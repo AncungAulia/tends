@@ -8,6 +8,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {UserVault} from "../vaults/UserVault.sol";
 import {StrategyRouter} from "../routers/StrategyRouter.sol";
+import {AgentActivityLog} from "../logs/AgentActivityLog.sol";
 
 contract VaultFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // === Storage ===
@@ -93,6 +94,8 @@ contract VaultFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         // Grant the new vault permission to swap via StrategyRouter
         StrategyRouter(strategyRouter).authorizeVault(vault, true);
+        // Grant the new vault permission to write to AgentActivityLog
+        AgentActivityLog(activityLog).authorizeLogger(vault, true);
 
         emit VaultDeployed(msg.sender, vault);
     }

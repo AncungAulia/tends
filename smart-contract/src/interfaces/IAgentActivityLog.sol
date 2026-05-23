@@ -2,5 +2,8 @@
 pragma solidity ^0.8.24;
 
 interface IAgentActivityLog {
-    function logActivity(uint8 vaultId, string calldata action, bytes calldata metadata) external;
+    /// @param vault   The UserVault proxy that triggered the action (msg.sender in logActivity)
+    /// @param action  Human-readable label, e.g. "REBALANCE"
+    /// @param metadata ABI-encoded context (riskPreference, SwapInstructions, etc.)
+    function logActivity(address vault, string calldata action, bytes calldata metadata) external;
 }

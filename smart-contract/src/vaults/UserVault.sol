@@ -260,9 +260,9 @@ contract UserVault is
         emit Rebalanced(block.timestamp, msg.sender, instructions);
 
         IAgentActivityLog(activityLog).logActivity(
-            0,
+            address(this),
             "REBALANCE",
-            abi.encode(address(this), uint8(riskPreference), instructions)
+            abi.encode(uint8(riskPreference), instructions)
         );
     }
 
