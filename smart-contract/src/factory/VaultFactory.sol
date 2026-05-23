@@ -7,6 +7,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {UserVault} from "../vaults/UserVault.sol";
+import {StrategyRouter} from "../routers/StrategyRouter.sol";
 
 contract VaultFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // === Storage ===
@@ -89,6 +90,9 @@ contract VaultFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         vault = address(new ERC1967Proxy(implementation, initData));
         vaultOf[msg.sender] = vault;
         allVaults.push(vault);
+
+        // Grant the new vault permission to swap via StrategyRouter
+        StrategyRouter(strategyRouter).authorizeVault(vault, true);
 
         emit VaultDeployed(msg.sender, vault);
     }
