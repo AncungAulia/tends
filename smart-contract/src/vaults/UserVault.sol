@@ -14,47 +14,62 @@ import {IStrategyRouter} from "../interfaces/IStrategyRouter.sol";
 import {IAgentActivityLog} from "../interfaces/IAgentActivityLog.sol";
 import {IWMNT} from "../interfaces/IWMNT.sol";
 
-abstract contract BaseVault is
+contract UserVault is
     Initializable,
     ERC4626Upgradeable,
     OwnableUpgradeable,
     ReentrancyGuard,
     UUPSUpgradeable
 {
-    // === Storage ===
-    // Slot 0: strategyId (uint8) + agentExecutor (address) packed
-    uint8 public strategyId;
-    address public agentExecutor;
+    // === Types ===
 
-    address public strategyRouter;  // slot 1
-    address public activityLog;     // slot 2
-    address public priceFeed;       // slot 3
-    address public wmnt;            // slot 4 — WMNT for native MNT deposit
+    enum RiskLevel { LOW, MEDIUM, HIGH, CUSTOM }
 
-    struct AssetAllocation {
-        address token;
-        uint16 targetBps;
+    struct SwapInstruction {
+        address tokenIn;
+        address tokenOut;
+        uint256 amountIn;
+        uint256 minAmountOut;
     }
-    AssetAllocation[] public targetAllocations; // slot 5
 
-    // Slot 6: rebalanceThresholdBps + maxSlippageBps packed
-    uint16 public rebalanceThresholdBps;
+    struct CustomAllocation {
+        uint16 lowBps;
+        uint16 medBps;
+        uint16 highBps;
+    }
+
+    // === Storage ===
+    // Slot 0: agentExecutor (address, 20 bytes)
+    address public agentExecutor;
+    // Slot 1: strategyRouter
+    address public strategyRouter;
+    // Slot 2: activityLog
+    address public activityLog;
+    // Slot 3: priceFeed
+    address public priceFeed;
+    // Slot 4: wmnt
+    address public wmnt;
+    // Slot 5: riskPreference (uint8,1) + customAllocation (3×uint16,6) packed = 7 bytes
+    RiskLevel public riskPreference;
+    CustomAllocation public customAllocation;
+    // Slot 6: allowedTokens array pointer
+    address[] public allowedTokens;
+    // Slot 7: isAllowedToken mapping
+    mapping(address => bool) public isAllowedToken;
+    // Slot 8: maxSlippageBps (uint16,2) + paused (bool,1) packed
     uint16 public maxSlippageBps;
+    bool public paused;
+    // Slot 9: lastRebalanceTime
+    uint256 public lastRebalanceTime;
+    // Slot 10: minRebalanceInterval
+    uint256 public minRebalanceInterval;
 
-    uint256 public lastRebalanceTime;    // slot 7
-    uint256 public minRebalanceInterval; // slot 8
-    bool public paused;                  // slot 9
-
-    // 10 slots used above; reserve to 48 total for this contract's own storage
-    uint256[38] private __gap;
+    // 11 slots used; reserve to 50 total
+    uint256[39] private __gap;
 
     // === Events ===
-    event Rebalanced(
-        uint256 timestamp,
-        address indexed agent,
-        AssetAllocation[] oldAllocation,
-        AssetAllocation[] newAllocation
-    );
+    event Rebalanced(uint256 timestamp, address indexed agent, SwapInstruction[] instructions);
+    event RiskPreferenceUpdated(address indexed user, RiskLevel level, uint16 lowBps, uint16 medBps, uint16 highBps);
     event AgentExecutorUpdated(address indexed oldAgent, address indexed newAgent);
     event EmergencyPaused(address indexed by, string reason);
     event EmergencyUnpaused(address indexed by);
@@ -63,6 +78,8 @@ abstract contract BaseVault is
     error NotAuthorizedAgent();
     error VaultPaused();
     error RebalanceTooSoon();
+    error TokenNotAllowed();
+    error InvalidAllocationSum();
     error ZeroAmount();
 
     // === Modifiers ===
@@ -84,55 +101,54 @@ abstract contract BaseVault is
 
     // === Init ===
 
-    function __BaseVault_init(
-        IERC20 _asset,
-        string memory _name,
-        string memory _symbol,
-        uint8 _strategyId,
+    function initialize(
+        IERC20 _usdc,
         address _owner,
         address _agentExecutor,
         address _strategyRouter,
         address _activityLog,
         address _priceFeed,
-        address _wmnt
-    ) internal onlyInitializing {
-        __ERC4626_init(_asset);
-        __ERC20_init(_name, _symbol);
+        address _wmnt,
+        address[] calldata _allowedTokens
+    ) external initializer {
+        __ERC4626_init(_usdc);
+        __ERC20_init("Tends User Vault", "tVAULT");
         __Ownable_init(_owner);
 
-        strategyId = _strategyId;
         agentExecutor = _agentExecutor;
         strategyRouter = _strategyRouter;
         activityLog = _activityLog;
         priceFeed = _priceFeed;
         wmnt = _wmnt;
 
-        rebalanceThresholdBps = 50;
-        maxSlippageBps = 100;
+        maxSlippageBps = 100; // 1%
         minRebalanceInterval = 1 hours;
+        riskPreference = RiskLevel.LOW;
+
+        for (uint256 i = 0; i < _allowedTokens.length; i++) {
+            allowedTokens.push(_allowedTokens[i]);
+            isAllowedToken[_allowedTokens[i]] = true;
+        }
     }
 
     // === ERC-4626 overrides ===
 
-    /// @notice Total vault value denominated in asset (USDC) decimals.
-    function totalAssets() public view virtual override returns (uint256 total) {
+    /// @notice Total vault value in asset (USDC) decimals.
+    function totalAssets() public view override returns (uint256 total) {
         uint8 usdcDec = IERC20Metadata(asset()).decimals();
-
-        // Raw USDC sitting in the vault (not yet swapped to RWA tokens)
         uint256 totalNorm = IERC20(asset()).balanceOf(address(this)) * (10 ** (18 - usdcDec));
 
-        for (uint256 i = 0; i < targetAllocations.length; i++) {
-            address token = targetAllocations[i].token;
+        for (uint256 i = 0; i < allowedTokens.length; i++) {
+            address token = allowedTokens[i];
             uint256 bal = IERC20(token).balanceOf(address(this));
             if (bal == 0) continue;
 
-            uint256 price = IPriceFeed(priceFeed).getPrice(token); // 1e18 USD per token
+            uint256 price = IPriceFeed(priceFeed).getPrice(token);
             uint8 tokenDec = IERC20Metadata(token).decimals();
             uint256 balNorm = bal * (10 ** (18 - tokenDec));
             totalNorm += (balNorm * price) / 1e18;
         }
 
-        // Bring back to USDC decimals
         total = totalNorm / (10 ** (18 - usdcDec));
     }
 
@@ -156,7 +172,7 @@ abstract contract BaseVault is
 
     // withdraw + redeem intentionally NOT paused — users can always exit
 
-    // === Deposit helpers ===
+    // === User: deposit helpers ===
 
     /// @notice ERC-2612 permit + deposit in one tx.
     function depositWithPermit(
@@ -181,18 +197,16 @@ abstract contract BaseVault is
     {
         if (msg.value == 0) revert ZeroAmount();
 
-        // 1. Wrap native MNT to WMNT (1:1)
         IWMNT(wmnt).deposit{value: msg.value}();
-
-        // 2. Swap WMNT → USDC via StrategyRouter
         IWMNT(wmnt).approve(strategyRouter, msg.value);
+
         uint256 expected = IStrategyRouter(strategyRouter).getExpectedOutput(wmnt, asset(), msg.value);
         uint256 minReceived = (expected * (10000 - maxSlippageBps)) / 10000;
         uint256 usdcAmount = IStrategyRouter(strategyRouter).executeSwap(
             wmnt, asset(), msg.value, minReceived
         );
 
-        // 3. Mint shares — vault already holds the USDC from the swap output
+        // USDC already in vault from swap — mint shares directly
         uint256 maxAssets = maxDeposit(receiver);
         if (usdcAmount > maxAssets) revert ERC4626ExceededMaxDeposit(receiver, usdcAmount, maxAssets);
         shares = previewDeposit(usdcAmount);
@@ -200,26 +214,55 @@ abstract contract BaseVault is
         emit Deposit(msg.sender, receiver, usdcAmount, shares);
     }
 
+    // === User: preference ===
+
+    /// @notice Set risk level. Agent reads this at next rebalance.
+    function setRiskLevel(RiskLevel level) external onlyOwner {
+        if (level == RiskLevel.CUSTOM) revert InvalidAllocationSum(); // use setCustomAllocation instead
+        riskPreference = level;
+        emit RiskPreferenceUpdated(msg.sender, level, 0, 0, 0);
+    }
+
+    /// @notice Set custom allocation bps. Automatically sets riskPreference to CUSTOM.
+    function setCustomAllocation(uint16 lowBps, uint16 medBps, uint16 highBps) external onlyOwner {
+        if (uint256(lowBps) + medBps + highBps != 10000) revert InvalidAllocationSum();
+        riskPreference = RiskLevel.CUSTOM;
+        customAllocation = CustomAllocation(lowBps, medBps, highBps);
+        emit RiskPreferenceUpdated(msg.sender, RiskLevel.CUSTOM, lowBps, medBps, highBps);
+    }
+
     // === Agent: rebalance ===
 
-    function rebalance() external onlyAgent whenNotPaused_ nonReentrant {
+    /// @notice Execute a set of swaps as determined by agent Hermes from skill.md strategy.
+    function rebalance(SwapInstruction[] calldata instructions)
+        external
+        onlyAgent
+        whenNotPaused_
+        nonReentrant
+    {
         if (block.timestamp < lastRebalanceTime + minRebalanceInterval) revert RebalanceTooSoon();
 
-        AssetAllocation[] memory oldAllocation = _captureCurrentAllocation();
-        uint256 totalValue = totalAssets(); // USDC decimals
+        for (uint256 i = 0; i < instructions.length; i++) {
+            SwapInstruction calldata inst = instructions[i];
 
-        for (uint256 i = 0; i < targetAllocations.length; i++) {
-            _rebalanceAsset(targetAllocations[i], totalValue);
+            // USDC (asset) is always allowed as tokenIn or tokenOut
+            if (inst.tokenIn != asset() && !isAllowedToken[inst.tokenIn]) revert TokenNotAllowed();
+            if (inst.tokenOut != asset() && !isAllowedToken[inst.tokenOut]) revert TokenNotAllowed();
+
+            IERC20(inst.tokenIn).approve(strategyRouter, inst.amountIn);
+            IStrategyRouter(strategyRouter).executeSwap(
+                inst.tokenIn, inst.tokenOut, inst.amountIn, inst.minAmountOut
+            );
         }
 
         lastRebalanceTime = block.timestamp;
 
-        emit Rebalanced(block.timestamp, msg.sender, oldAllocation, targetAllocations);
+        emit Rebalanced(block.timestamp, msg.sender, instructions);
 
         IAgentActivityLog(activityLog).logActivity(
-            strategyId,
+            0,
             "REBALANCE",
-            abi.encode(oldAllocation, targetAllocations)
+            abi.encode(address(this), uint8(riskPreference), instructions)
         );
     }
 
@@ -241,60 +284,6 @@ abstract contract BaseVault is
         paused = false;
         emit EmergencyUnpaused(msg.sender);
     }
-
-    // === Internal ===
-
-    function _captureCurrentAllocation() internal view returns (AssetAllocation[] memory result) {
-        result = new AssetAllocation[](targetAllocations.length);
-        for (uint256 i = 0; i < targetAllocations.length; i++) {
-            result[i] = targetAllocations[i];
-        }
-    }
-
-    /// @notice Current USD value of `token` held by this vault, in USDC decimals.
-    function _getCurrentValueOf(address token) internal view returns (uint256) {
-        uint256 bal = IERC20(token).balanceOf(address(this));
-        if (bal == 0) return 0;
-
-        uint256 price = IPriceFeed(priceFeed).getPrice(token); // 1e18 USD per token
-        uint8 tokenDec = IERC20Metadata(token).decimals();
-        uint8 usdcDec = IERC20Metadata(asset()).decimals();
-
-        uint256 balNorm = bal * (10 ** (18 - tokenDec));          // token balance in 1e18
-        uint256 valueNorm = (balNorm * price) / 1e18;              // USD value in 1e18
-        return valueNorm / (10 ** (18 - usdcDec));                 // back to USDC decimals
-    }
-
-    /// @notice Buy `token` using `amountUSDC` (in USDC decimals) from vault balance.
-    function _executeBuy(address token, uint256 amountUSDC) internal {
-        IERC20(asset()).approve(strategyRouter, amountUSDC);
-
-        uint256 expected = IStrategyRouter(strategyRouter).getExpectedOutput(asset(), token, amountUSDC);
-        uint256 minReceived = (expected * (10000 - maxSlippageBps)) / 10000;
-
-        IStrategyRouter(strategyRouter).executeSwap(asset(), token, amountUSDC, minReceived);
-    }
-
-    /// @notice Sell enough `token` to realise `valueUSDC` (in USDC decimals).
-    function _executeSell(address token, uint256 valueUSDC) internal {
-        uint256 price = IPriceFeed(priceFeed).getPrice(token);
-        uint8 tokenDec = IERC20Metadata(token).decimals();
-        uint8 usdcDec = IERC20Metadata(asset()).decimals();
-
-        // Normalize valueUSDC → 1e18, then compute token amount in token's native decimals
-        uint256 valueNorm = valueUSDC * (10 ** (18 - usdcDec));
-        uint256 amountToken = (valueNorm * (10 ** tokenDec)) / price;
-
-        IERC20(token).approve(strategyRouter, amountToken);
-
-        uint256 expected = IStrategyRouter(strategyRouter).getExpectedOutput(token, asset(), amountToken);
-        uint256 minReceived = (expected * (10000 - maxSlippageBps)) / 10000;
-
-        IStrategyRouter(strategyRouter).executeSwap(token, asset(), amountToken, minReceived);
-    }
-
-    /// @notice Implemented by concrete vaults (Low/Medium/High) with their own allocation logic.
-    function _rebalanceAsset(AssetAllocation memory target, uint256 totalValue) internal virtual;
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
