@@ -2,5 +2,21 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+ffi = true
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
+fs_permissions = [
+  { access = "read", path = "./deployments" },
+  { access = "read-write", path = "./broadcast" }
+]
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[rpc_endpoints]
+mantle_sepolia = "https://rpc.sepolia.mantle.xyz"
+
+[etherscan]
+mantle_sepolia = { key = "${MANTLESCAN_KEY}", url = "https://api-sepolia.mantlescan.xyz/api" }
