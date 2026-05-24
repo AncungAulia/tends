@@ -1,0 +1,43 @@
+{
+  "network": "Mantle Sepolia",
+  "chainId": 5003,
+  "rpc": "https://rpc.sepolia.mantle.xyz",
+  "explorer": "https://explorer.sepolia.mantle.xyz",
+  "deployedAt": null,
+  "deployer": null,
+  "mockOracle": "0x26f9178b4082b68D8cC55874D377f9829Fc8C22d",
+
+  "mocks": {
+    "USDC":  null,
+    "mUSD":  null,
+    "USDY":  null,
+    "mETH":  null,
+    "cmETH": null,
+    "sUSDe": null,
+    "WMNT":  null
+  },
+
+  "core": {
+    "PriceFeed":        null,
+    "AgentActivityLog": null,
+    "MockDexAdapter":   null,
+    "StrategyRouter":   null,
+    "UserVaultImpl":    null,
+    "VaultFactory":     null
+  },
+
+  "priceFeedConfig": {
+    "staticPrices": {
+      "USDC": "1000000000000000000",
+      "mUSD": "1000000000000000000"
+    },
+    "feedIds": {
+      "USDY":  "USDY",
+      "mETH":  "mETH_FUNDAMENTAL",
+      "cmETH": "cmETH",
+      "sUSDe": "sUSDe",
+      "WMNT":  "MNT"
+    },
+    "maxStaleness": "7200"
+  }
+}

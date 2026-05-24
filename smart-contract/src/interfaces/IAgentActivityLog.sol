@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.30;
 
 interface IAgentActivityLog {
     /// @param vault   The UserVault proxy that triggered the action (msg.sender in logActivity)
