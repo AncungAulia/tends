@@ -1,0 +1,231 @@
+// ABIs lifted from backend/INTEGRATION.md (smart-contract team). Only the
+// surfaces the backend touches are included — kept `as const` for viem typing.
+
+export const ERC20_ABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
+// NOTE: the deployed PriceFeed is PULL-based — it reads live from MockOracle on
+// getPrice(). There is no pushPrices() (INTEGRATION.md §1 is outdated). Prices are
+// fed into MockOracle by an external relayer (~hourly), not by this backend.
+export const PRICE_FEED_ABI = [
+  {
+    name: "getPrice",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "price", type: "uint256" }],
+  },
+  {
+    name: "getPriceUnsafe",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [
+      { name: "price", type: "uint256" },
+      { name: "updatedAt", type: "uint256" },
+    ],
+  },
+  {
+    name: "maxStaleness",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
+export const MOCK_ORACLE_ABI = [
+  {
+    name: "getPrice",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "feedId", type: "bytes32" }],
+    outputs: [
+      { name: "value", type: "uint256" },
+      { name: "updatedAt", type: "uint64" },
+    ],
+  },
+  {
+    // onlyRelayer — our AGENT_EXECUTOR is authorized (RELAYER-HANDOFF.md).
+    name: "setPrices",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "feedIds", type: "bytes32[]" },
+      { name: "values", type: "uint256[]" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+/** Ondo USDY oracle on Mantle MAINNET — getPrice() returns 18-dec USD. */
+export const USDY_ORACLE_ABI = [
+  {
+    name: "getPrice",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
+export const VAULT_FACTORY_ABI = [
+  {
+    name: "vaultOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    name: "allVaults",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "index", type: "uint256" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    name: "totalVaults",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "VaultDeployed",
+    type: "event",
+    inputs: [
+      { name: "user", type: "address", indexed: true },
+      { name: "vault", type: "address", indexed: true },
+    ],
+  },
+] as const;
+
+const SWAP_INSTRUCTION = {
+  name: "instructions",
+  type: "tuple[]",
+  components: [
+    { name: "tokenIn", type: "address" },
+    { name: "tokenOut", type: "address" },
+    { name: "amountIn", type: "uint256" },
+    { name: "minAmountOut", type: "uint256" },
+  ],
+} as const;
+
+export const USER_VAULT_ABI = [
+  {
+    name: "riskPreference",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }], // 0=LOW 1=MEDIUM 2=HIGH 3=CUSTOM
+  },
+  {
+    name: "customAllocation",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "lowBps", type: "uint16" },
+      { name: "medBps", type: "uint16" },
+      { name: "highBps", type: "uint16" },
+    ],
+  },
+  {
+    name: "totalAssets",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }], // USDC, 6 decimals
+  },
+  {
+    name: "lastRebalanceTime",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "minRebalanceInterval",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "paused",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    name: "rebalance",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [SWAP_INSTRUCTION],
+    outputs: [],
+  },
+  {
+    name: "Rebalanced",
+    type: "event",
+    inputs: [
+      { name: "timestamp", type: "uint256", indexed: false },
+      { name: "agent", type: "address", indexed: true },
+      { ...SWAP_INSTRUCTION, indexed: false },
+    ],
+  },
+] as const;
+
+export const ACTIVITY_LOG_ABI = [
+  {
+    name: "logActivity",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "vault", type: "address" },
+      { name: "action", type: "string" },
+      { name: "metadata", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "getRecentActivities",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "count", type: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "uint256" },
+          { name: "agent", type: "address" },
+          { name: "vault", type: "address" },
+          { name: "action", type: "string" },
+          { name: "metadata", type: "bytes" },
+          { name: "timestamp", type: "uint256" },
+          { name: "blockNumber", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "ActivityLogged",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "vault", type: "address", indexed: true },
+      { name: "agent", type: "address", indexed: true },
+      { name: "action", type: "string", indexed: false },
+      { name: "timestamp", type: "uint256", indexed: false },
+    ],
+  },
+] as const;

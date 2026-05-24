@@ -1,0 +1,94 @@
+// Tends — AI-managed RWA yield aggregator on Mantle.
+// Per-user-vault architecture (1 user = 1 UserVault). See backend/INTEGRATION.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  walletAddress String   @id
+  privyId       String?  @unique
+  createdAt     DateTime @default(now())
+  lastActiveAt  DateTime @updatedAt
+
+  vault        Vault?
+  chatMessages ChatMessage[]
+}
+
+/// One ERC-4626 UserVault per user (deployed via VaultFactory). Folds position +
+/// allocation: holds shares/initialDeposit and the risk config the agent reads.
+model Vault {
+  address        String   @id // vault contract address
+  owner          String   @unique // User.walletAddress
+  riskPreference Int      @default(1) // 0=LOW 1=MEDIUM 2=HIGH 3=CUSTOM
+  lowBps         Int? // CUSTOM only
+  medBps         Int?
+  highBps        Int?
+  shares         Decimal  @default(0) @db.Decimal(78, 0)
+  initialDeposit Decimal  @default(0) @db.Decimal(78, 0)
+  deployedBlock  BigInt?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [owner], references: [walletAddress], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id            BigInt   @id @default(autoincrement())
+  walletAddress String
+  role          String // 'user' | 'assistant'
+  content       String
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [walletAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@index([walletAddress, createdAt])
+}
+
+/// Time-series of scraped per-asset APY. Written by the indexer every ~5m.
+model ApyHistory {
+  asset      String
+  apy        Decimal  @db.Decimal(10, 4)
+  snapshotAt DateTime @default(now())
+
+  @@id([asset, snapshotAt])
+  @@index([asset, snapshotAt])
+}
+
+/// Mirror of on-chain AgentActivityLog + agent decisions made off-chain.
+model AgentActivity {
+  id           BigInt   @id @default(autoincrement())
+  vaultAddress String? // null for global actions (e.g. price pushes)
+  action       String // REBALANCE | PRICE_UPDATE | DEPOSIT | WITHDRAW | PAUSE | ALERT
+  metadata     Json
+  txHash       String?
+  blockNumber  BigInt?
+  agentAddress String
+  timestamp    DateTime
+
+  @@index([vaultAddress, timestamp])
+  @@index([txHash])
+}
+
+model GasTopUp {
+  id        BigInt   @id @default(autoincrement())
+  recipient String
+  amount    String // wei as string
+  txHash    String
+  timestamp DateTime @default(now())
+
+  @@index([recipient, timestamp])
+}
+
+/// Indexer cursor — last fully-processed block per scope, for idempotent restarts.
+model IndexerState {
+  key       String   @id // e.g. "factory" or "vault:0x..."
+  lastBlock BigInt
+  updatedAt DateTime @updatedAt
+}
