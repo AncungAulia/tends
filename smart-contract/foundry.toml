@@ -19,4 +19,4 @@ fs_permissions = [
 mantle_sepolia = "https://rpc.sepolia.mantle.xyz"
 
 [etherscan]
-mantle_sepolia = { key = "${MANTLESCAN_KEY}", url = "https://api-sepolia.mantlescan.xyz/api" }
+mantle_sepolia = { key = "${MANTLESCAN_KEY}", url = "https://api.etherscan.io/v2/api?chainid=5003" }
