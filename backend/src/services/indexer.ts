@@ -5,6 +5,7 @@ import { publicClient } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI } from "../chain/abis.js";
 import { STATIC_APY_PCT, type ApyByToken } from "./projection.js";
+import { wsHub, type WsEvent } from "../ws/hub.js";
 
 const log = childLogger("indexer");
 
@@ -117,10 +118,14 @@ export const prismaIndexerRepo: IndexerRepo = {
  * watchContractEvent wiring (startWatching) is thin glue over publicClient.
  */
 export class IndexerService {
-  constructor(private readonly repo: IndexerRepo = prismaIndexerRepo) {}
+  constructor(
+    private readonly repo: IndexerRepo = prismaIndexerRepo,
+    private readonly broadcast: (e: WsEvent) => void = (e) => wsHub.broadcast(e),
+  ) {}
 
   async onVaultDeployed(user: string, vault: string, blockNumber: bigint | null): Promise<void> {
     await this.repo.upsertVault(toVaultRecord(user, vault, blockNumber));
+    this.broadcast({ type: "vault_deployed", user, vault });
     log.info({ user, vault }, "vault deployed");
   }
 
@@ -133,6 +138,7 @@ export class IndexerService {
     blockNumber: bigint | null;
   }): Promise<void> {
     await this.repo.recordActivity(toRebalanceActivity(args));
+    this.broadcast({ type: "rebalanced", vault: args.vault, swaps: args.swaps });
     log.info({ vault: args.vault, swaps: args.swaps }, "rebalance indexed");
   }
 
@@ -145,6 +151,7 @@ export class IndexerService {
     blockNumber: bigint | null;
   }): Promise<void> {
     await this.repo.recordActivity(toActivityLogRecord(args));
+    this.broadcast({ type: "activity", vault: args.vault, action: args.action });
     log.info({ vault: args.vault, action: args.action }, "activity indexed");
   }
 

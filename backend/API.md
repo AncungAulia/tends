@@ -46,6 +46,7 @@ type Projection = { capital: number; durationDays: number; blendedApyPct: number
 | POST | `/api/users/me/prepare-withdraw` | ✅ | `{ vault, account, amount }` | `{ tx: Tx }` |
 | POST | `/api/users/me/prepare-switch` | ✅ | `{ vault, strategyId, customAllocation? }` | `{ steps: Tx[] }` |
 | POST | `/api/chat` | ✅ | `{ message }` | SSE stream |
+| WS | `/ws/dashboard` | – | – | JSON event stream |
 
 Notes:
 - `amount` is a plain USDC number (e.g. `100.5`); the backend scales to 6 decimals.
@@ -65,6 +66,22 @@ event: error\ndata: <message>        (on failure)
 ```
 
 Concatenate `text` chunks for the assistant reply.
+
+## WebSocket `/ws/dashboard`
+
+Connect (`ws://` / `wss://`, no auth) and receive live JSON events as the indexer
+sees on-chain activity. Use it to refresh position/activity instead of polling.
+
+```jsonc
+{ "type": "connected" }                          // on connect
+{ "type": "vault_deployed", "user": "0x…", "vault": "0x…" }
+{ "type": "rebalanced", "vault": "0x…", "swaps": 3 }
+{ "type": "activity", "vault": "0x…", "action": "REBALANCE" }
+```
+
+Events are broadcast to all clients (data is public on-chain) — filter by your
+`vault` address client-side. Re-fetch `/api/users/me/{position,activity}` on a
+matching event. Requires the backend's indexer to be running (`INDEXER_ENABLED`).
 
 ## Typical flow
 

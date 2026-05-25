@@ -1,4 +1,6 @@
+import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
+import { WebSocketServer } from "ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";
@@ -7,6 +9,7 @@ import { childLogger } from "./lib/logger.js";
 import { prisma } from "./db/client.js";
 import { startScheduler, stopScheduler } from "./scheduler.js";
 import { indexerService } from "./services/indexer.js";
+import { wsHub } from "./ws/hub.js";
 import { strategiesRouter } from "./api/routes/strategies.js";
 import { projectionRouter } from "./api/routes/projection.js";
 import { usersRouter } from "./api/routes/users.js";
@@ -56,10 +59,21 @@ const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   if (env.INDEXER_ENABLED) stopIndexer = indexerService.startWatching();
 });
 
+// Dashboard WebSocket — clients receive broadcast on-chain events (see ws/hub.ts).
+const wss = new WebSocketServer({ server: server as unknown as Server, path: "/ws/dashboard" });
+wss.on("connection", (ws) => {
+  const client = { send: (d: string) => ws.send(d) };
+  wsHub.add(client);
+  ws.on("close", () => wsHub.remove(client));
+  ws.on("error", () => wsHub.remove(client));
+  ws.send(JSON.stringify({ type: "connected" }));
+});
+
 const shutdown = async (signal: string) => {
   log.info({ signal }, "shutting down");
   stopScheduler();
   stopIndexer?.();
+  wss.close();
   server.close();
   await prisma.$disconnect();
   process.exit(0);

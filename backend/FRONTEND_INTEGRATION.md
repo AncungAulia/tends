@@ -178,7 +178,27 @@ async function chat(message: string, token: string, onChunk: (t: string) => void
 
 ---
 
-## 6. Gotchas
+## 6. Live updates (WebSocket)
+
+Instead of polling, subscribe to `/ws/dashboard` and refetch on relevant events.
+
+```ts
+function watchDashboard(myVault: string, onUpdate: () => void) {
+  const url = process.env.NEXT_PUBLIC_API_URL!.replace(/^http/, "ws") + "/ws/dashboard";
+  const ws = new WebSocket(url);
+  ws.onmessage = (e) => {
+    const ev = JSON.parse(e.data) as { type: string; vault?: string };
+    // events: connected | vault_deployed | rebalanced | activity
+    if (ev.vault?.toLowerCase() === myVault.toLowerCase()) onUpdate(); // refetch position/activity
+  };
+  ws.onclose = () => setTimeout(() => watchDashboard(myVault, onUpdate), 2000); // reconnect
+  return () => ws.close();
+}
+```
+
+No auth on the socket; data is public on-chain, so filter by your `vault` client-side.
+
+## 7. Gotchas
 
 - **Privy app id must match** backend ⇒ else 401 on every auth'd call.
 - `amount` is a **plain USDC number** (`100.5`) — backend scales to 6 decimals.

@@ -115,11 +115,14 @@ is tested with fakes.
 
 ## Status
 
-Live on Mantle Sepolia (`USE_MOCK_CONTRACTS=false`). Done: chain layer + agent wallet,
-rebalance planning (`rebalance-math` + `rebalancer`), price relayer + monitor,
-scheduler (relayer/rebalancer/price-monitor, env-gated), projection, strategies +
-projection + users API, Privy-JWT auth, indexer event→record mappers — all unit-tested.
+Live on Mantle Sepolia (`USE_MOCK_CONTRACTS=false`). Feature-complete for v1:
+chain layer + agent wallet, rebalance planning, price relayer + monitor, scheduler
+(relayer/rebalancer/price-monitor/apy-scraper, env-gated), full API (auth/verify,
+strategies, projection, apy/history, chat SSE, users/me position/activity +
+prepare-deposit/withdraw/switch + deploy-vault), Privy-JWT auth, indexer (event
+watchers + mappers), `WS /ws/dashboard` (live broadcast), Hermes MCP tools + gateway
+service, deploy artifacts (Dockerfile, railway.json, Prisma migration). 128 tests.
 
-Remaining (integration, mostly gated on the running DB / live wiring):
-indexer `watchContractEvent` subscription + APY scraper, deposit/deploy-vault tx
-encoding, `/api/chat` (Hermes SSE), `/api/apy/history`, `WS /ws/dashboard`.
+Docs: `API.md` (contract), `FRONTEND_INTEGRATION.md` (frontend how-to), `HERMES.md`
+(agent setup). Needs real keys to fully run: `PRIVY_APP_ID` + `PRIVY_VERIFICATION_KEY`
+(auth), `OPENROUTER_API_KEY` + Hermes service (chat).

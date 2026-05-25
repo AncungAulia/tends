@@ -112,6 +112,18 @@ test("onActivityLogged records the mapped activity", async () => {
   assert.equal(activities[0]!.txHash, "0xabc");
 });
 
+test("handlers broadcast a WS event after persisting", async () => {
+  const { repo } = fakeRepo();
+  const events: { type: string }[] = [];
+  const svc = new IndexerService(repo, (e) => events.push(e));
+
+  await svc.onVaultDeployed(USER, VAULT, 1n);
+  await svc.onRebalanced({ vault: VAULT, agent: AGENT, timestampSec: 1n, swaps: 1, txHash: null, blockNumber: null });
+  await svc.onActivityLogged({ vault: VAULT, agent: AGENT, action: "PAUSE", timestampSec: 1n, txHash: null, blockNumber: null });
+
+  assert.deepEqual(events.map((e) => e.type), ["vault_deployed", "rebalanced", "activity"]);
+});
+
 test("scrapeAPYs writes one row per asset", async () => {
   const { repo, apys } = fakeRepo();
   await new IndexerService(repo).scrapeAPYs({ mUSD: 5, sUSDe: 12 });
