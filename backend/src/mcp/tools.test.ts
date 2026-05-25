@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { decodeFunctionData } from "viem";
 import { buildTools, type ToolDeps } from "./tools.js";
+import { USER_VAULT_TX_ABI } from "../chain/abis.js";
 
 const VAULT = "0x00000000000000000000000000000000000000aa";
 const ACCOUNT = "0x00000000000000000000000000000000000000bb";
@@ -82,5 +84,7 @@ test("prepareSwitchTx: preset one step, CUSTOM validated", async () => {
   const okCustom = await call("prepareSwitchTx", {
     vault: VAULT, strategyId: "CUSTOM", customAllocation: { lowBps: 5000, medBps: 3000, highBps: 2000 },
   });
-  assert.equal((okCustom.steps as unknown[]).length, 2);
+  const steps = okCustom.steps as { data: `0x${string}` }[];
+  assert.equal(steps.length, 1); // only setCustomAllocation (setRiskLevel(CUSTOM) reverts)
+  assert.equal(decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: steps[0]!.data }).functionName, "setCustomAllocation");
 });

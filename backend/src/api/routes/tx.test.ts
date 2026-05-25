@@ -1,8 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
+import { decodeFunctionData } from "viem";
 import { makeTxRouter } from "./tx.js";
 import { makeAuthMiddleware } from "../auth.js";
+import { USER_VAULT_TX_ABI } from "../../chain/abis.js";
+
+type Step = { to: string; data: `0x${string}`; value: string };
+const decode = (s: Step) => decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: s.data });
 
 const VAULT = "0x00000000000000000000000000000000000000aa";
 const ACCOUNT = "0x00000000000000000000000000000000000000bb";
@@ -52,19 +57,23 @@ test("POST /prepare-withdraw returns one tx", async () => {
   assert.ok((await res.json() as { tx: unknown }).tx);
 });
 
-test("POST /prepare-switch: preset → one setRiskLevel step", async () => {
+test("POST /prepare-switch: preset → single setRiskLevel(level)", async () => {
   const res = await post("/prepare-switch", { vault: VAULT, strategyId: "HIGH" });
   assert.equal(res.status, 200);
-  assert.equal(((await res.json()) as { steps: unknown[] }).steps.length, 1);
+  const { steps } = (await res.json()) as { steps: Step[] };
+  assert.equal(steps.length, 1);
+  const d = decode(steps[0]!);
+  assert.equal(d.functionName, "setRiskLevel");
+  assert.deepEqual(d.args, [2]); // HIGH
 });
 
-test("POST /prepare-switch: CUSTOM needs a valid allocation", async () => {
+test("POST /prepare-switch CUSTOM → single setCustomAllocation (NOT setRiskLevel, which reverts)", async () => {
   assert.equal((await post("/prepare-switch", { vault: VAULT, strategyId: "CUSTOM" })).status, 400);
   assert.equal(
     (await post("/prepare-switch", {
       vault: VAULT,
       strategyId: "CUSTOM",
-      customAllocation: { lowBps: 5000, medBps: 4000, highBps: 0 },
+      customAllocation: { lowBps: 5000, medBps: 4000, highBps: 0 }, // bad sum
     })).status,
     400,
   );
@@ -74,5 +83,9 @@ test("POST /prepare-switch: CUSTOM needs a valid allocation", async () => {
     customAllocation: { lowBps: 5000, medBps: 3000, highBps: 2000 },
   });
   assert.equal(ok.status, 200);
-  assert.equal(((await ok.json()) as { steps: unknown[] }).steps.length, 2); // setAllocation + setRisk
+  const { steps } = (await ok.json()) as { steps: Step[] };
+  assert.equal(steps.length, 1);
+  const d = decode(steps[0]!);
+  assert.equal(d.functionName, "setCustomAllocation"); // regression guard
+  assert.deepEqual(d.args, [5000, 3000, 2000]);
 });

@@ -71,9 +71,9 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>): Hono<AuthVars> 
       if (lowBps + medBps + highBps !== 10_000) {
         return c.json({ error: "customAllocation must sum to 10000 bps" }, 400);
       }
-      return c.json({
-        steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps), tx.prepareSetRisk(v, risk)],
-      });
+      // setCustomAllocation already sets riskPreference=CUSTOM on-chain; calling
+      // setRiskLevel(CUSTOM) reverts (InvalidAllocationSum), so it's the only step.
+      return c.json({ steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps)] });
     }
     return c.json({ steps: [tx.prepareSetRisk(v, risk)] });
   });

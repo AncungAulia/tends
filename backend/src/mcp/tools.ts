@@ -95,7 +95,8 @@ export function buildTools(deps: ToolDeps): McpTool[] {
           if (!customAllocation) throw new Error("customAllocation required for CUSTOM");
           const { lowBps, medBps, highBps } = customAllocation;
           if (lowBps + medBps + highBps !== 10_000) throw new Error("customAllocation must sum to 10000");
-          return { steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps), tx.prepareSetRisk(v, risk)] };
+          // setCustomAllocation sets risk=CUSTOM; setRiskLevel(CUSTOM) would revert.
+          return { steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps)] };
         }
         return { steps: [tx.prepareSetRisk(v, risk)] };
       }),
