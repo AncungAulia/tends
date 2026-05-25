@@ -1,37 +1,14 @@
 # Hermes Agent config — Tends portfolio assistant.
-#
-# ⚠️ The model/provider key names below follow Hermes' OpenAI-compatible provider
-# pattern but MAY differ by Hermes version — verify against
-# https://hermes-agent.nousresearch.com/docs and adjust. The `mcp_servers` block
-# matches the documented MCP config (stdio command/args/env).
+# Provider: GitHub Copilot. Auth via COPILOT_GITHUB_TOKEN (see hermes/.env.example).
+# Canonical config shape: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 
-# ── Model: OpenRouter (OpenAI-compatible). API key via env OPENROUTER_API_KEY. ──
-model: anthropic/claude-sonnet-4.6
-provider:
-  type: openai
-  base_url: https://openrouter.ai/api/v1
-  api_key_env: OPENROUTER_API_KEY
+model:
+  default: gpt-4o # Copilot model (auto-detected from the live catalog). GPT-5+ uses
+  provider: copilot # the Responses API; gpt-4o uses Chat Completions.
 
-# ── System prompt (Portfolio Assistant) ──────────────────────────────────────
-system_prompt: |
-  You are the Tends portfolio assistant for an AI-managed RWA yield aggregator on
-  Mantle. Be concise, direct, no jargon; mix Bahasa Indonesia + English naturally.
-  Always mention risk honestly; never promise specific returns.
-
-  Strategies:
-  - LOW: 90% mUSD + 10% USDY, ~5% APY, treasury-backed, very low risk
-  - MEDIUM: 40% mUSD + 30% mETH + 30% cmETH, ~5-6%, moderate
-  - HIGH: 40% cmETH + 30% sUSDe + 20% mETH + 10% WMNT, ~8-12%, aggressive
-  - CUSTOM: user-defined blend of the above (bps sum to 10000)
-
-  Use the mcp_tends_* tools to read positions/APYs, compute projections, and prepare
-  transactions. When the user wants to deposit/withdraw/switch, call the matching
-  prepare* tool and present the returned tx for them to sign — never claim a tx is
-  executed (the user signs it in their wallet).
-
-# ── MCP: the Tends tools server (Hermes spawns it as a subprocess) ────────────
-# It needs DATABASE_URL + contract addresses to read data; these are inherited
-# from the container env (set the same vars on this service as on the backend).
+# MCP: the Tends tools server (Hermes spawns it as a subprocess and exposes
+# mcp_tends_*). It needs DATABASE_URL + contract addresses (inherited from the
+# container env via .env.prod) to read data.
 mcp_servers:
   tends:
     command: node

@@ -35,7 +35,7 @@ hermes/
 ```bash
 pip install hermes-agent
 mkdir -p ~/.hermes && cp hermes/config.yaml ~/.hermes/config.yaml
-# put hermes/.env.example values into ~/.hermes/.env (real OPENROUTER_API_KEY, DB, addrs)
+export COPILOT_GITHUB_TOKEN=github_pat_...   # fine-grained PAT w/ Copilot Requests perm
 pnpm build                       # so dist/mcp/server.js exists for Hermes to spawn
 hermes gateway                   # OpenAI-compatible API on http://127.0.0.1:8642
 
@@ -57,14 +57,21 @@ Then `POST /api/chat { "message": "..." }` streams a real reply.
 
 So Option A = **2 services** (backend + hermes) sharing one Postgres.
 
+## Provider: GitHub Copilot
+
+`config.yaml` uses `model.provider: copilot`. Auth is resolved in this order:
+`COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token` → OAuth device
+login. For the container set **`COPILOT_GITHUB_TOKEN`** — a **fine-grained PAT**
+(`github_pat_…`) with the **"Copilot Requests"** permission, or a `gho_`/`ghu_` token.
+Classic `ghp_` tokens are **not** supported. Default model `gpt-4o` (change in
+config.yaml; valid names come from Copilot's live catalog).
+
 ## ⚠️ Caveats (couldn't be smoke-tested here)
 
-- `pip install hermes-agent` and the gateway run were not verified in this repo —
-  validate the image builds and `hermes gateway` starts; pin the version once it does.
-- `config.yaml`'s **model/provider keys** follow the OpenAI-compatible pattern but may
-  differ by Hermes version — check the [Hermes docs](https://hermes-agent.nousresearch.com/docs)
-  and adjust. The `mcp_servers` block follows the documented MCP config.
-- The MCP server itself **is** tested (`src/mcp/tools.test.ts`) and verified to keep
+- `pip install hermes-agent` and `hermes gateway` startup were not run end-to-end —
+  the image build is verified on the server, but a valid `COPILOT_GITHUB_TOKEN` is
+  needed for the gateway to actually serve completions; pin the Hermes version once happy.
+- The MCP server **is** unit-tested (`src/mcp/tools.test.ts`) and verified to keep
   stdout protocol-clean.
 
 ## Fallback

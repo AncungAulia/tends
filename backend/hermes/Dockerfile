@@ -22,7 +22,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Hermes Agent — pin a version in production once you've verified it.
-RUN pip install --no-cache-dir hermes-agent
+# aiohttp is required for the OpenAI-compatible API server adapter (`hermes gateway`).
+RUN pip install --no-cache-dir hermes-agent aiohttp
 
 # The Tends MCP server + its deps (Prisma client) and schema.
 COPY --from=mcpbuild /app/node_modules ./node_modules
@@ -34,7 +35,8 @@ COPY hermes/config.yaml /root/.hermes/config.yaml
 
 ENV API_SERVER_ENABLED=true \
     API_SERVER_HOST=0.0.0.0 \
-    API_SERVER_PORT=8642
+    API_SERVER_PORT=8642 \
+    PYTHONUNBUFFERED=1
 EXPOSE 8642
 
 CMD ["hermes", "gateway"]
