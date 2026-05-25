@@ -6,9 +6,14 @@ import { env } from "./config/env.js";
 import { childLogger } from "./lib/logger.js";
 import { prisma } from "./db/client.js";
 import { startScheduler, stopScheduler } from "./scheduler.js";
+import { indexerService } from "./services/indexer.js";
 import { strategiesRouter } from "./api/routes/strategies.js";
 import { projectionRouter } from "./api/routes/projection.js";
 import { usersRouter } from "./api/routes/users.js";
+import { txRouter } from "./api/routes/tx.js";
+import { authRouter } from "./api/routes/auth.js";
+import { apyRouter } from "./api/routes/apy.js";
+import { chatRouter } from "./api/routes/chat.js";
 
 const log = childLogger("server");
 
@@ -34,19 +39,27 @@ app.get("/health", async (c) => {
   });
 });
 
+app.route("/api/auth", authRouter);
 app.route("/api/strategies", strategiesRouter);
 app.route("/api/projection", projectionRouter);
+app.route("/api/apy", apyRouter);
+app.route("/api/chat", chatRouter);
 app.route("/api/users/me", usersRouter);
-// TODO: /api/chat (Hermes SSE), /api/apy/history, WS /ws/dashboard
+app.route("/api/users/me", txRouter);
+// TODO: WS /ws/dashboard
+
+let stopIndexer: (() => void) | undefined;
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   log.info(`🚀 Tends backend listening on http://localhost:${info.port}`);
   startScheduler();
+  if (env.INDEXER_ENABLED) stopIndexer = indexerService.startWatching();
 });
 
 const shutdown = async (signal: string) => {
   log.info({ signal }, "shutting down");
   stopScheduler();
+  stopIndexer?.();
   server.close();
   await prisma.$disconnect();
   process.exit(0);

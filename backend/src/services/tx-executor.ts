@@ -1,9 +1,11 @@
 import { encodeFunctionData, parseUnits } from "viem";
-import { childLogger } from "../lib/logger.js";
-import { USER_VAULT_ABI } from "../chain/abis.js";
+import {
+  ERC20_ABI,
+  USER_VAULT_TX_ABI,
+  VAULT_FACTORY_TX_ABI,
+} from "../chain/abis.js";
 import { TOKENS } from "../chain/tokens.js";
-
-const log = childLogger("tx-executor");
+import { addresses, as0x } from "../chain/addresses.js";
 
 /** Unsigned tx returned to the frontend for the user to sign via Privy. */
 export interface PreparedTx {
@@ -12,49 +14,98 @@ export interface PreparedTx {
   value: string;
 }
 
-// ERC-4626 withdraw isn't in our trimmed USER_VAULT_ABI; declare just what we encode.
-const WITHDRAW_ABI = [
-  {
-    name: "withdraw",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "receiver", type: "address" },
-      { name: "owner", type: "address" },
-    ],
-    outputs: [{ type: "uint256" }],
-  },
-] as const;
+const usdc = (amount: number) => parseUnits(amount.toString(), TOKENS.USDC.decimals);
 
 /**
- * Prepares UNSIGNED calldata for user-initiated actions on their own UserVault
- * (deposit/withdraw). The backend never holds user keys — the frontend signs via
- * Privy (docs §3 signature flow). Agent-signed txs (rebalance, pushPrices) live in
- * rebalancer.ts / price-pusher.ts and use the AGENT_EXECUTOR wallet instead.
+ * Pure calldata encoders for user-initiated actions on their own vault. The
+ * backend never holds user keys — the frontend signs these via Privy (docs §3).
+ * Agent-signed txs (rebalance, relayer) live elsewhere.
  *
- * Blocked on deployed vault addresses (USE_MOCK_CONTRACTS=true until deploy).
+ * Exact signatures from smart-contract/src/{UserVault,VaultFactory}.sol.
  */
 export class TxExecutorService {
-  /** Withdraw `amount` USDC from the user's vault back to their wallet. */
-  prepareWithdrawTx(
-    vault: `0x${string}`,
-    walletAddress: `0x${string}`,
-    amount: number,
-  ): PreparedTx {
-    const assets = parseUnits(amount.toString(), TOKENS.USDC.decimals);
-    const data = encodeFunctionData({
-      abi: WITHDRAW_ABI,
-      functionName: "withdraw",
-      args: [assets, walletAddress, walletAddress],
-    });
-    log.info({ vault, walletAddress, amount }, "prepared withdraw tx");
-    return { to: vault, data, value: "0" };
+  /** USDC.approve(vault, amount) — step 1 of a deposit (unless using permit). */
+  prepareApproveUsdc(vault: `0x${string}`, amount: number): PreparedTx {
+    return {
+      to: as0x(TOKENS.USDC.address),
+      data: encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [vault, usdc(amount)],
+      }),
+      value: "0",
+    };
   }
 
-  // TODO: prepareDepositTx (ERC-2612 permit + deposit), prepareDeployVaultTx
-  // (VaultFactory.deployVault for first-time users). Need final ABIs + decimals.
+  /** UserVault.deposit(assets, receiver) — ERC-4626 deposit. */
+  prepareDeposit(vault: `0x${string}`, receiver: `0x${string}`, amount: number): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "deposit",
+        args: [usdc(amount), receiver],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.withdraw(assets, receiver, owner). */
+  prepareWithdraw(vault: `0x${string}`, owner: `0x${string}`, amount: number): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "withdraw",
+        args: [usdc(amount), owner, owner],
+      }),
+      value: "0",
+    };
+  }
+
+  /** VaultFactory.deployVault() — first-time users create their vault. */
+  prepareDeployVault(): PreparedTx {
+    return {
+      to: as0x(addresses.vaultFactory),
+      data: encodeFunctionData({
+        abi: VAULT_FACTORY_TX_ABI,
+        functionName: "deployVault",
+        args: [],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.setRiskLevel(level) — switch strategy (0=LOW 1=MED 2=HIGH 3=CUSTOM). */
+  prepareSetRisk(vault: `0x${string}`, riskLevel: number): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "setRiskLevel",
+        args: [riskLevel],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.setCustomAllocation(lowBps, medBps, highBps) — for CUSTOM risk. */
+  prepareSetCustomAllocation(
+    vault: `0x${string}`,
+    lowBps: number,
+    medBps: number,
+    highBps: number,
+  ): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "setCustomAllocation",
+        args: [lowBps, medBps, highBps],
+      }),
+      value: "0",
+    };
+  }
 }
 
-void USER_VAULT_ABI; // referenced by future deposit encoding
 export const txExecutorService = new TxExecutorService();

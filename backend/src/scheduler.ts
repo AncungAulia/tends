@@ -3,6 +3,7 @@ import { env } from "./config/env.js";
 import { relayerService } from "./services/relayer.js";
 import { rebalancerService } from "./services/rebalancer.js";
 import { priceMonitorService } from "./services/price-monitor.js";
+import { indexerService } from "./services/indexer.js";
 
 const log = childLogger("scheduler");
 
@@ -53,6 +54,12 @@ export function buildJobs(): ScheduledJob[] {
       enabled: env.PRICE_MONITOR_ENABLED,
       intervalMs: env.PRICE_MONITOR_INTERVAL_SEC * 1000,
       run: () => priceMonitorService.checkFreshness(),
+    },
+    {
+      name: "apy-scraper",
+      enabled: env.APY_SCRAPER_ENABLED,
+      intervalMs: env.APY_SCRAPER_INTERVAL_SEC * 1000,
+      run: () => indexerService.scrapeAPYs(),
     },
   ];
 }

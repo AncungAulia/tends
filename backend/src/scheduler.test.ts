@@ -79,9 +79,14 @@ test("scheduleJobs: a failing job is isolated and still scheduled", async () => 
   assert.equal(scheduled.length, 1);
 });
 
-test("buildJobs: exposes relayer, rebalancer, price-monitor gated by env", () => {
+test("buildJobs: exposes the scheduled jobs gated by env", () => {
   const jobs = buildJobs();
-  assert.deepEqual(jobs.map((j) => j.name), ["relayer", "rebalancer", "price-monitor"]);
+  assert.deepEqual(jobs.map((j) => j.name), [
+    "relayer",
+    "rebalancer",
+    "price-monitor",
+    "apy-scraper",
+  ]);
   assert.ok(jobs.every((j) => typeof j.enabled === "boolean" && j.intervalMs > 0));
 });
 

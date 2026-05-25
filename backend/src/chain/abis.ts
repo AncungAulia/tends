@@ -9,6 +9,69 @@ export const ERC20_ABI = [
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
+
+/** Tx-building surface of UserVault/VaultFactory (deposit/withdraw/config/deploy). */
+export const USER_VAULT_TX_ABI = [
+  {
+    name: "deposit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "assets", type: "uint256" },
+      { name: "receiver", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "withdraw",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "assets", type: "uint256" },
+      { name: "receiver", type: "address" },
+      { name: "owner", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "setRiskLevel",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "level", type: "uint8" }],
+    outputs: [],
+  },
+  {
+    name: "setCustomAllocation",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "lowBps", type: "uint16" },
+      { name: "medBps", type: "uint16" },
+      { name: "highBps", type: "uint16" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+export const VAULT_FACTORY_TX_ABI = [
+  {
+    name: "deployVault",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [{ name: "vault", type: "address" }],
+  },
 ] as const;
 
 // NOTE: the deployed PriceFeed is PULL-based — it reads live from MockOracle on

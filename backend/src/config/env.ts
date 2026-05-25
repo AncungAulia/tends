@@ -79,6 +79,17 @@ export const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   PRICE_MONITOR_INTERVAL_SEC: z.coerce.number().int().positive().default(600),
+
+  // Indexer: live event watch (VaultDeployed/ActivityLogged) + APY snapshot scraper.
+  INDEXER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  APY_SCRAPER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  APY_SCRAPER_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   // Ondo USDY oracle lives on Mantle MAINNET, so the relayer needs a mainnet RPC.
   MANTLE_MAINNET_RPC: z.string().url().default("https://rpc.mantle.xyz"),
   USDY_ORACLE_ADDRESS: z

@@ -1,43 +1,60 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeFunctionData, parseUnits } from "viem";
-import { txExecutorService } from "./tx-executor.js";
+import { decodeFunctionData, getAddress } from "viem";
+import { txExecutorService as tx } from "./tx-executor.js";
+import {
+  ERC20_ABI,
+  USER_VAULT_TX_ABI,
+  VAULT_FACTORY_TX_ABI,
+} from "../chain/abis.js";
+import { TOKENS } from "../chain/tokens.js";
+import { addresses } from "../chain/addresses.js";
 
-const WITHDRAW_ABI = [
-  {
-    name: "withdraw",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "receiver", type: "address" },
-      { name: "owner", type: "address" },
-    ],
-    outputs: [{ type: "uint256" }],
-  },
-] as const;
+// checksummed to match viem's decodeFunctionData output
+const VAULT = getAddress("0x00000000000000000000000000000000000000aa");
+const USER = getAddress("0x00000000000000000000000000000000000000bb");
 
-const VAULT = "0x00000000000000000000000000000000000000aa" as const;
-const USER = "0x00000000000000000000000000000000000000bb" as const;
-
-test("prepareWithdrawTx targets the vault with zero value", () => {
-  const tx = txExecutorService.prepareWithdrawTx(VAULT, USER, 100);
-  assert.equal(tx.to, VAULT);
-  assert.equal(tx.value, "0");
-  assert.match(tx.data, /^0x[0-9a-f]+$/i);
+test("prepareApproveUsdc → USDC.approve(vault, amount@6dec)", () => {
+  const t = tx.prepareApproveUsdc(VAULT, 100);
+  assert.equal(t.to, TOKENS.USDC.address);
+  assert.equal(t.value, "0");
+  const d = decodeFunctionData({ abi: ERC20_ABI, data: t.data });
+  assert.equal(d.functionName, "approve");
+  assert.deepEqual(d.args, [VAULT, 100_000_000n]);
 });
 
-test("prepareWithdrawTx encodes withdraw(assets@6dec, receiver, owner)", () => {
-  const tx = txExecutorService.prepareWithdrawTx(VAULT, USER, 250.5);
-  const decoded = decodeFunctionData({ abi: WITHDRAW_ABI, data: tx.data });
-  assert.equal(decoded.functionName, "withdraw");
-  assert.deepEqual(decoded.args, [parseUnits("250.5", 6), USER, USER]);
-  // receiver and owner are both the user
-  assert.equal(decoded.args[1], decoded.args[2]);
+test("prepareDeposit → vault.deposit(assets@6dec, receiver)", () => {
+  const t = tx.prepareDeposit(VAULT, USER, 250);
+  assert.equal(t.to, VAULT);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "deposit");
+  assert.deepEqual(d.args, [250_000_000n, USER]);
 });
 
-test("prepareWithdrawTx uses USDC 6-decimal scaling", () => {
-  const tx = txExecutorService.prepareWithdrawTx(VAULT, USER, 1);
-  const decoded = decodeFunctionData({ abi: WITHDRAW_ABI, data: tx.data });
-  assert.equal(decoded.args[0], 1_000_000n); // 1 USDC = 1e6
+test("prepareWithdraw → vault.withdraw(assets, receiver=owner, owner)", () => {
+  const t = tx.prepareWithdraw(VAULT, USER, 10);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "withdraw");
+  assert.deepEqual(d.args, [10_000_000n, USER, USER]);
+});
+
+test("prepareDeployVault → factory.deployVault()", () => {
+  const t = tx.prepareDeployVault();
+  assert.equal(t.to, addresses.vaultFactory);
+  const d = decodeFunctionData({ abi: VAULT_FACTORY_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "deployVault");
+});
+
+test("prepareSetRisk → vault.setRiskLevel(level)", () => {
+  const t = tx.prepareSetRisk(VAULT, 2);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "setRiskLevel");
+  assert.deepEqual(d.args, [2]);
+});
+
+test("prepareSetCustomAllocation → vault.setCustomAllocation(low, med, high)", () => {
+  const t = tx.prepareSetCustomAllocation(VAULT, 5000, 3000, 2000);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "setCustomAllocation");
+  assert.deepEqual(d.args, [5000, 3000, 2000]);
 });
