@@ -113,6 +113,11 @@ export const envSchema = z.object({
   PRIVY_JWT_ISSUER: z.string().default("privy.io"),
   COINGECKO_API_KEY: z.string().default(""),
   MCP_PORT: z.coerce.number().int().positive().default(8765),
+
+  // Per-token APY estimate override (JSON, e.g. {"sUSDe":12,"mETH":3.5}). Merges
+  // over the built-in defaults. These are ESTIMATES until a real protocol-APY
+  // oracle is wired (Ondo/Mantle-LSP/Ethena).
+  APY_PCT_JSON: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

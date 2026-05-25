@@ -1,5 +1,5 @@
 import { resolveTargetBps } from "./services/rebalance-math.js";
-import { blendedApy, STATIC_APY_PCT } from "./services/projection.js";
+import { blendedApy, currentApy } from "./services/projection.js";
 import { RISK_LEVEL, type RiskLevel } from "./chain/tokens.js";
 
 export type StrategyId = "LOW" | "MEDIUM" | "HIGH" | "CUSTOM";
@@ -61,7 +61,7 @@ export interface StrategyView extends StrategyMeta {
 }
 
 /** Strategies enriched with a current blended APY (CUSTOM stays null). */
-export function listStrategies(apy = STATIC_APY_PCT): StrategyView[] {
+export function listStrategies(apy = currentApy()): StrategyView[] {
   return STRATEGIES.map((s) => ({
     ...s,
     blendedApyPct:
@@ -71,7 +71,7 @@ export function listStrategies(apy = STATIC_APY_PCT): StrategyView[] {
   }));
 }
 
-export function getStrategy(id: string, apy = STATIC_APY_PCT): StrategyView | null {
+export function getStrategy(id: string, apy = currentApy()): StrategyView | null {
   return listStrategies(apy).find((s) => s.id === id) ?? null;
 }
 

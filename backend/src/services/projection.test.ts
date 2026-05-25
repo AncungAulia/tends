@@ -4,8 +4,21 @@ import {
   blendedApy,
   computeProjection,
   projectForRisk,
+  parseApyOverrides,
 } from "./projection.js";
 import { resolveTargetBps } from "./rebalance-math.js";
+
+test("parseApyOverrides: empty / invalid JSON → {}", () => {
+  assert.deepEqual(parseApyOverrides(""), {});
+  assert.deepEqual(parseApyOverrides("not json"), {});
+});
+
+test("parseApyOverrides: keeps known tokens with numeric values, drops the rest", () => {
+  assert.deepEqual(
+    parseApyOverrides('{"sUSDe":15,"mETH":4,"BOGUS":9,"USDY":"x"}'),
+    { sUSDe: 15, mETH: 4 },
+  );
+});
 
 test("blendedApy: weights per-token APYs by allocation", () => {
   // LOW = 90% mUSD + 10% USDY

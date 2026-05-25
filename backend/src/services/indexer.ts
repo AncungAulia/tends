@@ -4,7 +4,7 @@ import { prisma } from "../db/client.js";
 import { publicClient } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI } from "../chain/abis.js";
-import { STATIC_APY_PCT, type ApyByToken } from "./projection.js";
+import { currentApy, type ApyByToken } from "./projection.js";
 import { wsHub, type WsEvent } from "../ws/hub.js";
 
 const log = childLogger("indexer");
@@ -240,7 +240,7 @@ export class IndexerService {
   }
 
   /** Snapshot current APYs into ApyHistory (placeholder source until a real feed). */
-  async scrapeAPYs(apy: ApyByToken = STATIC_APY_PCT): Promise<void> {
+  async scrapeAPYs(apy: ApyByToken = currentApy()): Promise<void> {
     for (const rec of toApyRecords(apy)) await this.repo.recordApy(rec);
     log.info({ count: Object.keys(apy).length }, "apy snapshot written");
   }

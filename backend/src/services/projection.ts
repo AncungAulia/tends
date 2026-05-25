@@ -2,7 +2,11 @@ import {
   resolveTargetBps,
   type CustomAllocation,
 } from "./rebalance-math.js";
-import { type RiskLevel, type TokenSymbol } from "../chain/tokens.js";
+import { TOKENS, type RiskLevel, type TokenSymbol } from "../chain/tokens.js";
+import { env } from "../config/env.js";
+import { childLogger } from "../lib/logger.js";
+
+const log = childLogger("projection");
 
 export interface Projection {
   capital: number;
@@ -16,10 +20,10 @@ export interface Projection {
 export type ApyByToken = Partial<Record<TokenSymbol, number>>;
 
 /**
- * Placeholder per-token APY (%) until the indexer's APY scraper lands. Values
- * are illustrative (docs strategy targets). Replace with ApyHistory reads.
+ * Baseline per-token APY (%) estimates. NOT live protocol rates — overridable via
+ * APY_PCT_JSON; real APY (Ondo/Mantle-LSP/Ethena oracles) is a follow-up.
  */
-export const STATIC_APY_PCT: ApyByToken = {
+export const DEFAULT_APY_PCT: ApyByToken = {
   USDC: 0,
   mUSD: 5,
   USDY: 5,
@@ -28,6 +32,30 @@ export const STATIC_APY_PCT: ApyByToken = {
   sUSDe: 12,
   WMNT: 0,
 };
+
+/** Parse APY_PCT_JSON, keeping only known tokens with numeric values. Pure. */
+export function parseApyOverrides(json: string): ApyByToken {
+  if (!json) return {};
+  try {
+    const obj = JSON.parse(json) as Record<string, unknown>;
+    const out: ApyByToken = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "number" && Number.isFinite(v) && k in TOKENS) {
+        out[k as TokenSymbol] = v;
+      }
+    }
+    return out;
+  } catch {
+    log.warn("APY_PCT_JSON is not valid JSON — ignoring");
+    return {};
+  }
+}
+
+let _apy: ApyByToken | undefined;
+/** Effective APY estimate = defaults merged with APY_PCT_JSON overrides (memoized). */
+export function currentApy(): ApyByToken {
+  return (_apy ??= { ...DEFAULT_APY_PCT, ...parseApyOverrides(env.APY_PCT_JSON) });
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -70,7 +98,7 @@ export function projectForRisk(
   risk: RiskLevel,
   capital: number,
   durationDays: number,
-  apyByToken: ApyByToken = STATIC_APY_PCT,
+  apyByToken: ApyByToken = currentApy(),
   custom?: CustomAllocation,
 ): Projection {
   const target = resolveTargetBps(risk, custom);
