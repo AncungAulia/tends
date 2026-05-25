@@ -1,50 +1,50 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-import { childLogger } from "../lib/logger.js";
+import { pino } from "pino";
+import { prisma } from "../db/client.js";
+import { prismaApyReader } from "../api/routes/apy.js";
+import { buildTools, type ToolDeps } from "./tools.js";
 
-const log = childLogger("mcp");
+// stdio MCP uses STDOUT for the JSON-RPC protocol — logs MUST go to stderr.
+const log = pino({ level: "info" }, process.stderr);
 
 /**
- * MCP server exposing Tends backend tools to the Hermes Agent.
- * Register in ~/.hermes/config.yaml:
+ * Tends MCP server (stdio). Hermes spawns this as a subprocess and exposes its
+ * tools as `mcp_tends_<tool>`. Register in ~/.hermes/config.yaml:
  *
  *   mcp_servers:
  *     tends:
- *       command: "pnpm"
- *       args: ["--dir", "/abs/path/backend", "mcp"]
- *
- * Hermes registers each tool as `mcp_tends_<toolName>`.
- *
- * Tools to implement (docs/03-BACKEND_FRONTEND.md §A.3):
- *   readUserPosition, readAPYs, computeProjection,
- *   prepareDepositTx, prepareWithdrawTx, prepareSwitchTx,
- *   explainRisk, getAgentActivity,
- *   readVaultState, executeRebalance, readPriceFeeds,
- *   readDEXLiquidity, triggerEmergencyPause, logAlert
+ *       command: "node"
+ *       args: ["/app/dist/mcp/server.js"]
+ *       env: { DATABASE_URL: "...", VAULT_FACTORY_ADDRESS: "...", ... }
  */
-const server = new McpServer({ name: "tends", version: "0.1.0" });
-
-// Example tool — replace stub with real implementation.
-server.tool(
-  "readUserPosition",
-  "Read a user's current portfolio position (shares, value, PnL).",
-  { walletAddress: z.string().describe("User wallet address (0x...)") },
-  async ({ walletAddress }) => {
-    // TODO: query prisma.vault for this owner + enrich with on-chain value.
-    log.info({ walletAddress }, "readUserPosition (stub)");
-    return {
-      content: [
-        { type: "text", text: JSON.stringify({ walletAddress, positions: [] }) },
-      ],
-    };
+const deps: ToolDeps = {
+  async position(walletAddress) {
+    const vault = await prisma.vault.findUnique({ where: { owner: walletAddress } });
+    return { vault };
   },
-);
+  async activity(walletAddress) {
+    const vault = await prisma.vault.findUnique({ where: { owner: walletAddress } });
+    if (!vault) return { activities: [] };
+    const activities = await prisma.agentActivity.findMany({
+      where: { vaultAddress: vault.address },
+      orderBy: { timestamp: "desc" },
+      take: 20,
+    });
+    return { activities };
+  },
+  apyHistory: (asset, days) => prismaApyReader.history(asset, days),
+};
+
+const server = new McpServer({ name: "tends", version: "0.1.0" });
+for (const t of buildTools(deps)) {
+  // SDK validates against t.schema before calling; our handler re-parses defensively.
+  server.tool(t.name, t.description, t.schema, t.handler as never);
+}
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  log.info("Tends MCP server up (stdio)");
+  await server.connect(new StdioServerTransport());
+  log.info(`Tends MCP server up (stdio) — ${buildTools(deps).length} tools`);
 }
 
 main().catch((err) => {
