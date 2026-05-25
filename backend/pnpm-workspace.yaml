@@ -1,0 +1,7 @@
+# pnpm 10.4+/11 reads settings from here (not the package.json "pnpm" field).
+# Allow these packages to run install/build scripts (Prisma needs its engines).
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+  - esbuild
