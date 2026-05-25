@@ -83,3 +83,25 @@ test("POST /api/chat: auth + body validation + streamed SSE chunks", async () =>
   // the completed exchange is persisted with the accumulated reply
   assert.deepEqual(persisted, [{ privyId: "did:privy:1", user: "hi", assistant: "Hello" }]);
 });
+
+test("POST /api/chat: a stream error emits an SSE error event (no persist)", async () => {
+  async function* boom() {
+    throw new Error("llm down");
+    yield ""; // unreachable; makes this a generator
+  }
+  const persisted: unknown[] = [];
+  const app = new Hono().route(
+    "/api/chat",
+    makeChatRouter(okAuth, boom, async (...a) => void persisted.push(a)),
+  );
+  const res = await app.request("/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer good" },
+    body: JSON.stringify({ message: "hi" }),
+  });
+  assert.equal(res.status, 200); // SSE opened
+  const text = await res.text();
+  assert.match(text, /event: error/);
+  assert.match(text, /llm down/);
+  assert.equal(persisted.length, 0); // nothing to persist on failure
+});
