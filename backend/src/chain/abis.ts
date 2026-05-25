@@ -245,6 +245,39 @@ export const USER_VAULT_ABI = [
       { ...SWAP_INSTRUCTION, indexed: false },
     ],
   },
+  {
+    // ERC-4626 standard
+    name: "Deposit",
+    type: "event",
+    inputs: [
+      { name: "sender", type: "address", indexed: true },
+      { name: "owner", type: "address", indexed: true },
+      { name: "assets", type: "uint256", indexed: false },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "Withdraw",
+    type: "event",
+    inputs: [
+      { name: "sender", type: "address", indexed: true },
+      { name: "receiver", type: "address", indexed: true },
+      { name: "owner", type: "address", indexed: true },
+      { name: "assets", type: "uint256", indexed: false },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "RiskPreferenceUpdated",
+    type: "event",
+    inputs: [
+      { name: "user", type: "address", indexed: true },
+      { name: "level", type: "uint8", indexed: false },
+      { name: "lowBps", type: "uint16", indexed: false },
+      { name: "medBps", type: "uint16", indexed: false },
+      { name: "highBps", type: "uint16", indexed: false },
+    ],
+  },
 ] as const;
 
 export const ACTIVITY_LOG_ABI = [

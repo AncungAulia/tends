@@ -5,11 +5,13 @@ import {
   toRebalanceActivity,
   toActivityLogRecord,
   toApyRecords,
+  toRiskUpdate,
   IndexerService,
   type IndexerRepo,
   type VaultRecord,
   type ActivityRecord,
   type ApyRecord,
+  type RiskUpdate,
 } from "./indexer.js";
 
 const VAULT = "0x00000000000000000000000000000000000000aa";
@@ -64,16 +66,24 @@ test("toApyRecords maps a token→APY map (missing → 0)", () => {
   ]);
 });
 
+type PosOp = { vault: string; owner?: string; shares: bigint; assets?: bigint; op: "add" | "sub" };
+
 function fakeRepo() {
   const vaults: VaultRecord[] = [];
   const activities: ActivityRecord[] = [];
   const apys: ApyRecord[] = [];
+  const positions: PosOp[] = [];
+  const risks: { vault: string; update: RiskUpdate }[] = [];
   const repo: IndexerRepo = {
     upsertVault: async (r) => void vaults.push(r),
     recordActivity: async (r) => void activities.push(r),
     recordApy: async (r) => void apys.push(r),
+    addToPosition: async (vault, owner, shares, assets) =>
+      void positions.push({ vault, owner, shares, assets, op: "add" }),
+    subFromPosition: async (vault, shares) => void positions.push({ vault, shares, op: "sub" }),
+    setRiskPreference: async (vault, update) => void risks.push({ vault, update }),
   };
-  return { repo, vaults, activities, apys };
+  return { repo, vaults, activities, apys, positions, risks };
 }
 
 test("onVaultDeployed upserts the mapped vault record", async () => {
@@ -131,4 +141,46 @@ test("scrapeAPYs writes one row per asset", async () => {
     { asset: "mUSD", apyPct: 5 },
     { asset: "sUSDe", apyPct: 12 },
   ]);
+});
+
+test("toRiskUpdate: keeps bps only for CUSTOM (level 3)", () => {
+  assert.deepEqual(toRiskUpdate(2, 0, 0, 0), {
+    riskPreference: 2, lowBps: null, medBps: null, highBps: null,
+  });
+  assert.deepEqual(toRiskUpdate(3, 5000, 3000, 2000), {
+    riskPreference: 3, lowBps: 5000, medBps: 3000, highBps: 2000,
+  });
+});
+
+test("onDeposit adds shares + cost basis to the position", async () => {
+  const { repo, positions } = fakeRepo();
+  await new IndexerService(repo).onDeposit(VAULT, USER, 1_000_000n, 999n);
+  assert.deepEqual(positions, [
+    { vault: VAULT, owner: USER, shares: 999n, assets: 1_000_000n, op: "add" },
+  ]);
+});
+
+test("onWithdraw reduces shares", async () => {
+  const { repo, positions } = fakeRepo();
+  await new IndexerService(repo).onWithdraw(VAULT, USER, 500_000n, 499n);
+  assert.deepEqual(positions, [{ vault: VAULT, shares: 499n, op: "sub" }]);
+});
+
+test("onRiskPreferenceUpdated persists the mapped risk update", async () => {
+  const { repo, risks } = fakeRepo();
+  await new IndexerService(repo).onRiskPreferenceUpdated(VAULT, 3, 6000, 2000, 2000);
+  assert.equal(risks.length, 1);
+  assert.deepEqual(risks[0]!.update, {
+    riskPreference: 3, lowBps: 6000, medBps: 2000, highBps: 2000,
+  });
+});
+
+test("deposit/withdraw/risk handlers broadcast WS events", async () => {
+  const { repo } = fakeRepo();
+  const events: { type: string }[] = [];
+  const svc = new IndexerService(repo, (e) => events.push(e));
+  await svc.onDeposit(VAULT, USER, 1n, 1n);
+  await svc.onWithdraw(VAULT, USER, 1n, 1n);
+  await svc.onRiskPreferenceUpdated(VAULT, 1, 0, 0, 0);
+  assert.deepEqual(events.map((e) => e.type), ["deposit", "withdraw", "risk_updated"]);
 });
