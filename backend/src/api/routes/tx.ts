@@ -2,9 +2,24 @@ import { Hono } from "hono";
 import type { Context, MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { txExecutorService as tx } from "../../services/tx-executor.js";
+import { gasFunderService } from "../../services/gas-funder.js";
 import { riskLevelFromId } from "../../strategies.js";
 import { RISK_LEVEL } from "../../chain/tokens.js";
+import { env } from "../../config/env.js";
+import { childLogger } from "../../lib/logger.js";
 import { requireAuth, type AuthVars } from "../auth.js";
+
+const log = childLogger("tx");
+
+/** Best-effort gas top-up before a user-signed tx (docs §A.5). Never blocks. */
+async function tryEnsureGas(account: `0x${string}`): Promise<void> {
+  if (!env.PRIVATE_KEY_GAS_FUNDER) return;
+  try {
+    await gasFunderService.ensureGasFunded(account);
+  } catch (err) {
+    log.warn({ account, err }, "gas top-up failed (non-blocking)");
+  }
+}
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid address");
 const amount = z.number().positive();
@@ -41,6 +56,7 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>): Hono<AuthVars> 
     const p = await parseBody(c, depositBody);
     if (!p.ok) return p.res;
     const { vault, account, amount } = p.data;
+    await tryEnsureGas(account as `0x${string}`);
     return c.json({
       steps: [
         tx.prepareApproveUsdc(vault as `0x${string}`, amount),
@@ -53,6 +69,7 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>): Hono<AuthVars> 
     const p = await parseBody(c, withdrawBody);
     if (!p.ok) return p.res;
     const { vault, account, amount } = p.data;
+    await tryEnsureGas(account as `0x${string}`);
     return c.json({ tx: tx.prepareWithdraw(vault as `0x${string}`, account as `0x${string}`, amount) });
   });
 

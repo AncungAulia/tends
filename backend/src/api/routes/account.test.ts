@@ -59,7 +59,10 @@ test("POST /api/chat: auth + body validation + streamed SSE chunks", async () =>
     yield "Hel";
     yield "lo";
   }
-  const app = new Hono().route("/api/chat", makeChatRouter(okAuth, fakeStream));
+  const persisted: { privyId: string; user: string; assistant: string }[] = [];
+  const persist = async (privyId: string, user: string, assistant: string) =>
+    void persisted.push({ privyId, user, assistant });
+  const app = new Hono().route("/api/chat", makeChatRouter(okAuth, fakeStream, persist));
   const post = (token: string, body?: unknown) =>
     app.request("/api/chat", {
       method: "POST",
@@ -76,4 +79,7 @@ test("POST /api/chat: auth + body validation + streamed SSE chunks", async () =>
   assert.match(text, /data: Hel/);
   assert.match(text, /data: lo/);
   assert.match(text, /event: done/);
+
+  // the completed exchange is persisted with the accumulated reply
+  assert.deepEqual(persisted, [{ privyId: "did:privy:1", user: "hi", assistant: "Hello" }]);
 });

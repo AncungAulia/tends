@@ -118,6 +118,10 @@ export const envSchema = z.object({
   // over the built-in defaults. These are ESTIMATES until a real protocol-APY
   // oracle is wired (Ondo/Mantle-LSP/Ethena).
   APY_PCT_JSON: z.string().default(""),
+
+  // Rate limit per client IP for /api/* (fixed window).
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
 });
 
 const parsed = envSchema.safeParse(process.env);

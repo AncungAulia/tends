@@ -17,6 +17,7 @@ import { txRouter } from "./api/routes/tx.js";
 import { authRouter } from "./api/routes/auth.js";
 import { apyRouter } from "./api/routes/apy.js";
 import { chatRouter } from "./api/routes/chat.js";
+import { rateLimit } from "./api/rate-limit.js";
 
 const log = childLogger("server");
 
@@ -41,6 +42,8 @@ app.get("/health", async (c) => {
     ts: new Date().toISOString(),
   });
 });
+
+app.use("/api/*", rateLimit);
 
 app.route("/api/auth", authRouter);
 app.route("/api/strategies", strategiesRouter);
