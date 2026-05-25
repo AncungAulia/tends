@@ -30,8 +30,11 @@ COPY --from=mcpbuild /app/node_modules ./node_modules
 COPY --from=mcpbuild /app/dist ./dist
 COPY --from=mcpbuild /app/prisma ./prisma
 
-# Hermes config (model + MCP registration). Secrets come from env at runtime.
-COPY hermes/config.yaml /root/.hermes/config.yaml
+# Hermes config seeded by the entrypoint into the persistent /root/.hermes volume
+# (so the Copilot OAuth credential in auth.json survives recreates).
+COPY hermes/config.yaml /opt/hermes/config.yaml
+COPY hermes/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV API_SERVER_ENABLED=true \
     API_SERVER_HOST=0.0.0.0 \
@@ -39,4 +42,4 @@ ENV API_SERVER_ENABLED=true \
     PYTHONUNBUFFERED=1
 EXPOSE 8642
 
-CMD ["hermes", "gateway"]
+CMD ["/usr/local/bin/entrypoint.sh"]
