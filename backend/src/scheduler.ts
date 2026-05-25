@@ -53,7 +53,7 @@ export function buildJobs(): ScheduledJob[] {
       name: "price-monitor",
       enabled: env.PRICE_MONITOR_ENABLED,
       intervalMs: env.PRICE_MONITOR_INTERVAL_SEC * 1000,
-      run: () => priceMonitorService.checkFreshness(),
+      run: () => priceMonitorService.runChecks(),
     },
     {
       name: "apy-scraper",

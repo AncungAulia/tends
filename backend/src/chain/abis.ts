@@ -62,6 +62,14 @@ export const USER_VAULT_TX_ABI = [
     ],
     outputs: [],
   },
+  {
+    // callable by owner OR agentExecutor (our agent wallet)
+    name: "emergencyPause",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "reason", type: "string" }],
+    outputs: [],
+  },
 ] as const;
 
 export const VAULT_FACTORY_TX_ABI = [

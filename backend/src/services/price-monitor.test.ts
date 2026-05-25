@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   classifyFreshness,
+  assessBounds,
   PriceMonitorService,
   type PriceMonitorDeps,
 } from "./price-monitor.js";
@@ -28,6 +29,34 @@ test("classifyFreshness: unset (updatedAt 0) is stale with max age", () => {
     ageSeconds: Number.MAX_SAFE_INTEGER,
     stale: true,
   });
+});
+
+test("assessBounds: in-band / below / above / zero", () => {
+  const lo = (E18 * 97n) / 100n;
+  const hi = (E18 * 13n) / 10n;
+  assert.deepEqual(assessBounds(E18, lo, hi), { ok: true, reason: null });
+  assert.deepEqual(assessBounds(E18 / 2n, lo, hi), { ok: false, reason: "below" });
+  assert.deepEqual(assessBounds(E18 * 2n, lo, hi), { ok: false, reason: "above" });
+  assert.deepEqual(assessBounds(0n, lo, hi), { ok: false, reason: "zero" });
+});
+
+test("checkPrices: flags a token below its band (depeg), others ok", async () => {
+  const deps: PriceMonitorDeps = {
+    readNow: async () => 1000n,
+    readMaxStaleness: async () => 7200n,
+    readPriceUnsafe: async (t) =>
+      t === TOKENS.USDY.address ? ([E18 / 2n, 1000n] as const) : ([E18, 1000n] as const),
+  };
+  const out = await new PriceMonitorService(deps).checkPrices();
+  if (env.USE_MOCK_CONTRACTS || !addresses.priceFeed) {
+    assert.deepEqual(out, []);
+    return;
+  }
+  assert.equal(out.length, 4); // USDC, mUSD, USDY, sUSDe
+  const breaches = out.filter((s) => !s.ok);
+  assert.equal(breaches.length, 1);
+  assert.equal(breaches[0]!.symbol, "USDY");
+  assert.equal(breaches[0]!.reason, "below");
 });
 
 test("checkFreshness: one stale feed flagged among fresh ones", async () => {
