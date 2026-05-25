@@ -22,7 +22,9 @@ export const envSchema = z.object({
     .default("info"),
 
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  // Optional — Redis isn't consumed yet (reserved for cache/rate-limit). No need
+  // to provision it to deploy.
+  REDIS_URL: z.string().url().optional().or(z.literal("")),
 
   // ── Chain (Mantle) ──────────────────────────────────────────────────────
   CHAIN_ID: z.coerce.number().int().positive().default(5003),

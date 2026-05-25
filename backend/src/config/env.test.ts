@@ -39,8 +39,15 @@ test("coerces numeric env vars", () => {
 });
 
 test("missing required vars fail validation", () => {
-  assert.equal(envSchema.safeParse({ REDIS_URL: base.REDIS_URL, MANTLE_RPC_URL: base.MANTLE_RPC_URL }).success, false);
-  assert.equal(envSchema.safeParse({ DATABASE_URL: base.DATABASE_URL, MANTLE_RPC_URL: base.MANTLE_RPC_URL }).success, false);
+  // DATABASE_URL required
+  assert.equal(envSchema.safeParse({ MANTLE_RPC_URL: base.MANTLE_RPC_URL }).success, false);
+  // MANTLE_RPC_URL required
+  assert.equal(envSchema.safeParse({ DATABASE_URL: base.DATABASE_URL }).success, false);
+});
+
+test("REDIS_URL is optional (Redis not consumed yet)", () => {
+  const e = envSchema.parse({ DATABASE_URL: base.DATABASE_URL, MANTLE_RPC_URL: base.MANTLE_RPC_URL });
+  assert.ok(e); // parses fine without REDIS_URL
 });
 
 test("rejects invalid enum / non-numeric / bad url", () => {
