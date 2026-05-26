@@ -1,0 +1,104 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  RebalancerService,
+  type RebalancerDeps,
+  type VaultMeta,
+} from "./rebalancer.js";
+import type { SwapInstruction } from "./rebalance-math.js";
+
+const V1 = "0x0000000000000000000000000000000000000001" as const;
+const V2 = "0x0000000000000000000000000000000000000002" as const;
+const SWAP: SwapInstruction = {
+  tokenIn: "0x00000000000000000000000000000000000000aa",
+  tokenOut: "0x00000000000000000000000000000000000000bb",
+  amountIn: 1n,
+  minAmountOut: 1n,
+};
+
+const meta = (o: Partial<VaultMeta> = {}): VaultMeta => ({
+  paused: false,
+  lastRebalanceTime: 0n,
+  minRebalanceInterval: 0n,
+  riskPreference: 1,
+  ...o,
+});
+
+function makeDeps(over: Partial<RebalancerDeps> = {}) {
+  const calls = { sendRebalance: [] as { vault: string; instr: SwapInstruction[] }[] };
+  const deps: RebalancerDeps = {
+    listVaults: async () => [V1],
+    readVaultMeta: async () => meta(),
+    buildInstructions: async () => [SWAP],
+    sendRebalance: async (vault, instr) => {
+      calls.sendRebalance.push({ vault, instr });
+      return "0xhash";
+    },
+    now: () => 1000n,
+    ...over,
+  };
+  return { deps, calls };
+}
+
+test("processVault: paused → skip, no tx sent", async () => {
+  const { deps, calls } = makeDeps({ readVaultMeta: async () => meta({ paused: true }) });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "paused" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: within cooldown → skip", async () => {
+  const { deps, calls } = makeDeps({
+    readVaultMeta: async () => meta({ lastRebalanceTime: 900n, minRebalanceInterval: 200n }),
+    now: () => 1000n, // 1000 < 900+200
+  });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "cooldown" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: cooldown elapsed + already balanced → skip", async () => {
+  const { deps, calls } = makeDeps({
+    readVaultMeta: async () => meta({ lastRebalanceTime: 900n, minRebalanceInterval: 100n }),
+    now: () => 1000n, // 1000 >= 1000, cooldown done
+    buildInstructions: async () => [],
+  });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "balanced" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: imbalanced → sends rebalance with the built instructions", async () => {
+  const { deps, calls } = makeDeps();
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "rebalanced", hash: "0xhash", swaps: 1 });
+  assert.equal(calls.sendRebalance.length, 1);
+  assert.equal(calls.sendRebalance[0]!.vault, V1);
+  assert.deepEqual(calls.sendRebalance[0]!.instr, [SWAP]);
+});
+
+test("runOnce: isolates a failing vault and still processes the rest", async () => {
+  const seen: string[] = [];
+  const { deps, calls } = makeDeps({
+    listVaults: async () => [V1, V2],
+    readVaultMeta: async (v) => {
+      seen.push(v);
+      if (v === V1) throw new Error("rpc blip");
+      return meta();
+    },
+  });
+  await new RebalancerService(deps).runOnce();
+  assert.deepEqual(seen, [V1, V2]); // both attempted
+  assert.equal(calls.sendRebalance.length, 1); // only V2 rebalanced
+  assert.equal(calls.sendRebalance[0]!.vault, V2);
+});
+
+test("listVaults / buildSwapInstructions delegate to deps", async () => {
+  const { deps } = makeDeps({
+    listVaults: async () => [V1, V2],
+    buildInstructions: async () => [SWAP, SWAP],
+  });
+  const svc = new RebalancerService(deps);
+  assert.deepEqual(await svc.listVaults(), [V1, V2]);
+  assert.equal((await svc.buildSwapInstructions(V1, 2)).length, 2);
+});

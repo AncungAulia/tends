@@ -1,0 +1,15 @@
+# Hermes Agent config — Tends portfolio assistant.
+# Provider: GitHub Copilot. Auth via COPILOT_GITHUB_TOKEN (see hermes/.env.example).
+# Canonical config shape: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+
+model:
+  default: gpt-4o # Copilot model (auto-detected from the live catalog). GPT-5+ uses
+  provider: copilot # the Responses API; gpt-4o uses Chat Completions.
+
+# MCP: the Tends tools server (Hermes spawns it as a subprocess and exposes
+# mcp_tends_*). It needs DATABASE_URL + contract addresses (inherited from the
+# container env via .env.prod) to read data.
+mcp_servers:
+  tends:
+    command: node
+    args: ["/app/dist/mcp/server.js"]

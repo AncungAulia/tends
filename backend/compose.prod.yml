@@ -1,0 +1,78 @@
+# Self-hosted production stack — isolated under compose project "tends".
+#   core:  docker compose -f compose.prod.yml up -d --build
+#   +chat: docker compose -f compose.prod.yml --profile chat up -d --build
+# Secrets live in .env.prod (NOT committed) next to this file.
+
+name: tends
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tends
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tends}
+      POSTGRES_DB: tends
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [tends]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tends -d tends"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+    # apply migrations, then start the server
+    command: sh -c "node_modules/.bin/prisma migrate deploy && node dist/index.js"
+    ports:
+      # host 3005 (3001 taken on this server) → container 3001
+      - "${BACKEND_HOST_PORT:-3005}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [tends]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Chat agent — opt-in (build not yet verified). Enable with `--profile chat`.
+  hermes:
+    profiles: ["chat"]
+    build:
+      context: .
+      dockerfile: hermes/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    expose:
+      - "8642"
+    volumes:
+      # persists ~/.hermes/auth.json (Copilot OAuth login) across recreates
+      - hermes_home:/root/.hermes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [tends]
+
+volumes:
+  pgdata:
+  hermes_home:
+
+networks:
+  tends:
+    name: tends
