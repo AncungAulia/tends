@@ -3,13 +3,15 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const TEXT = "Always on. Always optimizing. Zero effort.";
 
 export default function HorizontalWords() {
-  const outerRef = useRef<HTMLDivElement>(null);
+  const outerRef  = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
+  const textRef   = useRef<HTMLDivElement>(null);
+  const isMobile  = useIsMobile();
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -62,7 +64,7 @@ export default function HorizontalWords() {
 
   return (
     /* Outer div drives scroll distance; inner sticky handles pinning */
-    <div ref={outerRef} style={{ height: "510vh" }} className="bg-bg">
+    <div ref={outerRef} style={{ height: isMobile ? "320vh" : "510vh" }} className="bg-bg">
       <div
         ref={stickyRef}
         className="sticky top-0 h-screen overflow-hidden flex flex-col justify-center"

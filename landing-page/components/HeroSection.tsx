@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const VIDEO_SRC = "/video/video4.mp4";
 
@@ -39,9 +40,11 @@ export default function HeroSection() {
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const textRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const activeIdx = useRef(-1);
-  const entryDone = useRef(false);
+  const activeIdx  = useRef(-1);
+  const entryDone  = useRef(false);
   const [hovered, setHovered] = useState(false);
+  const isMobile    = useIsMobile();
+  const isMobileRef = useRef(isMobile);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = 0.6;
@@ -63,12 +66,11 @@ export default function HeroSection() {
       { yPercent: 110 },
     );
 
-    tl
-      .to(
-        loadOverlayRef.current,
-        { autoAlpha: 0, duration: 0.5, ease: "power2.in" },
-        0,
-      )
+    tl.to(
+      loadOverlayRef.current,
+      { autoAlpha: 0, duration: 0.5, ease: "power2.in" },
+      0,
+    )
       .to(
         videoBgRef.current,
         { scale: 1, duration: 1.5, ease: "power3.inOut" },
@@ -91,6 +93,9 @@ export default function HeroSection() {
       tl.kill();
     };
   }, []);
+
+  // ── Sync isMobileRef setiap isMobile berubah ─────────────────────
+  useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
 
   // ── Expand/restore frame berdasarkan scroll position ─────────────
   useEffect(() => {
@@ -115,7 +120,7 @@ export default function HeroSection() {
       } else if (atTop && isExpanded.current) {
         isExpanded.current = false;
         gsap.to(videoBgRef.current, {
-          padding: 14,
+          padding: isMobileRef.current ? 8 : 14,
           duration: 0.25,
           ease: "power2.out",
           overwrite: true,
@@ -237,7 +242,7 @@ export default function HeroSection() {
           inset: 0,
           zIndex: 0,
           background: "#ffffff",
-          padding: "14px",
+          padding: isMobile ? "8px" : "14px",
         }}
       >
         <div
@@ -288,34 +293,50 @@ export default function HeroSection() {
         <div
           data-hero-content
           className="relative h-full flex flex-col pt-10 pb-12"
-          style={{ paddingLeft: "30px", paddingRight: "30px" }}
+          style={{
+            paddingLeft: isMobile ? "20px" : "30px",
+            paddingRight: isMobile ? "20px" : "30px",
+          }}
         >
           <div className="flex-1 flex flex-col justify-center pt-12">
             <h1
               className="font-sans font-normal text-white leading-[0.93] tracking-[-0.03em]"
-              style={{ fontSize: "clamp(4rem, 9.5vw, 7rem)" }}
+              style={{
+                fontSize: isMobile
+                  ? "clamp(2.5rem, 10vw, 4rem)"
+                  : "clamp(4rem, 9.5vw, 7rem)",
+              }}
             >
               <div
                 className="clip-line"
-                style={{ paddingLeft: "20px", paddingRight: "20px" }}
+                style={{
+                  paddingLeft: isMobile ? "0" : "20px",
+                  paddingRight: isMobile ? "0" : "20px",
+                }}
               >
                 <div
                   ref={line1Ref}
-                  style={{ paddingLeft: "20px", paddingRight: "20px" }}
+                  style={{
+                    paddingLeft: isMobile ? "0" : "20px",
+                    paddingRight: isMobile ? "0" : "20px",
+                  }}
                 >
                   Fire your analyst,
                 </div>
               </div>
               <div
                 className="clip-line"
-                style={{ paddingLeft: "40 px", paddingRight: "20px" }}
+                style={{
+                  paddingLeft: "0",
+                  paddingRight: isMobile ? "0" : "20px",
+                }}
               >
                 <div
                   ref={line2Ref}
                   style={{
                     color: "white",
-                    paddingLeft: "40px",
-                    paddingRight: "20px",
+                    paddingLeft: isMobile ? "0" : "40px",
+                    paddingRight: isMobile ? "0" : "20px",
                   }}
                 >
                   deploy your agent.
@@ -325,7 +346,11 @@ export default function HeroSection() {
           </div>
 
           <div
-            className="flex items-center justify-between gap-8 pt-8"
+            className={
+              isMobile
+                ? "flex flex-col gap-4 pt-6"
+                : "flex items-center justify-between gap-8 pt-8"
+            }
             style={{ paddingBottom: "28px" }}
           >
             <div style={{ overflow: "hidden", paddingBottom: "0.2em" }}>
@@ -333,10 +358,12 @@ export default function HeroSection() {
                 <p
                   className="font-sans leading-relaxed text-white"
                   style={{
-                    fontSize: "clamp(1rem, 1.5vw, 1.5rem)",
+                    fontSize: isMobile
+                      ? "clamp(0.95rem, 4vw, 1.1rem)"
+                      : "clamp(1rem, 1.5vw, 1.5rem)",
                     maxWidth: "38ch",
-                    paddingLeft: "40px",
-                    paddingRight: "20px",
+                    paddingLeft: isMobile ? "0" : "40px",
+                    paddingRight: isMobile ? "0" : "20px",
                     paddingBottom: "20px",
                   }}
                 >
@@ -345,154 +372,113 @@ export default function HeroSection() {
               </div>
             </div>
 
-            {/* SVG filter: blur → threshold → composite, rounded clip-path corners */}
-            <svg
-              width="0"
-              height="0"
-              style={{ position: "absolute", overflow: "hidden" }}
-            >
-              <defs>
-                <filter
-                  id="hero-btn-round"
-                  x="-10%"
-                  y="-30%"
-                  width="120%"
-                  height="160%"
-                >
-                  <feGaussianBlur
-                    in="SourceGraphic"
-                    stdDeviation="4"
-                    result="blur"
-                  />
-                  <feColorMatrix
-                    in="blur"
-                    mode="matrix"
-                    values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -8"
-                    result="round"
-                  />
-                  <feComposite in="SourceGraphic" in2="round" operator="atop" />
-                </filter>
-              </defs>
-            </svg>
-
             <div style={{ overflow: "hidden", paddingBottom: "0.2em" }}>
               <div
                 ref={btnsRef}
-                className="flex items-center shrink-0"
                 style={{
-                  paddingLeft: "40px",
-                  paddingRight: "40px",
+                  paddingLeft: isMobile ? "0" : "40px",
+                  paddingRight: isMobile ? "0" : "40px",
                   paddingBottom: "20px",
                 }}
               >
-                {/* Filter wrapper — dibutuhkan agar filter applied SETELAH clip-path */}
-                <div style={{ filter: "url(#hero-btn-round)" }}>
-                  <div
-                    onMouseEnter={() => setHovered(true)}
-                    onMouseLeave={() => setHovered(false)}
+                <button
+                  onMouseEnter={() => setHovered(true)}
+                  onMouseLeave={() => setHovered(false)}
+                  style={{
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    padding: "12px 12px 12px 22px",
+                    background: "#ffffff",
+                    border: "none",
+                    borderRadius: "14px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: isMobile ? "0.7rem" : "0.78rem",
+                    letterSpacing: 0,
+                    textTransform: "uppercase",
+                    color: hovered ? "#ffffff" : "#0C1A2B",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    transition: "color 0.65s ease",
+                  }}
+                >
+                  {/* Wipe layer — slides up from bottom */}
+                  <span
                     style={{
-                      background: hovered ? "#4BB8FA" : "#0C1A2B",
-                      color: hovered ? "#0C1A2B" : "#ffffff",
-                      padding: "16px 32px 16px 22px",
-                      borderRadius: "12px 0 0 12px",
-                      clipPath:
-                        "polygon(0 0, 100% 0, calc(100% - 20px) 100%, 0 100%)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "1rem",
-                      textTransform: "uppercase",
-                      transition: "background 0.4s ease, color 0.4s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      whiteSpace: "nowrap",
-                      cursor: "pointer",
-                      letterSpacing: "none",
-                      position: "relative",
-                      left: "10px",
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: hovered ? "100%" : "0%",
+                      background: "#0C1A2B",
+                      transition: "height 0.65s cubic-bezier(0.4,0,0.2,1)",
+                      zIndex: 0,
                     }}
-                  >
-                    Deploy Your Agent
-                  </div>
-                </div>
-
-                <div style={{ filter: "url(#hero-btn-round)" }}>
-                  <div
-                    onMouseEnter={() => setHovered(true)}
-                    onMouseLeave={() => setHovered(false)}
+                  />
+                  <span style={{ position: "relative", zIndex: 1 }}>Deploy Your Agent</span>
+                  {/* Icon — arrow, no circle, warna ikut text */}
+                  <span
                     style={{
-                      background: hovered ? "#0C1A2B" : "#4BB8FA",
-                      width: "64px",
-                      height: "56px",
-                      borderRadius: "0 12px 12px 0",
-                      clipPath: "polygon(20px 0, 100% 0, 100% 100%, 0 100%)",
                       position: "relative",
-                      overflow: "hidden",
-                      transition: "background 0.4s ease",
-                      cursor: "pointer",
+                      zIndex: 1,
+                      width: "13px",
+                      height: "13px",
                       flexShrink: 0,
+                      overflow: "hidden",
                     }}
                   >
+                    {/* arr-out: idle di tengah, hover keluar ke kanan-atas */}
                     <span
                       style={{
                         position: "absolute",
-                        left: "12px",
-                        inset: 0,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
                         transform: hovered
-                          ? "translateX(150%)"
-                          : "translateX(0)",
-                        transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1)",
+                          ? "translate(200%, -200%)"
+                          : "translate(0, 0)",
                       }}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                      >
+                      <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
                         <path
-                          d="M3 8H13M13 8L9 4M13 8L9 12"
-                          stroke={hovered ? "#ffffff" : "#0C1A2B"}
+                          d="M2 12L12 2M12 2H5.5M12 2V8.5"
+                          stroke="currentColor"
                           strokeWidth="1.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                       </svg>
                     </span>
+                    {/* arr-in: idle tersembunyi di kiri-bawah, hover masuk ke tengah */}
                     <span
                       style={{
                         position: "absolute",
-                        inset: 0,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
                         transform: hovered
-                          ? "translateX(0)"
-                          : "translateX(-100%)",
-                        transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1)",
+                          ? "translate(0, 0)"
+                          : "translate(-200%, 200%)",
                       }}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                      >
+                      <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
                         <path
-                          d="M3 8H13M13 8L9 4M13 8L9 12"
-                          stroke={hovered ? "#ffffff" : "#0C1A2B"}
+                          d="M2 12L12 2M12 2H5.5M12 2V8.5"
+                          stroke="currentColor"
                           strokeWidth="1.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                       </svg>
                     </span>
-                  </div>
-                </div>
+                  </span>
+                </button>
               </div>
             </div>
-            {/* end overflow wrapper buttons */}
           </div>
         </div>
       </section>
@@ -528,25 +514,39 @@ export default function HeroSection() {
               />
             </div>
 
+            {/* ── Sidebar: How It Works + counter ──────────────────── */}
             <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "40px",
-                transform: "translateY(-50%)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
-              }}
+              style={
+                isMobile
+                  ? {
+                      position: "absolute",
+                      top: "80px",
+                      left: "20px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }
+                  : {
+                      position: "absolute",
+                      top: "50%",
+                      left: "40px",
+                      transform: "translateY(-50%)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "16px",
+                    }
+              }
             >
               <span
                 style={{
                   fontFamily: "var(--font-sans)",
-                  fontSize: "clamp(1.2rem, 2.5vw, 1.5rem)",
+                  fontSize: isMobile
+                    ? "0.75rem"
+                    : "clamp(1.2rem, 2.5vw, 1.5rem)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   color: "rgba(255,255,255,0.45)",
-                  marginLeft: "40px",
+                  marginLeft: isMobile ? "0" : "40px",
                 }}
               >
                 How It Works?
@@ -565,7 +565,7 @@ export default function HeroSection() {
                   letterSpacing: "0.05em",
                   color: "rgba(255,255,255,0.85)",
                   width: "fit-content",
-                  marginLeft: "40px",
+                  marginLeft: isMobile ? "0" : "40px",
                 }}
               >
                 <span ref={counterRef}>01</span>
@@ -573,14 +573,25 @@ export default function HeroSection() {
               </div>
             </div>
 
+            {/* ── Slide text ────────────────────────────────────────── */}
             <div
-              style={{
-                position: "absolute",
-                top: "45%",
-                left: "50%",
-                transform: "translate(-10%, -50%)",
-                width: "55%",
-              }}
+              style={
+                isMobile
+                  ? {
+                      position: "absolute",
+                      top: "200px",
+                      left: "20px",
+                      right: "20px",
+                      width: "auto",
+                    }
+                  : {
+                      position: "absolute",
+                      top: "45%",
+                      left: "50%",
+                      transform: "translate(-10%, -50%)",
+                      width: "55%",
+                    }
+              }
             >
               {SLIDES.map((slide, i) => (
                 <div
@@ -625,7 +636,9 @@ export default function HeroSection() {
                         style={{
                           color: "#ffffff",
                           fontFamily: "var(--font-sans)",
-                          fontSize: "clamp(1.8rem, 3.8vw, 3.5rem)",
+                          fontSize: isMobile
+                            ? "clamp(1.5rem, 7vw, 2rem)"
+                            : "clamp(1.8rem, 3.8vw, 3.5rem)",
                           fontWeight: 400,
                           lineHeight: 1.15,
                           letterSpacing: "-0.02em",

@@ -54,6 +54,20 @@
   --color-blue-pale:    #EAF4FC;
 }
 
+/* ── Responsive spacing tokens ──────────────────────────────────── */
+:root {
+  --page-px:   70px;   /* horizontal page padding */
+  --nav-inset: 70px;   /* navbar left / right offset */
+  --hero-px:   40px;   /* hero inner text indent */
+}
+@media (max-width: 768px) {
+  :root {
+    --page-px:   20px;
+    --nav-inset: 20px;
+    --hero-px:   16px;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {

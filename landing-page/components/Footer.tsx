@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const VIDEO_SRC = "/video/video2.mp4";
 
@@ -26,9 +27,9 @@ const BRAND_STYLE: React.CSSProperties = {
 };
 
 export default function Footer() {
-  const [hovered, setHovered] = useState(false);
   const [spot, setSpot] = useState({ x: 0, y: 0 });
   const [lit, setLit] = useState(false);
+  const isMobile = useIsMobile();
 
   return (
     <footer
@@ -83,10 +84,11 @@ export default function Footer() {
         <div
           style={{
             display: "flex",
+            flexDirection: isMobile ? "column" : "row",
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: "40px",
-            padding: "60px 70px",
+            padding: isMobile ? "40px 20px 20px" : "60px 70px",
           }}
         >
           {/* Left — tagline + CTA */}
@@ -157,9 +159,11 @@ export default function Footer() {
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: isMobile ? "flex-start" : "center",
             justifyContent: "space-between",
-            padding: "0 70px 48px",
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? "16px" : undefined,
+            padding: isMobile ? "0 20px 32px" : "0 70px 48px",
           }}
         >
           <div style={{ display: "flex", gap: "10px" }}>
@@ -213,7 +217,7 @@ export default function Footer() {
           style={{
             height: "1px",
             background: "rgba(255,255,255,0.08)",
-            margin: "0 70px",
+            margin: isMobile ? "0 20px" : "0 70px",
           }}
         />
 
@@ -223,7 +227,7 @@ export default function Footer() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "24px 70px 32px",
+            padding: isMobile ? "16px 20px 24px" : "24px 70px 32px",
           }}
         >
           <p
@@ -258,7 +262,7 @@ export default function Footer() {
         {/* ── Large brand name with spotlight effect ────────────────── */}
         <div
           style={{
-            padding: "0 60px",
+            padding: isMobile ? "0 20px" : "0 60px",
             userSelect: "none",
             position: "relative",
           }}
@@ -281,7 +285,7 @@ export default function Footer() {
               ...BRAND_STYLE,
               position: "absolute",
               inset: 0,
-              padding: "0 60px",
+              padding: isMobile ? "0 20px" : "0 60px",
               color: "#ffffff",
               opacity: lit ? 1 : 0,
               transition: "opacity 0.3s ease",
