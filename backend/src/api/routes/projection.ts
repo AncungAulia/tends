@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { projectForRisk } from "../../services/projection.js";
+import { apyService } from "../../services/apy.js";
 import { riskLevelFromId } from "../../strategies.js";
 
 const bpsField = z.number().int().min(0).max(10_000);
@@ -28,7 +29,8 @@ projectionRouter.post("/", async (c) => {
   }
   const risk = riskLevelFromId(strategyId)!;
   try {
-    return c.json(projectForRisk(risk, capital, durationDays, undefined, customAllocation));
+    const apy = await apyService.getApyMap(); // derived where available, else estimate
+    return c.json(projectForRisk(risk, capital, durationDays, apy, customAllocation));
   } catch (e) {
     // e.g. custom bps don't sum to 10000
     return c.json({ error: (e as Error).message }, 400);

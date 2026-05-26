@@ -7,6 +7,37 @@ Stack assumed: Next.js + Privy (embedded wallet) + viem, Mantle Sepolia (chainId
 
 ---
 
+## 0. Which doc? (SC INTEGRATION.md vs this) — READ FIRST
+
+There are two integration docs; they don't actually conflict — they're for **different
+consumers**:
+
+- `smart-contract/INTEGRATION.md` (Axel's) = **backend ↔ contracts**. It's for the
+  **backend** (the agent/relayer signing with the agent key). **The frontend does NOT
+  use it.**
+- `API.md` + this file = **frontend ↔ backend**. **This is yours.**
+
+**Rule of thumb:** the FE never encodes contract calls or talks to the chain for
+**write** actions. For every user action the FE calls the backend, gets back an
+**unsigned tx**, and signs it with Privy. The backend owns the contract details
+(addresses, ABIs, decimals, approve+deposit ordering, gas top-up).
+
+| Action | Use | Don't |
+|---|---|---|
+| **Deposit** | `POST /api/users/me/prepare-deposit` → sign `steps` | ❌ call `UserVault.deposit` directly |
+| **Withdraw** | `POST /api/users/me/prepare-withdraw` → sign `tx` | ❌ call `UserVault.withdraw` directly |
+| **Switch strategy** | `POST /api/users/me/prepare-switch` → sign `steps` | ❌ call `setRiskLevel`/`setCustomAllocation` directly |
+| **Create vault** | `POST /api/users/me/deploy-vault` → sign `tx` | ❌ call `VaultFactory.deployVault` directly |
+| Read position / activity / strategies / projection | backend `GET`/`POST` | — |
+| Read raw chain (e.g. USDC balance/allowance for UI) | direct viem read is fine | — |
+
+So **deposit = backend API (`/prepare-deposit`)**, not the SC function. Same for
+withdraw/switch/deploy-vault. (Why: backend returns the correct 2-step approve+deposit,
+scales decimals, and best-effort tops up gas — one stable surface that can evolve
+without FE changes.)
+
+---
+
 ## 1. Setup
 
 ```bash
