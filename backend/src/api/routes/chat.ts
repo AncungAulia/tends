@@ -12,11 +12,39 @@ const log = childLogger("chat");
 export type ChatStream = (messages: ChatMessage[]) => AsyncGenerator<string>;
 /** Persist a completed exchange for a user (by Privy id). */
 export type ChatPersist = (privyId: string, userMsg: string, assistantMsg: string) => Promise<void>;
+/** Resolve a Privy session to the user's on-chain identity. */
+export type UserResolver = (
+  privyId: string,
+) => Promise<{ walletAddress: string | null; vaultAddress: string | null }>;
 
-/** Default: store user+assistant turns once the user is linked to a wallet. */
+export const prismaUserResolver: UserResolver = async (privyId) => {
+  const user = await prisma.user.findUnique({ where: { privyId }, include: { vault: true } });
+  return { walletAddress: user?.walletAddress ?? null, vaultAddress: user?.vault?.address ?? null };
+};
+
+/** Grounding system prompt — keeps Hermes on-topic and pointed at the real portfolio. */
+export function buildSystemPrompt(
+  walletAddress: string | null,
+  vaultAddress: string | null,
+): string {
+  const who = walletAddress
+    ? `The current user's wallet is ${walletAddress}` +
+      (vaultAddress ? `, vault ${vaultAddress}.` : " (no vault deployed yet).")
+    : "The current user has not linked a wallet yet.";
+  return [
+    "You are Hermes, the AI portfolio manager for Tends, an AI-managed RWA vault product on Mantle.",
+    "'Vault' ALWAYS means the user's on-chain ERC-4626 RWA vault holding tokenized real-world assets",
+    "(mUSD, USDY, mETH, cmETH, sUSDe, WMNT) — NEVER a secrets/file/password vault.",
+    who,
+    "Use your tools (readUserPosition, getAgentActivity, listStrategies, computeProjection) to answer",
+    "about the user's ACTUAL on-chain portfolio — do NOT answer from general knowledge. Always pass the",
+    "user's wallet address to readUserPosition. Be concise, honest about risk, and never promise returns.",
+  ].join(" ");
+}
+
 export const prismaChatPersist: ChatPersist = async (privyId, userMsg, assistantMsg) => {
   const user = await prisma.user.findUnique({ where: { privyId } });
-  if (!user) return; // not linked yet (/auth/verify not called) — nothing to attach to
+  if (!user) return;
   await prisma.chatMessage.createMany({
     data: [
       { walletAddress: user.walletAddress, role: "user", content: userMsg },
@@ -25,11 +53,12 @@ export const prismaChatPersist: ChatPersist = async (privyId, userMsg, assistant
   });
 };
 
-/** POST /api/chat — SSE relay of the Hermes assistant reply; persists the exchange. */
+/** POST /api/chat — grounded, tool-using Hermes reply over SSE; persists the exchange. */
 export function makeChatRouter(
   auth: MiddlewareHandler<AuthVars>,
   stream: ChatStream,
   persist: ChatPersist = prismaChatPersist,
+  resolveUser: UserResolver = prismaUserResolver,
 ): Hono<AuthVars> {
   const r = new Hono<AuthVars>();
   r.post("/", auth, async (c) => {
@@ -39,7 +68,20 @@ export function makeChatRouter(
 
     const privyId = c.get("privyId");
     const userMsg = parsed.data.message;
-    const messages: ChatMessage[] = [{ role: "user", content: userMsg }];
+
+    // ground the agent: who the user is + that "vault" = their on-chain RWA vault
+    let walletAddress: string | null = null;
+    let vaultAddress: string | null = null;
+    try {
+      ({ walletAddress, vaultAddress } = await resolveUser(privyId));
+    } catch (err) {
+      log.warn({ err }, "user resolve failed — chatting without wallet grounding");
+    }
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: buildSystemPrompt(walletAddress, vaultAddress) },
+      { role: "user", content: userMsg },
+    ];
 
     return streamSSE(c, async (s) => {
       let assistant = "";
@@ -52,7 +94,6 @@ export function makeChatRouter(
       } catch (e) {
         await s.writeSSE({ event: "error", data: (e as Error).message });
       }
-      // persist the completed turn (best-effort — never breaks the response)
       try {
         if (assistant) await persist(privyId, userMsg, assistant);
       } catch (err) {
