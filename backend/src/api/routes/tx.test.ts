@@ -51,6 +51,13 @@ test("POST /prepare-deposit rejects a bad address / amount", async () => {
   assert.equal((await post("/prepare-deposit", { vault: VAULT, account: ACCOUNT, amount: -1 })).status, 400);
 });
 
+test("POST /prepare-deposit rejects out-of-range amount (no 500 from parseUnits)", async () => {
+  // < 1 USDC unit (would become "1e-7" → parseUnits throw)
+  assert.equal((await post("/prepare-deposit", { vault: VAULT, account: ACCOUNT, amount: 0.0000001 })).status, 400);
+  // absurdly large (would be exponential)
+  assert.equal((await post("/prepare-deposit", { vault: VAULT, account: ACCOUNT, amount: 2e12 })).status, 400);
+});
+
 test("POST /prepare-deposit-permit: encodes depositWithPermit from a signature", async () => {
   const sig = "0x" + "ab".repeat(32) + "cd".repeat(32) + "1b"; // r + s + v(27)
   const ok = await post("/prepare-deposit-permit", {

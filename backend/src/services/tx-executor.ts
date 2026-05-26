@@ -14,7 +14,10 @@ export interface PreparedTx {
   value: string;
 }
 
-const usdc = (amount: number) => parseUnits(amount.toString(), TOKENS.USDC.decimals);
+// toFixed(decimals) — never exponential for sane amounts (unlike Number.toString(),
+// which goes "1e-7"/"1e+21" and makes parseUnits throw), and truncates to 6 dp.
+const usdc = (amount: number) =>
+  parseUnits(amount.toFixed(TOKENS.USDC.decimals), TOKENS.USDC.decimals);
 
 /**
  * Pure calldata encoders for user-initiated actions on their own vault. The

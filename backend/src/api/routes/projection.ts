@@ -8,8 +8,8 @@ const bpsField = z.number().int().min(0).max(10_000);
 
 export const projectionBodySchema = z.object({
   strategyId: z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]),
-  capital: z.number().positive(),
-  durationDays: z.number().int().positive(),
+  capital: z.number().positive().max(1_000_000_000_000),
+  durationDays: z.number().int().positive().max(36_500), // ≤100y; avoids Infinity blowup
   customAllocation: z
     .object({ lowBps: bpsField, medBps: bpsField, highBps: bpsField })
     .optional(),

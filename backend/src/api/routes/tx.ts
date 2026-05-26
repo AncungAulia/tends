@@ -23,7 +23,8 @@ async function tryEnsureGas(account: `0x${string}`): Promise<void> {
 }
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid address");
-const amount = z.number().positive();
+// bounded so amount.toFixed(6) never goes exponential (≥1e21) and rejects dust (<1 unit)
+const amount = z.number().min(0.000001).max(1_000_000_000_000);
 const bps = z.number().int().min(0).max(10_000);
 
 const depositBody = z.object({ vault: address, account: address, amount });
