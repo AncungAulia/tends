@@ -1,3 +1,4 @@
+import "../../lib/json-bigint.js"; // so responses carrying Prisma BigInt serialize
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
@@ -101,4 +102,19 @@ test("GET /api/users/me/position: 401 without/with bad token, 200 with good", as
   });
   assert.equal(ok.status, 200);
   assert.deepEqual(seen, ["did:privy:1"]); // privyId from the verified token
+});
+
+test("GET /api/users/me/position: serializes Prisma BigInt fields (no 500)", async () => {
+  const reader: UserReader = {
+    getPosition: async () => ({ vault: { address: "0xabc", deployedBlock: 12345n } }),
+    getActivity: async () => ({ activities: [{ id: 99n, blockNumber: null }] }),
+  };
+  const app = usersApp(reader);
+  const pos = await app.request("/api/users/me/position", { headers: { authorization: "Bearer good" } });
+  assert.equal(pos.status, 200);
+  assert.equal(((await pos.json()) as { vault: { deployedBlock: unknown } }).vault.deployedBlock, "12345");
+
+  const act = await app.request("/api/users/me/activity", { headers: { authorization: "Bearer good" } });
+  assert.equal(act.status, 200);
+  assert.equal(((await act.json()) as { activities: { id: unknown }[] }).activities[0]!.id, "99");
 });
