@@ -424,6 +424,16 @@ When CUSTOM is selected, right panel becomes allocation form:
 - Uses `hooks/useRiskLevel.ts` — `setRiskLevel()` or `setCustomAllocation()`
 - On save success: panel closes + toast "Strategy updated."
 
+### Strategy Data Sources
+
+| Data | Source |
+|---|---|
+| Strategy names, descriptions, allocations | Hardcoded — static, never changes |
+| `apyLabel`, `blendedApyPct` per strategy | **Backend** — `GET /api/strategies` (no auth) |
+| Current active strategy | SC — `riskPreference` from `usePortfolio` |
+
+APY label ditampilkan di setiap strategy card (kanan panel), di-fetch saat panel dibuka. Kalau fetch gagal → tampilkan `--` bukan error.
+
 ---
 
 ## /activity — Activity Log
