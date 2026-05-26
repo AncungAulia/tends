@@ -44,35 +44,36 @@
 
 ---
 
-### Semua Contract Hooks (read & write)
+### SC Read Hooks
 **Skill: `/wagmi`**
 
-Pakai setiap kali implement hook baru di `src/hooks/`:
+Pakai untuk implement **read hooks** di `src/hooks/`:
 - `useReadContract` / `useReadContracts` — baca data dari contract
-- `useWriteContract` + `useWaitForTransactionReceipt` — kirim transaksi
 - `useWatchContractEvent` — real-time event listener
 - `WagmiProvider` + `createConfig` setup
 
-Hooks yang butuh skill ini:
-- `useUserVault.ts` — `vaultOf`, `deployVault`
+Hooks yang butuh skill ini (reads only):
 - `usePortfolio.ts` — `totalAssets`, `riskPreference`, `paused`
 - `useVaultHoldings.ts` — balance per token
-- `useRiskLevel.ts` — `setRiskLevel`, `setCustomAllocation`
-- `useDeposit.ts`, `useWithdraw.ts`
-- `useActivityLog.ts`, `usePrices.ts`
+- `useRiskLevel.ts` — `riskPreference`, `customAllocation` (reads; writes via backend)
+- `usePrices.ts`, `useUSDCBalance.ts`, `useAllowedTokens.ts`
 - `useRebalanceWatch.ts`, `useVaultDeployedWatch.ts`
+
+> **Write hooks** (`useDeposit`, `useWithdraw`, `useUserVault` deploy, `useRiskLevel` switch)
+> pakai backend API pattern — lihat `BACKEND.md` dan `useBackendTx.ts`.
+> Tidak pakai `useWriteContract` untuk user-facing write actions.
 
 ---
 
-### Deposit dengan EIP-2612 Permit
-**Skills: `/wagmi` + `/evm-wallet-integration` + `/viem`**
+### Deposit Flow
+**No skill required — lihat `BACKEND.md`**
 
-Flow deposit pakai `depositWithPermit` (satu transaksi, tanpa separate approve):
-- Sign typed data off-chain (`signTypedData`)
-- Parse `v`, `r`, `s` dari signature
-- Call `depositWithPermit(amount, receiver, deadline, v, r, s)`
+Deposit sekarang melalui backend API:
+- `POST /api/users/me/prepare-deposit` → backend returns `{ steps: [approveTx, depositTx] }`
+- FE sign kedua tx secara sequential via `useBackendTx.ts`
 
-Gunakan `/evm-wallet-integration` untuk memahami permit pattern sebelum implementasi `useDepositWithPermit.ts`.
+`useDepositWithPermit.ts` tidak dipakai lagi — backend yang handle encoding,
+termasuk opsi permit. FE cukup sign apa yang dikembalikan backend.
 
 ---
 
@@ -90,8 +91,9 @@ Gunakan `/evm-wallet-integration` untuk memahami permit pattern sebelum implemen
 **Skills: `/shadcn` + `/frontend-design`**
 
 **`/shadcn`** — untuk install dan konfigurasi komponen:
-- `Dialog` → Deposit modal, Withdraw modal
-- `Sheet` → Strategy slide-over
+- `Dialog` → Deposit modal, Withdraw modal (desktop)
+- `Sheet` → Strategy slide-over (desktop)
+- `Drawer` → semua overlay di mobile (via vaul) — bottom sheet pattern
 - `Button`, `Input`, `Badge`, `Card`
 - Override CSS variables dengan Tends design tokens dari `DESIGN.md`
 
