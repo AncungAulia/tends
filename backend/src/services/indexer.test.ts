@@ -132,12 +132,24 @@ test("toRiskUpdate: keeps bps only for CUSTOM (level 3)", () => {
   });
 });
 
-test("onDeposit adds shares + cost basis to the position", async () => {
+test("onDeposit adds shares + cost basis, then triggers a rebalance", async () => {
   const { repo, positions } = fakeRepo();
-  await new IndexerService(repo).onDeposit(VAULT, USER, 1_000_000n, 999n);
+  const triggered: string[] = [];
+  const svc = new IndexerService(repo, () => {}, async (v) => void triggered.push(v));
+  await svc.onDeposit(VAULT, USER, 1_000_000n, 999n);
   assert.deepEqual(positions, [
     { vault: VAULT, owner: USER, shares: 999n, assets: 1_000_000n, op: "add" },
   ]);
+  assert.deepEqual(triggered, [VAULT]); // event-driven rebalance fired for this vault
+});
+
+test("onDeposit: a failing rebalance trigger does not break indexing", async () => {
+  const { repo, positions } = fakeRepo();
+  const svc = new IndexerService(repo, () => {}, async () => {
+    throw new Error("rebalance blew up");
+  });
+  await assert.doesNotReject(() => svc.onDeposit(VAULT, USER, 1n, 1n));
+  assert.equal(positions.length, 1); // position still recorded despite the trigger failing
 });
 
 test("onWithdraw reduces shares", async () => {
@@ -158,7 +170,7 @@ test("onRiskPreferenceUpdated persists the mapped risk update", async () => {
 test("deposit/withdraw/risk handlers broadcast WS events", async () => {
   const { repo } = fakeRepo();
   const events: { type: string }[] = [];
-  const svc = new IndexerService(repo, (e) => events.push(e));
+  const svc = new IndexerService(repo, (e) => events.push(e), async () => {});
   await svc.onDeposit(VAULT, USER, 1n, 1n);
   await svc.onWithdraw(VAULT, USER, 1n, 1n);
   await svc.onRiskPreferenceUpdated(VAULT, 1, 0, 0, 0);

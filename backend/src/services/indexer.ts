@@ -5,8 +5,14 @@ import { publicClient } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI } from "../chain/abis.js";
 import { wsHub, type WsEvent } from "../ws/hub.js";
+import { rebalancerService } from "./rebalancer.js";
 
 const log = childLogger("indexer");
+
+/** Default deposit hook: rebalance the vault now (processVault respects cooldown/pause/balanced). */
+async function defaultTriggerRebalance(vault: `0x${string}`): Promise<void> {
+  await rebalancerService.processVault(vault);
+}
 
 export interface VaultRecord {
   address: string;
@@ -166,6 +172,8 @@ export class IndexerService {
   constructor(
     private readonly repo: IndexerRepo = prismaIndexerRepo,
     private readonly broadcast: (e: WsEvent) => void = (e) => wsHub.broadcast(e),
+    // event-driven: deploy a fresh deposit immediately instead of waiting for the poll
+    private readonly triggerRebalance: (vault: `0x${string}`) => Promise<void> = defaultTriggerRebalance,
   ) {}
 
   async onVaultDeployed(user: string, vault: string, blockNumber: bigint | null): Promise<void> {
@@ -204,6 +212,10 @@ export class IndexerService {
     await this.repo.addToPosition(vault, owner, shares, assets);
     this.broadcast({ type: "deposit", vault, owner });
     log.info({ vault, owner }, "deposit indexed");
+    // deploy the new funds right away (best-effort — never breaks indexing)
+    await this.triggerRebalance(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "deposit-triggered rebalance failed"),
+    );
   }
 
   async onWithdraw(vault: string, owner: string, assets: bigint, shares: bigint): Promise<void> {
