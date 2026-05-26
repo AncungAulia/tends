@@ -27,15 +27,15 @@ test("annualizedApy: invalid inputs → null", () => {
   assert.equal(annualizedApy(E18, 0n, 30), null);
 });
 
-test("apyFromSnapshots: needs ≥2 points spanning ≥0.5d", () => {
+test("apyFromSnapshots: needs ≥2 points spanning ≥1 day (else noise)", () => {
   const now = Date.now();
   assert.equal(apyFromSnapshots([]), null);
   assert.equal(apyFromSnapshots([{ priceWad: E18.toString(), snapshotAt: new Date(now) }]), null);
-  // same-ish timestamps → span too small
+  // 14h span (< 1 day) → null
   assert.equal(
     apyFromSnapshots([
       { priceWad: E18.toString(), snapshotAt: new Date(now) },
-      { priceWad: E18.toString(), snapshotAt: new Date(now + 1000) },
+      { priceWad: ((E18 * 101n) / 100n).toString(), snapshotAt: new Date(now + 14 * 3_600_000) },
     ]),
     null,
   );
@@ -82,4 +82,15 @@ test("getApyMap: resilient to a failing read (falls back to estimate)", async ()
   const map = await new ApyService(fakeRepo({ sUSDe: "throw", USDY: "throw" })).getApyMap();
   assert.equal(map.sUSDe, 12); // DEFAULT estimate, no throw
   assert.equal(map.USDY, 5);
+});
+
+test("getApyMap: absurd (out-of-band) derived APY is discarded for the estimate", async () => {
+  const t0 = Date.now() - 2 * MS_DAY;
+  // 1.0 → 2.0 over 2 days → annualizes to a gigantic % → must be rejected, not shown
+  const wild: Snap[] = [
+    { priceWad: E18.toString(), snapshotAt: new Date(t0) },
+    { priceWad: (E18 * 2n).toString(), snapshotAt: new Date(t0 + 2 * MS_DAY) },
+  ];
+  const map = await new ApyService(fakeRepo({ sUSDe: wild, USDY: [] })).getApyMap();
+  assert.equal(map.sUSDe, 12); // estimate, not the absurd derived value
 });

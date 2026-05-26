@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import {
   classifyFreshness,
   assessBounds,
+  criticalBreaches,
   PriceMonitorService,
   type PriceMonitorDeps,
+  type PriceBoundStatus,
+  type RiskGuardOpts,
 } from "./price-monitor.js";
 import { env } from "../config/env.js";
 import { addresses } from "../chain/addresses.js";
@@ -57,6 +60,63 @@ test("checkPrices: flags a token below its band (depeg), others ok", async () =>
   assert.equal(breaches.length, 1);
   assert.equal(breaches[0]!.symbol, "USDY");
   assert.equal(breaches[0]!.reason, "below");
+});
+
+test("criticalBreaches: below/zero are critical; above/ok are not", () => {
+  const mk = (symbol: string, reason: PriceBoundStatus["reason"], ok: boolean): PriceBoundStatus =>
+    ({ symbol: symbol as PriceBoundStatus["symbol"], price: 1n, ok, reason });
+  const out = criticalBreaches([
+    mk("USDC", "below", false),
+    mk("mUSD", "zero", false),
+    mk("USDY", "above", false),
+    mk("sUSDe", null, true),
+  ]);
+  assert.deepEqual(out.map((s) => s.symbol), ["USDC", "mUSD"]);
+});
+
+function guardDeps(over: Partial<RiskGuardOpts> = {}) {
+  const paused: string[] = [];
+  const opts: RiskGuardOpts = {
+    enabled: true,
+    listVaults: async () => ["0x01" as `0x${string}`, "0x02" as `0x${string}`],
+    pauseVault: async (v) => {
+      paused.push(v);
+      return "0xhash";
+    },
+    ...over,
+  };
+  return { opts, paused };
+}
+
+function depsWith(usdyPrice: bigint): PriceMonitorDeps {
+  return {
+    readNow: async () => 1000n,
+    readMaxStaleness: async () => 7200n,
+    readPriceUnsafe: async (t) =>
+      t === TOKENS.USDY.address ? ([usdyPrice, 1000n] as const) : ([E18, 1000n] as const),
+  };
+}
+
+test("guardAndMaybePause: disabled → never pauses even on depeg", async () => {
+  const svc = new PriceMonitorService(depsWith(E18 / 2n)); // USDY depeg
+  const { opts, paused } = guardDeps({ enabled: false });
+  const res = await svc.guardAndMaybePause(opts);
+  assert.equal(paused.length, 0);
+  if (!(env.USE_MOCK_CONTRACTS || !addresses.priceFeed)) assert.equal(res.critical.length, 1);
+});
+
+test("guardAndMaybePause: enabled + depeg → pauses all vaults; no depeg → none", async () => {
+  if (env.USE_MOCK_CONTRACTS || !addresses.priceFeed) return; // checkPrices is gated off
+
+  const depeg = guardDeps();
+  const r1 = await new PriceMonitorService(depsWith(E18 / 2n)).guardAndMaybePause(depeg.opts);
+  assert.equal(r1.critical.length, 1);
+  assert.deepEqual(depeg.paused, ["0x01", "0x02"]); // both vaults paused
+
+  const healthy = guardDeps();
+  const r2 = await new PriceMonitorService(depsWith(E18)).guardAndMaybePause(healthy.opts);
+  assert.equal(r2.critical.length, 0);
+  assert.equal(healthy.paused.length, 0);
 });
 
 test("checkFreshness: one stale feed flagged among fresh ones", async () => {

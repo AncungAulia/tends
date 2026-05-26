@@ -14,7 +14,10 @@ export interface PreparedTx {
   value: string;
 }
 
-const usdc = (amount: number) => parseUnits(amount.toString(), TOKENS.USDC.decimals);
+// toFixed(decimals) — never exponential for sane amounts (unlike Number.toString(),
+// which goes "1e-7"/"1e+21" and makes parseUnits throw), and truncates to 6 dp.
+const usdc = (amount: number) =>
+  parseUnits(amount.toFixed(TOKENS.USDC.decimals), TOKENS.USDC.decimals);
 
 /**
  * Pure calldata encoders for user-initiated actions on their own vault. The
@@ -45,6 +48,27 @@ export class TxExecutorService {
         abi: USER_VAULT_TX_ABI,
         functionName: "deposit",
         args: [usdc(amount), receiver],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.depositWithPermit(...) — ERC-2612 permit + deposit in one tx. */
+  prepareDepositWithPermit(
+    vault: `0x${string}`,
+    receiver: `0x${string}`,
+    amount: number,
+    deadline: bigint,
+    v: number,
+    r: `0x${string}`,
+    s: `0x${string}`,
+  ): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "depositWithPermit",
+        args: [usdc(amount), receiver, deadline, v, r, s],
       }),
       value: "0",
     };
@@ -106,6 +130,53 @@ export class TxExecutorService {
       value: "0",
     };
   }
+}
+
+export interface PermitTypedData {
+  domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}` };
+  types: { Permit: { name: string; type: string }[] };
+  primaryType: "Permit";
+  message: {
+    owner: `0x${string}`;
+    spender: `0x${string}`;
+    value: bigint;
+    nonce: bigint;
+    deadline: bigint;
+  };
+}
+
+/**
+ * EIP-2612 permit typed data for USDC (MockUSDC = OZ ERC20Permit, name "USD Coin",
+ * version "1"). The frontend signs this (Privy signTypedData), splits the signature,
+ * and posts it to /prepare-deposit-permit. `nonce` comes from USDC.nonces(owner).
+ */
+export function permitTypedData(p: {
+  chainId: number;
+  owner: `0x${string}`;
+  spender: `0x${string}`;
+  value: bigint;
+  nonce: bigint;
+  deadline: bigint;
+}): PermitTypedData {
+  return {
+    domain: {
+      name: "USD Coin",
+      version: "1",
+      chainId: p.chainId,
+      verifyingContract: as0x(TOKENS.USDC.address),
+    },
+    types: {
+      Permit: [
+        { name: "owner", type: "address" },
+        { name: "spender", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    },
+    primaryType: "Permit",
+    message: { owner: p.owner, spender: p.spender, value: p.value, nonce: p.nonce, deadline: p.deadline },
+  };
 }
 
 export const txExecutorService = new TxExecutorService();

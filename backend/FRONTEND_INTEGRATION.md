@@ -180,6 +180,40 @@ await fetch(`${API}/api/apy/history?asset=mETH&days=30`);            // chart se
 
 ---
 
+## 4b. Optional: 1-tx deposit via permit
+
+Saves the separate approve tx. The user signs an EIP-2612 permit (gasless,
+`signTypedData`), then submits a single `depositWithPermit`.
+
+```ts
+import { parseAbi } from "viem";
+// 1. read the USDC nonce for the user (direct viem read is fine)
+const nonce = await publicClient.readContract({
+  address: USDC_ADDR, abi: parseAbi(["function nonces(address) view returns (uint256)"]),
+  functionName: "nonces", args: [wallet.address],
+});
+const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+// 2. sign the permit (Privy signTypedData)
+const signature = await wallet.signTypedData({
+  domain: { name: "USD Coin", version: "1", chainId: 5003, verifyingContract: USDC_ADDR },
+  types: { Permit: [
+    { name: "owner", type: "address" }, { name: "spender", type: "address" },
+    { name: "value", type: "uint256" }, { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" } ] },
+  primaryType: "Permit",
+  message: { owner: wallet.address, spender: vault, value: parseUnits("100", 6), nonce, deadline: BigInt(deadline) },
+});
+
+// 3. backend encodes depositWithPermit; you sign + send the single tx
+const { tx } = await api("/api/users/me/prepare-deposit-permit", { method: "POST",
+  body: JSON.stringify({ vault, account: wallet.address, amount: 100, deadline, signature }) });
+await signTx(wallet, tx);
+```
+
+`value` in the permit must equal the deposit amount scaled to 6-dec USDC. The plain
+2-step `/prepare-deposit` remains fully supported — use whichever you prefer.
+
 ## 5. Chat (SSE)
 
 `POST /api/chat` streams the assistant reply as Server-Sent Events.

@@ -1,3 +1,4 @@
+import "./lib/json-bigint.js"; // BigInt → string in JSON (must load before any serialize)
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { WebSocketServer } from "ws";

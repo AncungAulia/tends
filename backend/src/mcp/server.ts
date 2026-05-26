@@ -1,3 +1,4 @@
+import "../lib/json-bigint.js"; // BigInt → string in JSON (tool results carry BigInt)
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pino } from "pino";

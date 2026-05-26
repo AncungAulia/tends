@@ -87,6 +87,12 @@ export const envSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
+  // Auto-pause every vault when a token breaches its price floor (depeg). Off by
+  // default — a transient blip shouldn't mass-pause; flip on once thresholds are tuned.
+  RISK_AUTOPAUSE_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   APY_SCRAPER_ENABLED: z
     .enum(["true", "false"])
     .default("false")

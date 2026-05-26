@@ -43,6 +43,7 @@ type Projection = { capital: number; durationDays: number; blendedApyPct: number
 | GET | `/api/users/me/activity` | ✅ | – | `{ activities[] }` |
 | POST | `/api/users/me/deploy-vault` | ✅ | – | `{ tx: Tx }` |
 | POST | `/api/users/me/prepare-deposit` | ✅ | `{ vault, account, amount }` | `{ steps: [approveTx, depositTx] }` |
+| POST | `/api/users/me/prepare-deposit-permit` | ✅ | `{ vault, account, amount, deadline, signature }` | `{ tx }` (1-tx, see FE guide §4b) |
 | POST | `/api/users/me/prepare-withdraw` | ✅ | `{ vault, account, amount }` | `{ tx: Tx }` |
 | POST | `/api/users/me/prepare-switch` | ✅ | `{ vault, strategyId, customAllocation? }` | `{ steps: Tx[] }` |
 | POST | `/api/chat` | ✅ | `{ message }` | SSE stream |
@@ -54,6 +55,7 @@ Notes:
 - **deposit** is two txs — sign `steps[0]` (USDC approve) then `steps[1]` (vault deposit). **switch** to CUSTOM is two txs (set allocation, then set risk).
 - First-time users: `deploy-vault` → then deposit. Get the user's `vault` address from `/users/me/position`.
 - Invalid bodies return `400 { error, details? }`.
+- BigInt fields (`activity.id`, `vault.deployedBlock`, `blockNumber`) serialize as decimal **strings** (precision-safe) — treat them as strings, not numbers.
 
 ## Chat SSE
 

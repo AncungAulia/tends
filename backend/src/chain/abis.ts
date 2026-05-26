@@ -45,6 +45,21 @@ export const USER_VAULT_TX_ABI = [
     outputs: [{ type: "uint256" }],
   },
   {
+    // ERC-2612 permit + deposit in one tx (MockUSDC is ERC20Permit)
+    name: "depositWithPermit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "assets", type: "uint256" },
+      { name: "receiver", type: "address" },
+      { name: "deadline", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
     name: "setRiskLevel",
     type: "function",
     stateMutability: "nonpayable",

@@ -42,6 +42,8 @@ function tool<S extends z.ZodRawShape>(
 }
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid address");
+const amount = z.number().min(0.000001).max(1_000_000_000_000);
+const capital = z.number().positive().max(1_000_000_000_000);
 const strategyId = z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
 const customAllocation = z
   .object({ lowBps: z.number(), medBps: z.number(), highBps: z.number() })
@@ -67,12 +69,12 @@ export function buildTools(deps: ToolDeps): McpTool[] {
       ({ asset, days }) => deps.apyHistory(asset, days)),
 
     tool("computeProjection", "Project future value for a strategy over a duration.",
-      { strategyId, capital: z.number().positive(), durationDays: z.number().int().positive(), customAllocation },
+      { strategyId, capital, durationDays: z.number().int().positive(), customAllocation },
       ({ strategyId, capital, durationDays, customAllocation }) =>
         projectForRisk(riskLevelFromId(strategyId)!, capital, durationDays, undefined, customAllocation)),
 
     tool("prepareDepositTx", "Prepare deposit (approve + deposit) txs for the user to sign.",
-      { vault: address, account: address, amount: z.number().positive() },
+      { vault: address, account: address, amount },
       ({ vault, account, amount }) => ({
         steps: [
           tx.prepareApproveUsdc(vault as `0x${string}`, amount),
@@ -81,7 +83,7 @@ export function buildTools(deps: ToolDeps): McpTool[] {
       })),
 
     tool("prepareWithdrawTx", "Prepare a withdraw tx for the user to sign.",
-      { vault: address, account: address, amount: z.number().positive() },
+      { vault: address, account: address, amount },
       ({ vault, account, amount }) => ({
         tx: tx.prepareWithdraw(vault as `0x${string}`, account as `0x${string}`, amount),
       })),
