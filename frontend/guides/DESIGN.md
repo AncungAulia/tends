@@ -311,6 +311,35 @@ function shortAddress(addr: string) {
 
 Always pair with a small copy button. Never display a raw full-length address in the UI.
 
+#### Wallet Avatar
+
+Use `ethereum-blockies-base64` to render a pixel-art avatar beside the wallet address in the sidebar (and anywhere else the connected address is prominently shown). This is the only place visual identity is used — it is not sprinkled into tables or activity rows.
+
+```bash
+npm install ethereum-blockies-base64
+```
+
+```tsx
+import makeBlockie from "ethereum-blockies-base64"
+
+// In the Sidebar wallet section
+<img
+  src={makeBlockie(address)}
+  alt=""
+  aria-hidden="true"
+  className="w-6 h-6 rounded-sm"   // 24px, slightly squared — not full circle
+/>
+<span className="font-mono text-xs text-[#5B7490]">
+  {shortAddress(address)}
+</span>
+```
+
+Rules:
+- Size: `24 × 24px` (`w-6 h-6`), `rounded-sm` (not `rounded-full`)
+- `aria-hidden="true"` — purely decorative, the address text carries meaning
+- Do not scale above 32px — blockies look pixelated at large sizes and that is fine at 24px
+- Do not use in tables, activity rows, or any data-dense context — sidebar only
+
 ---
 
 ### Holdings Table
@@ -654,6 +683,90 @@ When `priceStatus === "unavailable"` or `"stale"`:
 
 ---
 
+## Accessibility
+
+Tends targets serious DeFi investors — a significant portion of whom use keyboards, screen readers, or high-contrast modes. A11y is not optional.
+
+### Touch Targets
+
+All interactive elements (buttons, links, inputs, icon buttons) must have a minimum clickable area of **44 × 44px**, even if the visual size is smaller.
+
+```tsx
+// Icon-only button — visual size may be 20px, but tap area must be 44px
+<button
+  className="flex items-center justify-center w-11 h-11"
+  aria-label="Copy address"
+>
+  <CopyIcon className="w-4 h-4" />
+</button>
+```
+
+### Focus Ring
+
+Never hide focus with `outline: none` or `focus:outline-none` without providing a custom ring. The focus indicator must be visible for keyboard navigation.
+
+Correct:
+```tsx
+// Visible ring using brand blue
+focus:ring-2 focus:ring-[#1591DC]/40 focus:outline-none
+```
+
+Wrong:
+```tsx
+// Hides focus entirely — keyboard users cannot track position
+focus:outline-none
+```
+
+The Input component already includes `focus:ring-2 focus:ring-[#1591DC]/20` — use this pattern for all custom focusable elements.
+
+### Focus Trap
+
+All modals, drawers, and overlay panels must trap focus when open. Users pressing Tab must cycle within the overlay — focus must not escape to the page behind.
+
+Use shadcn/ui's built-in focus trap (Dialog, Drawer, Sheet) — these handle it automatically. If building a custom overlay, import `useFocusTrap` or use the `radix-ui/react-focus-trap` primitive.
+
+### Keyboard Dismiss
+
+Pressing **Escape** must close all modals, drawers, and slide-over panels. shadcn Dialog, Drawer, and Sheet handle this automatically. Do not suppress it.
+
+### Screen Reader Labels
+
+Icon-only buttons must carry an `aria-label`:
+
+```tsx
+// Correct
+<button aria-label="Close deposit modal">
+  <XIcon className="w-4 h-4" />
+</button>
+
+// Wrong — screen reader announces "button" with no context
+<button>
+  <XIcon className="w-4 h-4" />
+</button>
+```
+
+Status indicators (WebSocket dot, loading spinners) must include screen-reader text:
+
+```tsx
+// WebSocket status dot
+<span className="sr-only">Connection: {status}</span>
+
+// Spinner inside a button
+<Spinner size="sm" aria-hidden="true" />
+<span className="sr-only">Processing...</span>
+```
+
+### Color Contrast
+
+Minimum contrast ratios (WCAG AA):
+- Body text on background: **4.5:1**
+- Large text / headings: **3:1**
+- UI components (input borders, button outlines): **3:1**
+
+The muted color `#5B7490` on `#F7F9FC` background meets AA at approximately 4.6:1. Do not go lighter than `#5B7490` for body text in light mode.
+
+---
+
 ## Pre-ship Checklist
 
 Before merging any new page or component:
@@ -668,3 +781,8 @@ Before merging any new page or component:
 - [ ] Dark mode has no invisible text or broken contrast
 - [ ] Privy `accentColor` is set to `#1591DC`
 - [ ] No purple used anywhere in the UI
+- [ ] All interactive elements have 44px minimum touch target
+- [ ] No bare `focus:outline-none` — always pair with a visible focus ring
+- [ ] Modals / drawers trap focus and dismiss on Escape
+- [ ] Icon-only buttons have `aria-label`
+- [ ] Status indicators include `sr-only` text for screen readers
