@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { importSPKI, jwtVerify, type CryptoKey } from "jose";
+import { createRemoteJWKSet, importSPKI, jwtVerify } from "jose";
 import { env } from "../config/env.js";
 
 export interface PrivyClaims {
@@ -7,8 +7,14 @@ export interface PrivyClaims {
   privyId: string;
 }
 
+/** What jose's jwtVerify accepts as the key: a key, raw secret, or a JWKS resolver. */
+export type VerifyKey =
+  | Awaited<ReturnType<typeof importSPKI>>
+  | ReturnType<typeof createRemoteJWKSet>
+  | Uint8Array;
+
 export interface VerifyOptions {
-  key: CryptoKey | Uint8Array;
+  key: VerifyKey;
   appId: string;
   issuer?: string;
 }
@@ -18,10 +24,12 @@ export async function verifyPrivyToken(
   token: string,
   opts: VerifyOptions,
 ): Promise<PrivyClaims> {
-  const { payload } = await jwtVerify(token, opts.key, {
-    issuer: opts.issuer ?? "privy.io",
-    audience: opts.appId,
-  });
+  const options = { issuer: opts.issuer ?? "privy.io", audience: opts.appId };
+  // narrow: a JWKS resolver (function) vs a concrete key — distinct jose overloads
+  const { payload } =
+    typeof opts.key === "function"
+      ? await jwtVerify(token, opts.key, options)
+      : await jwtVerify(token, opts.key, options);
   if (!payload.sub) throw new Error("token missing sub");
   return { privyId: payload.sub };
 }
@@ -56,11 +64,23 @@ export function makeAuthMiddleware(
   });
 }
 
-let cachedKey: CryptoKey | undefined;
-async function verificationKey(): Promise<CryptoKey> {
-  if (!env.PRIVY_VERIFICATION_KEY) throw new Error("PRIVY_VERIFICATION_KEY not set");
-  cachedKey ??= await importSPKI(env.PRIVY_VERIFICATION_KEY, "ES256");
-  return cachedKey;
+let cachedKey: VerifyKey | undefined;
+/**
+ * Resolve the Privy verification key. Prefers an explicit SPKI PEM
+ * (PRIVY_VERIFICATION_KEY); otherwise uses Privy's JWKS endpoint for the app id
+ * (no secret needed — token signatures verify against Privy's public keys).
+ */
+async function verificationKey(): Promise<VerifyKey> {
+  if (cachedKey) return cachedKey;
+  if (env.PRIVY_VERIFICATION_KEY) {
+    return (cachedKey = await importSPKI(env.PRIVY_VERIFICATION_KEY, "ES256"));
+  }
+  if (env.PRIVY_APP_ID) {
+    return (cachedKey = createRemoteJWKSet(
+      new URL(`https://auth.privy.io/api/v1/apps/${env.PRIVY_APP_ID}/jwks.json`),
+    ));
+  }
+  throw new Error("Privy auth not configured (set PRIVY_APP_ID or PRIVY_VERIFICATION_KEY)");
 }
 
 /** Default middleware: verifies against the configured Privy app key. */
