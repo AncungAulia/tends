@@ -55,6 +55,7 @@ Notes:
 - **deposit** is two txs — sign `steps[0]` (USDC approve) then `steps[1]` (vault deposit). **switch** to CUSTOM is two txs (set allocation, then set risk).
 - First-time users: `deploy-vault` → then deposit. Get the user's `vault` address from `/users/me/position`.
 - Invalid bodies return `400 { error, details? }`.
+- BigInt fields (`activity.id`, `vault.deployedBlock`, `blockNumber`) serialize as decimal **strings** (precision-safe) — treat them as strings, not numbers.
 
 ## Chat SSE
 
