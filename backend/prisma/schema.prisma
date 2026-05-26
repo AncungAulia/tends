@@ -51,10 +51,20 @@ model ChatMessage {
   @@index([walletAddress, createdAt])
 }
 
-/// Time-series of scraped per-asset APY. Written by the indexer every ~5m.
+/// Time-series of per-asset APY (derived from price growth, or estimate fallback).
 model ApyHistory {
   asset      String
   apy        Decimal  @db.Decimal(10, 4)
+  snapshotAt DateTime @default(now())
+
+  @@id([asset, snapshotAt])
+  @@index([asset, snapshotAt])
+}
+
+/// Raw 18-dec USD price snapshots — the basis for realized-APY derivation.
+model PriceSnapshot {
+  asset      String
+  priceWad   String // 18-decimal price as a base-10 string
   snapshotAt DateTime @default(now())
 
   @@id([asset, snapshotAt])
