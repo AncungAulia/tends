@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/* Class-based dark mode — next-themes sets `.dark` on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Aspekta (self-hosted) ───────────────────────────────────────── */
+@font-face {
+  font-family: "Aspekta";
+  src: url("/font/Aspekta-400.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aspekta";
+  src: url("/font/Aspekta-500.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aspekta";
+  src: url("/font/Aspekta-600.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aspekta";
+  src: url("/font/Aspekta-700.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aspekta";
+  src: url("/font/Aspekta-800.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --font-sans: "Aspekta", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", var(--font-roboto-mono), ui-monospace, Menlo,
+    Consolas, monospace;
+
+  /* Brand palette (DESIGN.md) */
+  --color-bg: #f7f9fc;
+  --color-surface: #ffffff;
+  --color-border: #dde8f2;
+  --color-text: #0c1a2b;
+  --color-muted: #5b7490;
+  --color-blue-deep: #2c5ead;
+  --color-blue-primary: #1591dc;
+  --color-blue-light: #4bb8fa;
+  --color-blue-pale: #eaf4fc;
+}
+
+/* NOTE: do NOT add an unlayered universal margin/padding reset here.
+   Tailwind v4 keeps its utilities in a cascade layer, and unlayered rules
+   override ALL layered utilities — that silently kills every spacing utility
+   (padding, gap, margin). Tailwind Preflight already resets box-sizing + margins. */
+
+/* Page background + text flip with theme (dark-first product) */
+:root {
+  --page-bg: #f7f9fc;
+  --page-text: #0c1a2b;
+}
+.dark {
+  --page-bg: #0c1a2b;
+  --page-text: #ffffff;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--page-text);
+  overflow-x: hidden;
+}
+
+/* Pointer cursor on interactive elements (Tailwind v4 Preflight no longer
+   sets this on <button>). In @layer base so cursor-* utilities still win,
+   and :disabled keeps its own cursor (e.g. cursor-not-allowed). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+}
+
+/* ── Skeleton shimmer (DESIGN.md) ────────────────────────────────── */
+@keyframes tends-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.tends-skeleton {
+  background: linear-gradient(90deg, #dde8f2 25%, #eaf4fc 50%, #dde8f2 75%);
+  background-size: 200% 100%;
+  animation: tends-shimmer 1.5s ease-in-out infinite;
+}
+.dark .tends-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.05) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ── Spinner (DESIGN.md) ─────────────────────────────────────────── */
+@keyframes tends-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Subtle clip-line reveal for page titles (landing signature, kept brief) */
+@keyframes tends-rise {
+  from {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
