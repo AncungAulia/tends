@@ -471,6 +471,7 @@ APY label ditampilkan di setiap strategy card (kanan panel), di-fetch saat panel
 - Default view: Table
 - Preference persisted to `localStorage` key `tends_activity_view`
 - Data: **backend** — `GET /api/users/me/activity` via `apiFetch` (not on-chain)
+- **Loading state**: skeleton rows — 6x `<ActivityRowSkeleton />` (3 columns shimmer)
 - Empty state: "No activity yet. Agent Hermes begins working after your first deposit."
 
 ---
@@ -482,7 +483,7 @@ APY label ditampilkan di setiap strategy card (kanan panel), di-fetch saat panel
 │ Tends.              Analytics                           │
 ├─────────┬───────────────────────────────────────────────┤
 │         │                                               │
-│ Port.   │  Projection                                   │
+│ Port.   │  Projection                    ← full-width  │
 │ Activity│  ┌──────────────────────────────────────────┐ │
 │ ●Analyt.│  │  Strategy   [LOW ▼]   Capital  [10000]   │ │
 │ Settings│  │  Duration   [180 days]                   │ │
@@ -492,7 +493,7 @@ APY label ditampilkan di setiap strategy card (kanan panel), di-fetch saat panel
 │         │  │  Worst    $10,450.00   ↓                 │ │
 │         │  └──────────────────────────────────────────┘ │
 │         │                                               │
-│         │  APY History                                  │
+│         │  APY History                   ← full-width  │
 │         │  ┌──────────────────────────────────────────┐ │
 │         │  │  [mETH ▼]  [7d] [30d] [90d]              │ │
 │         │  │                                          │ │
@@ -501,6 +502,14 @@ APY label ditampilkan di setiap strategy card (kanan panel), di-fetch saat panel
 │         │  └──────────────────────────────────────────┘ │
 └─────────┴───────────────────────────────────────────────┘
 ```
+
+Layout: **stacked full-width** — Projection di atas, APY History di bawah. Keduanya `w-full`. Tidak ada side-by-side — chart butuh lebar penuh agar terbaca.
+
+### Loading State
+
+- Projection section: skeleton block `h-32 w-full` + 3x skeleton result rows
+- APY History section: `<ApyChartSkeleton />` — `h-48 w-full` shimmer block
+- Both sections load independently — skeleton per section, not full-page
 
 ### Projection Planner
 
@@ -562,6 +571,8 @@ Full-height expanded state (press ⤢):
 
 - Trigger: `ChatBubble.tsx` in `components/layouts/` — always visible when authenticated
 - Panel state: collapsed → small panel → full-height (toggle with ⤢/⤡ button)
+- **Desktop dimensions**: small panel `w-[380px]`, full-height `w-[520px]`, always `h-screen` anchored right
+- **Mobile**: bottom sheet via shadcn Drawer — `snapPoints={[0.5, 0.92]}`, half-height default
 - Streaming: SSE via `POST /api/chat` — replies stream token by token
 - Message history: local React state only (no persistence across sessions)
 - Auth required — passes Privy token in Authorization header
@@ -600,6 +611,7 @@ Full-height expanded state (press ⤢):
 └─────────┴───────────────────────────────────────────────┘
 ```
 
+- **Loading state**: skeleton profile card (`h-16 w-full`) + skeleton rows untuk setiap section (Appearance, Preferences) — resolve langsung dari Privy user object, tidak ada async fetch
 - Identicon: generated from wallet address via `jazzicon` or `blockies`
 - Address: truncated `0x1234...5678` + copy button
 - Connected via: from Privy user object (`user.linkedAccounts`)
@@ -640,5 +652,58 @@ Sidebar collapses to a **bottom navigation bar**:
 └────────────────────────────────┘
 ```
 
-- Modals and slide-overs go full-screen on mobile
-- Holdings table scrolls horizontally on small screens
+### Bottom Sheet Pattern
+
+Semua overlay (modal, slide-over, chat panel) menggunakan **bottom sheet** di mobile — bukan centered modal atau right slide-over. Bottom sheet lebih natural untuk touch dan sesuai native mobile convention.
+
+Library: **`vaul`** via shadcn Drawer component — `npx shadcn@latest add drawer`.
+
+```
+Desktop                          Mobile
+─────────────────────────────    ────────────────────────
+Deposit → centered modal         Deposit → bottom sheet
+Withdraw → centered modal        Withdraw → bottom sheet
+Strategy → right slide-over      Strategy → bottom sheet
+Onboarding → centered modal      Onboarding → bottom sheet (full-height)
+Chat panel → right panel         Chat → bottom sheet (half-height, expandable)
+```
+
+Implementasi pattern — tiap komponen cek breakpoint dan swap component:
+
+```tsx
+import { useIsMobile } from "@/lib/useIsMobile"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Drawer, DrawerContent } from "@/components/ui/drawer"
+
+export function DepositModal({ open, onClose }) {
+  const isMobile = useIsMobile()
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onClose}>
+        <DrawerContent>
+          <DepositForm onClose={onClose} />
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DepositForm onClose={onClose} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+`useIsMobile` sudah ada di `landing-page/lib/useIsMobile.ts` — copy ke `src/hooks/useIsMobile.ts`.
+
+### Mobile-specific notes
+
+- Holdings table: horizontal scroll (`overflow-x-auto`)
+- Bottom sheet drag handle: shown by default via vaul
+- Strategy bottom sheet: full-height (karena ada 4 strategy options + form)
+- Onboarding bottom sheet: `snapPoints={[0.92]}` — hampir full screen, backdrop blur
+- Chat bottom sheet: default `snapPoints={[0.5, 0.92]}` — half-height default, bisa di-drag ke full
