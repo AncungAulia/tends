@@ -4,13 +4,11 @@ import {
   toVaultRecord,
   toRebalanceActivity,
   toActivityLogRecord,
-  toApyRecords,
   toRiskUpdate,
   IndexerService,
   type IndexerRepo,
   type VaultRecord,
   type ActivityRecord,
-  type ApyRecord,
   type RiskUpdate,
 } from "./indexer.js";
 
@@ -59,31 +57,22 @@ test("toActivityLogRecord maps a generic logged activity", () => {
   assert.deepEqual(rec.timestamp, new Date(1_700_000_000_000));
 });
 
-test("toApyRecords maps a token→APY map (missing → 0)", () => {
-  assert.deepEqual(toApyRecords({ mUSD: 5, USDY: undefined }), [
-    { asset: "mUSD", apyPct: 5 },
-    { asset: "USDY", apyPct: 0 },
-  ]);
-});
-
 type PosOp = { vault: string; owner?: string; shares: bigint; assets?: bigint; op: "add" | "sub" };
 
 function fakeRepo() {
   const vaults: VaultRecord[] = [];
   const activities: ActivityRecord[] = [];
-  const apys: ApyRecord[] = [];
   const positions: PosOp[] = [];
   const risks: { vault: string; update: RiskUpdate }[] = [];
   const repo: IndexerRepo = {
     upsertVault: async (r) => void vaults.push(r),
     recordActivity: async (r) => void activities.push(r),
-    recordApy: async (r) => void apys.push(r),
     addToPosition: async (vault, owner, shares, assets) =>
       void positions.push({ vault, owner, shares, assets, op: "add" }),
     subFromPosition: async (vault, shares) => void positions.push({ vault, shares, op: "sub" }),
     setRiskPreference: async (vault, update) => void risks.push({ vault, update }),
   };
-  return { repo, vaults, activities, apys, positions, risks };
+  return { repo, vaults, activities, positions, risks };
 }
 
 test("onVaultDeployed upserts the mapped vault record", async () => {
@@ -132,15 +121,6 @@ test("handlers broadcast a WS event after persisting", async () => {
   await svc.onActivityLogged({ vault: VAULT, agent: AGENT, action: "PAUSE", timestampSec: 1n, txHash: null, blockNumber: null });
 
   assert.deepEqual(events.map((e) => e.type), ["vault_deployed", "rebalanced", "activity"]);
-});
-
-test("scrapeAPYs writes one row per asset", async () => {
-  const { repo, apys } = fakeRepo();
-  await new IndexerService(repo).scrapeAPYs({ mUSD: 5, sUSDe: 12 });
-  assert.deepEqual(apys, [
-    { asset: "mUSD", apyPct: 5 },
-    { asset: "sUSDe", apyPct: 12 },
-  ]);
 });
 
 test("toRiskUpdate: keeps bps only for CUSTOM (level 3)", () => {

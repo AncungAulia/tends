@@ -4,7 +4,6 @@ import { prisma } from "../db/client.js";
 import { publicClient } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI } from "../chain/abis.js";
-import { currentApy, type ApyByToken } from "./projection.js";
 import { wsHub, type WsEvent } from "../ws/hub.js";
 
 const log = childLogger("indexer");
@@ -23,11 +22,6 @@ export interface ActivityRecord {
   blockNumber: bigint | null;
   agentAddress: string;
   timestamp: Date;
-}
-
-export interface ApyRecord {
-  asset: string;
-  apyPct: number;
 }
 
 // ── Pure event/data → record mappers ─────────────────────────────────────────
@@ -81,11 +75,6 @@ export function toActivityLogRecord(args: {
   };
 }
 
-/** Per-asset APY snapshot rows. */
-export function toApyRecords(apy: ApyByToken): ApyRecord[] {
-  return Object.entries(apy).map(([asset, apyPct]) => ({ asset, apyPct: apyPct ?? 0 }));
-}
-
 export interface RiskUpdate {
   riskPreference: number; // 0=LOW 1=MED 2=HIGH 3=CUSTOM
   lowBps: number | null;
@@ -114,7 +103,6 @@ export function toRiskUpdate(
 export interface IndexerRepo {
   upsertVault(rec: VaultRecord): Promise<void>;
   recordActivity(rec: ActivityRecord): Promise<void>;
-  recordApy(rec: ApyRecord): Promise<void>;
   /** Deposit: add shares + cost basis (upserts the vault row if missing). */
   addToPosition(vault: string, owner: string, shares: bigint, assets: bigint): Promise<void>;
   /** Withdraw: reduce shares. */
@@ -134,9 +122,6 @@ export const prismaIndexerRepo: IndexerRepo = {
     await prisma.agentActivity.create({
       data: { ...rec, metadata: rec.metadata as Prisma.InputJsonValue },
     });
-  },
-  async recordApy(rec) {
-    await prisma.apyHistory.create({ data: { asset: rec.asset, apy: rec.apyPct } });
   },
   async addToPosition(vault, owner, shares, assets) {
     await prisma.vault.upsert({
@@ -237,12 +222,6 @@ export class IndexerService {
     await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
     this.broadcast({ type: "risk_updated", vault, level });
     log.info({ vault, level }, "risk preference indexed");
-  }
-
-  /** Snapshot current APYs into ApyHistory (placeholder source until a real feed). */
-  async scrapeAPYs(apy: ApyByToken = currentApy()): Promise<void> {
-    for (const rec of toApyRecords(apy)) await this.repo.recordApy(rec);
-    log.info({ count: Object.keys(apy).length }, "apy snapshot written");
   }
 
   /** Enumerate all vault addresses from the factory. */
