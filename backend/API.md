@@ -43,6 +43,7 @@ type Projection = { capital: number; durationDays: number; blendedApyPct: number
 | GET | `/api/users/me/activity` | ✅ | – | `{ activities[] }` |
 | POST | `/api/users/me/deploy-vault` | ✅ | – | `{ tx: Tx }` |
 | POST | `/api/users/me/prepare-deposit` | ✅ | `{ vault, account, amount }` | `{ steps: [approveTx, depositTx] }` |
+| POST | `/api/users/me/prepare-deposit-permit` | ✅ | `{ vault, account, amount, deadline, signature }` | `{ tx }` (1-tx, see FE guide §4b) |
 | POST | `/api/users/me/prepare-withdraw` | ✅ | `{ vault, account, amount }` | `{ tx: Tx }` |
 | POST | `/api/users/me/prepare-switch` | ✅ | `{ vault, strategyId, customAllocation? }` | `{ steps: Tx[] }` |
 | POST | `/api/chat` | ✅ | `{ message }` | SSE stream |

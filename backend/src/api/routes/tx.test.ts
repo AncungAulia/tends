@@ -51,6 +51,23 @@ test("POST /prepare-deposit rejects a bad address / amount", async () => {
   assert.equal((await post("/prepare-deposit", { vault: VAULT, account: ACCOUNT, amount: -1 })).status, 400);
 });
 
+test("POST /prepare-deposit-permit: encodes depositWithPermit from a signature", async () => {
+  const sig = "0x" + "ab".repeat(32) + "cd".repeat(32) + "1b"; // r + s + v(27)
+  const ok = await post("/prepare-deposit-permit", {
+    vault: VAULT, account: ACCOUNT, amount: 50, deadline: 1_800_000_000, signature: sig,
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(decode((await ok.json() as { tx: Step }).tx).functionName, "depositWithPermit");
+
+  // malformed signature → 400
+  assert.equal(
+    (await post("/prepare-deposit-permit", {
+      vault: VAULT, account: ACCOUNT, amount: 50, deadline: 1_800_000_000, signature: "0xdead",
+    })).status,
+    400,
+  );
+});
+
 test("POST /prepare-withdraw returns one tx", async () => {
   const res = await post("/prepare-withdraw", { vault: VAULT, account: ACCOUNT, amount: 5 });
   assert.equal(res.status, 200);

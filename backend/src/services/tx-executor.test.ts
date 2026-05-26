@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decodeFunctionData, getAddress } from "viem";
-import { txExecutorService as tx } from "./tx-executor.js";
+import { txExecutorService as tx, permitTypedData } from "./tx-executor.js";
 import {
   ERC20_ABI,
   USER_VAULT_TX_ABI,
@@ -57,4 +57,28 @@ test("prepareSetCustomAllocation → vault.setCustomAllocation(low, med, high)",
   const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
   assert.equal(d.functionName, "setCustomAllocation");
   assert.deepEqual(d.args, [5000, 3000, 2000]);
+});
+
+test("prepareDepositWithPermit → vault.depositWithPermit(assets, receiver, deadline, v, r, s)", () => {
+  const r = ("0x" + "ab".repeat(32)) as `0x${string}`;
+  const s = ("0x" + "cd".repeat(32)) as `0x${string}`;
+  const t = tx.prepareDepositWithPermit(VAULT, USER, 100, 1_800_000_000n, 27, r, s);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "depositWithPermit");
+  assert.deepEqual(d.args, [100_000_000n, USER, 1_800_000_000n, 27, r, s]);
+});
+
+test("permitTypedData: USDC EIP-2612 domain + Permit message", () => {
+  const td = permitTypedData({
+    chainId: 5003, owner: USER, spender: VAULT,
+    value: 100_000_000n, nonce: 3n, deadline: 1_800_000_000n,
+  });
+  assert.equal(td.domain.name, "USD Coin");
+  assert.equal(td.domain.version, "1");
+  assert.equal(td.domain.chainId, 5003);
+  assert.equal(td.primaryType, "Permit");
+  assert.equal(td.types.Permit.length, 5);
+  assert.deepEqual(td.message, {
+    owner: USER, spender: VAULT, value: 100_000_000n, nonce: 3n, deadline: 1_800_000_000n,
+  });
 });

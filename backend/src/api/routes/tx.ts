@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler } from "hono";
+import { parseSignature } from "viem";
 import { z } from "zod";
 import { txExecutorService as tx } from "../../services/tx-executor.js";
 import { gasFunderService } from "../../services/gas-funder.js";
@@ -27,6 +28,13 @@ const bps = z.number().int().min(0).max(10_000);
 
 const depositBody = z.object({ vault: address, account: address, amount });
 const withdrawBody = depositBody;
+const permitBody = z.object({
+  vault: address,
+  account: address,
+  amount,
+  deadline: z.number().int().positive(), // unix seconds
+  signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/, "expected a 65-byte signature"),
+});
 const switchBody = z.object({
   vault: address,
   strategyId: z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]),
@@ -62,6 +70,28 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>): Hono<AuthVars> 
         tx.prepareApproveUsdc(vault as `0x${string}`, amount),
         tx.prepareDeposit(vault as `0x${string}`, account as `0x${string}`, amount),
       ],
+    });
+  });
+
+  // 1-tx deposit: FE signs an EIP-2612 permit (Privy signTypedData), splits it, posts
+  // here; we encode depositWithPermit. See FRONTEND_INTEGRATION.md for the typed data.
+  r.post("/prepare-deposit-permit", async (c) => {
+    const p = await parseBody(c, permitBody);
+    if (!p.ok) return p.res;
+    const { vault, account, amount, deadline, signature } = p.data;
+    const sig = parseSignature(signature as `0x${string}`);
+    const v = Number(sig.v ?? 27n + BigInt(sig.yParity ?? 0));
+    await tryEnsureGas(account as `0x${string}`);
+    return c.json({
+      tx: tx.prepareDepositWithPermit(
+        vault as `0x${string}`,
+        account as `0x${string}`,
+        amount,
+        BigInt(deadline),
+        v,
+        sig.r,
+        sig.s,
+      ),
     });
   });
 
