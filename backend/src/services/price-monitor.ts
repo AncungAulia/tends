@@ -63,6 +63,17 @@ export interface PriceBoundStatus {
   reason: BoundReason;
 }
 
+/** Pure: breaches that warrant pausing — depeg below floor or unset price. (above = warn only) */
+export function criticalBreaches(statuses: PriceBoundStatus[]): PriceBoundStatus[] {
+  return statuses.filter((s) => s.reason === "below" || s.reason === "zero");
+}
+
+export interface RiskGuardOpts {
+  enabled: boolean;
+  listVaults: () => Promise<`0x${string}`[]>;
+  pauseVault: (vault: `0x${string}`, reason: string) => Promise<`0x${string}`>;
+}
+
 export interface PriceMonitorDeps {
   readNow: () => Promise<bigint>;
   readMaxStaleness: () => Promise<bigint>;
@@ -183,6 +194,31 @@ export class PriceMonitorService {
       chain: activeChain,
       account: wallet.account!,
     });
+  }
+
+  /**
+   * Run checks and, if RISK_AUTOPAUSE_ENABLED and a token breached its floor,
+   * pause every vault. Per-vault pause failures are isolated. Returns what it found/did.
+   */
+  async guardAndMaybePause(
+    opts: RiskGuardOpts,
+  ): Promise<{ critical: PriceBoundStatus[]; pausedVaults: `0x${string}`[] }> {
+    const { bounds } = await this.runChecks();
+    const critical = criticalBreaches(bounds);
+    const pausedVaults: `0x${string}`[] = [];
+    if (opts.enabled && critical.length > 0) {
+      const reason = `depeg: ${critical.map((c) => `${c.symbol}:${c.reason}`).join(",")}`;
+      for (const v of await opts.listVaults()) {
+        try {
+          await opts.pauseVault(v, reason);
+          pausedVaults.push(v);
+        } catch (err) {
+          log.error({ vault: v, err }, "auto-pause failed for vault");
+        }
+      }
+      log.warn({ critical: critical.length, paused: pausedVaults.length }, "auto-paused on depeg");
+    }
+    return { critical, pausedVaults };
   }
 }
 
