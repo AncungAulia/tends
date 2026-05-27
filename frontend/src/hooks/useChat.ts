@@ -16,7 +16,13 @@ export function useChat() {
     async (message: string) => {
       if (!message.trim() || streaming) return;
 
-      setMessages((prev) => [...prev, { role: "user", text: message }]);
+      // Add the user message AND an empty Hermes message up-front so the typing
+      // loader appears during the whole wait (token + network + first token).
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", text: message },
+        { role: "hermes", text: "" },
+      ]);
       setStreaming(true);
 
       try {
@@ -39,9 +45,6 @@ export function useChat() {
         const decoder = new TextDecoder();
         let reply = "";
         let buffer = "";
-
-        // Empty hermes message to stream into
-        setMessages((prev) => [...prev, { role: "hermes", text: "" }]);
 
         while (true) {
           const { done, value } = await reader.read();
@@ -78,10 +81,15 @@ export function useChat() {
           }
         }
       } catch {
-        setMessages((prev) => [
-          ...prev,
-          { role: "hermes", text: "Hermes is unavailable. Try again." },
-        ]);
+        // Replace the pending (empty) Hermes message with the error.
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          const errored = { role: "hermes" as const, text: "Hermes is unavailable. Try again." };
+          if (last?.role === "hermes") copy[copy.length - 1] = errored;
+          else copy.push(errored);
+          return copy;
+        });
       } finally {
         setStreaming(false);
       }

@@ -48,7 +48,8 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
     <div className={cn("space-y-4 p-4", expanded && "mx-auto w-full max-w-2xl py-8")}>
       {messages.map((m, i) => {
         const isUser = m.role === "user";
-        const streamingThis = !isUser && streaming && i === messages.length - 1;
+        const streamingEmpty =
+          !isUser && streaming && i === messages.length - 1 && m.text === "";
         return (
           <div
             key={i}
@@ -74,25 +75,28 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
               <div className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-[#1591DC]" />
             )}
 
-            {/* Bubble — fits its content; corner toward the avatar is squared */}
-            <div
-              className={cn(
-                "w-fit max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm",
-                isUser
-                  ? "whitespace-pre-wrap rounded-tr-none bg-[#0C1A2B] text-white dark:bg-white dark:text-[#0C1A2B]"
-                  : "rounded-tl-none bg-[#F7F9FC] text-[#0C1A2B] dark:bg-white/5 dark:text-white",
-              )}
-            >
-              {isUser ? (
-                m.text
-              ) : streamingThis && m.text === "" ? (
-                <span className="inline-flex items-center gap-2 text-[#5B7490] dark:text-white/45">
-                  <Spinner size="sm" /> Thinking...
-                </span>
-              ) : (
-                <Markdown>{m.text}</Markdown>
-              )}
-            </div>
+            {streamingEmpty ? (
+              // Typing loader — original CSS untouched; only repositioned:
+              //  · ml offsets the left dot (overflows ~3.5em) → gap matches the bubble
+              //  · -mt lifts the element so its dots (rendered 2.5em below) center on the avatar
+              <span
+                className="tends-typing ml-[18px] -mt-[3px]"
+                role="status"
+                aria-label="Hermes is typing"
+              />
+            ) : (
+              // Bubble — fits its content; corner toward the avatar is squared
+              <div
+                className={cn(
+                  "w-fit max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm",
+                  isUser
+                    ? "whitespace-pre-wrap rounded-tr-none bg-[#0C1A2B] text-white dark:bg-white dark:text-[#0C1A2B]"
+                    : "rounded-tl-none bg-[#F7F9FC] text-[#0C1A2B] dark:bg-white/5 dark:text-white",
+                )}
+              >
+                {isUser ? m.text : <Markdown>{m.text}</Markdown>}
+              </div>
+            )}
           </div>
         );
       })}
