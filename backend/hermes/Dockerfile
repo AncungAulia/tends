@@ -26,8 +26,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Hermes Agent — pin a version in production once you've verified it.
+# [mcp] = the Python MCP SDK, REQUIRED for Hermes to connect to our `tends` MCP
+# server (without it `hermes mcp test` fails "requires the 'mcp' Python SDK").
 # aiohttp is required for the OpenAI-compatible API server adapter (`hermes gateway`).
-RUN pip install --no-cache-dir hermes-agent aiohttp
+RUN pip install --no-cache-dir 'hermes-agent[mcp]' aiohttp
 
 # The Tends MCP server + its deps (Prisma client) and schema.
 COPY --from=mcpbuild /app/node_modules ./node_modules
@@ -40,8 +42,10 @@ COPY hermes/config.yaml /opt/hermes/config.yaml
 COPY hermes/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# API_SERVER_HOST must be :: (IPv6) — Fly's private 6PN network is IPv6-only, so
+# binding 0.0.0.0 (IPv4) makes <app>.internal connections reset. :: is dual-stack.
 ENV API_SERVER_ENABLED=true \
-    API_SERVER_HOST=0.0.0.0 \
+    API_SERVER_HOST=:: \
     API_SERVER_PORT=8642 \
     PYTHONUNBUFFERED=1
 EXPOSE 8642
