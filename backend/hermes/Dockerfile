@@ -4,6 +4,10 @@
 # ── Stage 1: build our Node MCP server ───────────────────────────────────────
 FROM node:22-slim AS mcpbuild
 WORKDIR /app
+# openssl → Prisma detects debian-openssl-3.0.x at generate (no fallback warning).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -14,9 +18,9 @@ RUN pnpm db:generate && pnpm build
 FROM python:3.12-slim AS hermes
 WORKDIR /app
 
-# Node 22 (so Hermes can spawn `node dist/mcp/server.js`)
+# Node 22 (so Hermes can spawn `node dist/mcp/server.js`) + openssl for Prisma.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates \
+ && apt-get install -y --no-install-recommends curl ca-certificates openssl \
  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*

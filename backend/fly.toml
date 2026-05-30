@@ -1,0 +1,50 @@
+# Fly.io — Tends backend (HTTP API + indexer + schedulers + dashboard WebSocket).
+#
+# IMPORTANT: this is a SINGLE always-on machine. The indexer, the scheduler jobs
+# (relayer/rebalancer/price-monitor/apy) and the WebSocket hub are stateful and
+# must NOT auto-stop, and must NOT run as multiple replicas (two indexers would
+# double-process the same chain events). Keep min == max == 1.
+#
+# Deploy:  fly deploy            (from backend/)
+# Logs:    fly logs -a tends-api
+
+app = "tends-api"
+primary_region = "sin"   # Singapore — closest Fly region to ID/SEA
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Apply DB migrations in a one-off release machine BEFORE the new version goes
+# live. If this fails, the deploy is aborted and the old machine keeps serving.
+[deploy]
+  release_command = "node_modules/.bin/prisma migrate deploy"
+  strategy = "immediate"   # single machine → replace in place
+
+# Non-secret config. Everything sensitive goes through `fly secrets` (see DEPLOY_FLY.md).
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = false    # always-on: background indexer + schedulers
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  # Liveness/readiness — /health returns 200 once the server is up.
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"   # bump to 1gb if the schedulers + viem get tight
