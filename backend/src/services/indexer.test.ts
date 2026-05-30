@@ -111,6 +111,16 @@ test("onVaultDeployed upserts the mapped vault record", async () => {
   assert.deepEqual(vaults[0], { address: VAULT, owner: USER, deployedBlock: 7n });
 });
 
+test("backfillVault reads owner on-chain and upserts an existing vault", async () => {
+  const { repo, vaults } = fakeRepo();
+  const seen: string[] = [];
+  const readOwner = async (v: `0x${string}`) => (seen.push(v), USER);
+  const svc = new IndexerService(repo, () => {}, async () => {}, readOwner);
+  await svc.backfillVault(VAULT as `0x${string}`);
+  assert.deepEqual(seen, [VAULT]); // owner read for that vault
+  assert.deepEqual(vaults, [{ address: VAULT, owner: USER, deployedBlock: null }]);
+});
+
 test("onRebalanced records the mapped activity", async () => {
   const { repo, activities } = fakeRepo();
   await new IndexerService(repo).onRebalanced({

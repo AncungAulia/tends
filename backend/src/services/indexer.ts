@@ -14,6 +14,11 @@ async function defaultTriggerRebalance(vault: `0x${string}`): Promise<void> {
   await rebalancerService.processVault(vault);
 }
 
+/** Default on-chain owner reader for backfill: UserVault.owner(). */
+function defaultReadVaultOwner(vault: `0x${string}`): Promise<string> {
+  return publicClient.readContract({ address: vault, abi: USER_VAULT_ABI, functionName: "owner" });
+}
+
 export interface VaultRecord {
   address: string;
   owner: string;
@@ -210,12 +215,26 @@ export class IndexerService {
     private readonly broadcast: (e: WsEvent) => void = (e) => wsHub.broadcast(e),
     // event-driven: deploy a fresh deposit immediately instead of waiting for the poll
     private readonly triggerRebalance: (vault: `0x${string}`) => Promise<void> = defaultTriggerRebalance,
+    // backfill: read an existing vault's owner on-chain (UserVault.owner())
+    private readonly readVaultOwner: (vault: `0x${string}`) => Promise<string> = defaultReadVaultOwner,
   ) {}
 
   async onVaultDeployed(user: string, vault: string, blockNumber: bigint | null): Promise<void> {
     await this.repo.upsertVault(toVaultRecord(user, vault, blockNumber));
     this.broadcast({ type: "vault_deployed", user, vault });
     log.info({ user, vault }, "vault deployed");
+  }
+
+  /**
+   * Backfill an already-deployed vault into the DB. watchContractEvent only sees
+   * events from when the watcher attaches, so vaults deployed before startup (or
+   * during a restart's downtime) would never be recorded otherwise. Idempotent
+   * (upsert); reads the owner on-chain. Runs for every existing vault at startup.
+   */
+  async backfillVault(vault: `0x${string}`): Promise<void> {
+    const owner = await this.readVaultOwner(vault);
+    await this.repo.upsertVault(toVaultRecord(owner, vault, null));
+    log.info({ vault, owner }, "vault backfilled");
   }
 
   async onRebalanced(args: {
@@ -344,9 +363,14 @@ export class IndexerService {
           },
         }),
       );
-      // attach watchers for vaults that already exist
+      // attach watchers for vaults that already exist + backfill them into the DB
       void this.listVaults()
-        .then((vaults) => vaults.forEach((v) => this.watchVault(v, unwatch)))
+        .then((vaults) =>
+          vaults.forEach((v) => {
+            this.watchVault(v, unwatch);
+            void this.backfillVault(v).catch((err) => log.warn({ err, vault: v }, "vault backfill failed"));
+          }),
+        )
         .catch((err) => log.error({ err }, "failed to enumerate vaults for watching"));
     }
     if (addresses.activityLog) {
