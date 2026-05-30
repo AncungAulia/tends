@@ -41,6 +41,58 @@ export function toVaultRecord(
   return { address: vault, owner: user, deployedBlock: blockNumber };
 }
 
+/**
+ * Vault upsert args that CREATE the owner `User` if it doesn't exist yet
+ * (`connectOrCreate`). On-chain `VaultDeployed`/`Deposit` events can be indexed
+ * before the owner has authenticated (no User row), and `Vault.owner` is a FK to
+ * `User.walletAddress` — without this the upsert fails with a foreign-key error
+ * (P2003) and the vault is never recorded. The owner FK is set via the relation,
+ * so we must NOT also pass a scalar `owner`.
+ */
+export function toVaultUpsertArgs(rec: VaultRecord): Prisma.VaultUpsertArgs {
+  return {
+    where: { address: rec.address },
+    create: {
+      address: rec.address,
+      deployedBlock: rec.deployedBlock,
+      user: {
+        connectOrCreate: {
+          where: { walletAddress: rec.owner },
+          create: { walletAddress: rec.owner },
+        },
+      },
+    },
+    update: { deployedBlock: rec.deployedBlock },
+  };
+}
+
+/** Position upsert args (deposit) — same owner-User `connectOrCreate` guard. */
+export function toPositionUpsertArgs(
+  vault: string,
+  owner: string,
+  shares: bigint,
+  assets: bigint,
+): Prisma.VaultUpsertArgs {
+  return {
+    where: { address: vault },
+    create: {
+      address: vault,
+      shares: shares.toString(),
+      initialDeposit: assets.toString(),
+      user: {
+        connectOrCreate: {
+          where: { walletAddress: owner },
+          create: { walletAddress: owner },
+        },
+      },
+    },
+    update: {
+      shares: { increment: shares.toString() },
+      initialDeposit: { increment: assets.toString() },
+    },
+  };
+}
+
 /** UserVault `Rebalanced(timestamp, agent, instructions)` → an AgentActivity record. */
 export function toRebalanceActivity(args: {
   vault: string;
@@ -118,11 +170,7 @@ export interface IndexerRepo {
 
 export const prismaIndexerRepo: IndexerRepo = {
   async upsertVault(rec) {
-    await prisma.vault.upsert({
-      where: { address: rec.address },
-      create: { address: rec.address, owner: rec.owner, deployedBlock: rec.deployedBlock },
-      update: { deployedBlock: rec.deployedBlock },
-    });
+    await prisma.vault.upsert(toVaultUpsertArgs(rec));
   },
   async recordActivity(rec) {
     await prisma.agentActivity.create({
@@ -130,19 +178,7 @@ export const prismaIndexerRepo: IndexerRepo = {
     });
   },
   async addToPosition(vault, owner, shares, assets) {
-    await prisma.vault.upsert({
-      where: { address: vault },
-      create: {
-        address: vault,
-        owner,
-        shares: shares.toString(),
-        initialDeposit: assets.toString(),
-      },
-      update: {
-        shares: { increment: shares.toString() },
-        initialDeposit: { increment: assets.toString() },
-      },
-    });
+    await prisma.vault.upsert(toPositionUpsertArgs(vault, owner, shares, assets));
   },
   async subFromPosition(vault, shares) {
     await prisma.vault.update({
