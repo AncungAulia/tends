@@ -4,6 +4,7 @@ import {
   annualizedApy,
   apyFromSnapshots,
   ApyService,
+  LIVE_APY_POOLS,
   type ApyRepo,
   type Snap,
 } from "./apy.js";
@@ -52,45 +53,107 @@ test("apyFromSnapshots: computes realized APY from growth", () => {
   assert.ok(apy > 0);
 });
 
-function fakeRepo(byAsset: Record<string, Snap[] | "throw">): ApyRepo {
-  return {
+interface FakeOpts {
+  snaps?: Record<string, Snap[] | "throw">; // windowSnapshots (run() derivation)
+  cached?: Record<string, number> | "throw"; // latestApy (getApyMap cache)
+}
+function fakeRepo(opts: FakeOpts = {}) {
+  const recorded: Record<string, number> = {};
+  const repo: ApyRepo = {
     saveSnapshot: async () => {},
-    recordApy: async () => {},
+    recordApy: async (asset, apy) => void (recorded[asset] = apy),
     windowSnapshots: async (asset) => {
-      const v = byAsset[asset] ?? [];
+      const v = opts.snaps?.[asset] ?? [];
       if (v === "throw") throw new Error("db down");
       return v;
     },
+    latestApy: async () => {
+      if (opts.cached === "throw") throw new Error("db down");
+      return opts.cached ?? {};
+    },
   };
+  return { repo, recorded };
 }
 
-test("getApyMap: derived where available, estimate otherwise", async () => {
-  const t0 = Date.now() - 10 * MS_DAY;
-  const sUSDeSnaps: Snap[] = [
-    { priceWad: E18.toString(), snapshotAt: new Date(t0) },
-    { priceWad: ((E18 * 1001n) / 1000n).toString(), snapshotAt: new Date(t0 + 10 * MS_DAY) },
-  ];
-  const map = await new ApyService(fakeRepo({ sUSDe: sUSDeSnaps, USDY: [] })).getApyMap();
-
-  const expected = Math.round(apyFromSnapshots(sUSDeSnaps)! * 100) / 100;
-  assert.equal(map.sUSDe, expected); // derived
-  assert.equal(map.USDY, 5); // no snapshots → DEFAULT estimate
-  assert.equal(map.mETH, 3.5); // never derivable → estimate
+// ── getApyMap: reads the cached (live/derived) APY, layered over the estimate ──
+test("getApyMap: layers cached APY over the estimate", async () => {
+  const { repo } = fakeRepo({ cached: { sUSDe: 13.5, USDY: 4.2 } });
+  const map = await new ApyService(repo, false).getApyMap();
+  assert.equal(map.sUSDe, 13.5); // cached live value
+  assert.equal(map.USDY, 4.2);
+  assert.equal(map.mETH, 4); // not cached → DEFAULT estimate
 });
 
-test("getApyMap: resilient to a failing read (falls back to estimate)", async () => {
-  const map = await new ApyService(fakeRepo({ sUSDe: "throw", USDY: "throw" })).getApyMap();
-  assert.equal(map.sUSDe, 12); // DEFAULT estimate, no throw
+test("getApyMap: USE_MOCK_CONTRACTS returns estimates only (ignores cache)", async () => {
+  const { repo } = fakeRepo({ cached: { sUSDe: 3.5 } });
+  const map = await new ApyService(repo, true).getApyMap();
+  assert.equal(map.sUSDe, 14); // estimate — mock prices ≠ real yield
   assert.equal(map.USDY, 5);
 });
 
-test("getApyMap: absurd (out-of-band) derived APY is discarded for the estimate", async () => {
-  const t0 = Date.now() - 2 * MS_DAY;
-  // 1.0 → 2.0 over 2 days → annualizes to a gigantic % → must be rejected, not shown
-  const wild: Snap[] = [
+test("getApyMap: resilient to a failing read (falls back to estimate)", async () => {
+  const { repo } = fakeRepo({ cached: "throw" });
+  const map = await new ApyService(repo, false).getApyMap();
+  assert.equal(map.sUSDe, 14); // DEFAULT estimate, no throw
+  assert.equal(map.USDY, 5);
+});
+
+test("getApyMap: out-of-band cached APY is discarded for the estimate", async () => {
+  const { repo } = fakeRepo({ cached: { sUSDe: 999 } }); // absurd → rejected
+  const map = await new ApyService(repo, false).getApyMap();
+  assert.equal(map.sUSDe, 14);
+});
+
+// ── fetchLiveApy: real protocol rates with per-token fallback ──────────────────
+test("fetchLiveApy: keeps sane live values, drops null + out-of-band", async () => {
+  const { repo } = fakeRepo();
+  const svc = new ApyService(repo, false, async (pool) =>
+    pool === LIVE_APY_POOLS.sUSDe ? 3.79 : null,
+  ); // USDY source returns null → omitted
+  const live = await svc.fetchLiveApy();
+  assert.equal(live.sUSDe, 3.79);
+  assert.equal("USDY" in live, false); // null → caller falls back to estimate
+});
+
+test("fetchLiveApy: a throwing source is swallowed (omitted)", async () => {
+  const { repo } = fakeRepo();
+  const svc = new ApyService(repo, false, async () => {
+    throw new Error("network");
+  });
+  assert.deepEqual(await svc.fetchLiveApy(), {});
+});
+
+// ── run: caches live > derived > estimate to apyHistory ───────────────────────
+test("run: caches live protocol APY + estimates to history (mock mode)", async () => {
+  const { repo, recorded } = fakeRepo();
+  // useMock=true → snapshotPrices/derivation skipped; live fetch still runs
+  const svc = new ApyService(repo, true, async (pool) =>
+    pool === LIVE_APY_POOLS.sUSDe ? 3.5 : pool === LIVE_APY_POOLS.USDY ? 4.1 : null,
+  );
+  await svc.run();
+  assert.equal(recorded.sUSDe, 3.5); // live (overrides the 14 estimate)
+  assert.equal(recorded.USDY, 4.1); // live
+  assert.equal(recorded.mETH, 4); // estimate (no live source)
+});
+
+test("run: falls back to snapshot derivation for tokens without a live source", async () => {
+  const t0 = Date.now() - 10 * MS_DAY;
+  const usdySnaps: Snap[] = [
     { priceWad: E18.toString(), snapshotAt: new Date(t0) },
-    { priceWad: (E18 * 2n).toString(), snapshotAt: new Date(t0 + 2 * MS_DAY) },
+    // +0.1% over 10d → ~3.8% annualized (in the sane band, so it's recorded)
+    { priceWad: ((E18 * 1001n) / 1000n).toString(), snapshotAt: new Date(t0 + 10 * MS_DAY) },
   ];
-  const map = await new ApyService(fakeRepo({ sUSDe: wild, USDY: [] })).getApyMap();
-  assert.equal(map.sUSDe, 12); // estimate, not the absurd derived value
+  const { repo, recorded } = fakeRepo({ snaps: { USDY: usdySnaps, sUSDe: [] } });
+  // live covers sUSDe only; USDY has no live source → derived from snapshots (non-mock).
+  // 4th arg = feed-price reader stub so snapshotPrices() never touches the chain.
+  const svc = new ApyService(
+    repo,
+    false,
+    async (pool) => (pool === LIVE_APY_POOLS.sUSDe ? 12 : null),
+    async () => E18,
+  );
+  await svc.run();
+  assert.equal(recorded.sUSDe, 12); // live
+  const derived = Math.round(apyFromSnapshots(usdySnaps)! * 100) / 100;
+  assert.equal(recorded.USDY, derived); // snapshot-derived
 });

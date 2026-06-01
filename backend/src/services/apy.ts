@@ -49,10 +49,38 @@ export function apyFromSnapshots(snaps: Snap[]): number | null {
   return annualizedApy(BigInt(first.priceWad), BigInt(last.priceWad), days);
 }
 
+/** A live-protocol APY source: current % for a pool, or null → fall back. */
+export type PoolApyFetch = (pool: string) => Promise<number | null>;
+
+/**
+ * Real mainnet protocol APY per token, via DeFiLlama's per-pool chart endpoint
+ * (keyless, stable pool ids). Tokens without a reliable free source — Mantle's
+ * mETH/cmETH/mUSD and MNT staking — keep the curated DEFAULT_APY_PCT estimate.
+ */
+export const LIVE_APY_POOLS: Partial<Record<TokenSymbol, string>> = {
+  sUSDe: "66985a81-9c51-46ca-9977-42b4fe7bc6df", // Ethena staked USDe
+  USDY: "ac61ee82-2fe4-4f9b-a9cd-7fb33f598859", // Ondo USDY (tokenized US Treasuries)
+};
+
+/** Fetch a pool's current APY (%) from DeFiLlama. Null on any failure/bad shape. */
+export const defiLlamaApy: PoolApyFetch = async (pool) => {
+  try {
+    const res = await fetch(`https://yields.llama.fi/chart/${pool}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { data?: { apy: number | null }[] };
+    const apy = json.data?.[json.data.length - 1]?.apy;
+    return typeof apy === "number" && Number.isFinite(apy) ? apy : null;
+  } catch {
+    return null;
+  }
+};
+
 export interface ApyRepo {
   saveSnapshot(asset: string, priceWad: string): Promise<void>;
   recordApy(asset: string, apyPct: number): Promise<void>;
   windowSnapshots(asset: string, sinceDays: number): Promise<Snap[]>;
+  /** Latest recorded APY (%) per asset — the cache getApyMap reads. */
+  latestApy(): Promise<Record<string, number>>;
 }
 
 export const prismaApyRepo: ApyRepo = {
@@ -68,28 +96,53 @@ export const prismaApyRepo: ApyRepo = {
       orderBy: { snapshotAt: "asc" },
       select: { priceWad: true, snapshotAt: true },
     }),
+  latestApy: async () => {
+    const rows = await prisma.apyHistory.findMany({
+      orderBy: { snapshotAt: "desc" },
+      distinct: ["asset"],
+      select: { asset: true, apy: true },
+    });
+    return Object.fromEntries(rows.map((r) => [r.asset, Number(r.apy)]));
+  },
+};
+
+/** Read a token's PriceFeed price (18-dec wad) on-chain. Injectable for tests. */
+export type FeedPriceRead = (tokenAddr: string) => Promise<bigint>;
+
+const defaultReadFeedPrice: FeedPriceRead = async (tokenAddr) => {
+  const [price] = await publicClient.readContract({
+    address: as0x(addresses.priceFeed),
+    abi: PRICE_FEED_ABI,
+    functionName: "getPriceUnsafe",
+    args: [as0x(tokenAddr)],
+  });
+  return price;
 };
 
 /**
- * Realized-APY service. Snapshots PriceFeed prices over time and derives an
- * annualized yield for USD-stable yield tokens; everything else uses the
- * configured estimate (currentApy). Replaces the static-only scraper.
+ * APY service. Each scheduler run() refreshes per-token yield — live protocol rate
+ * (DeFiLlama) > on-chain price-snapshot derivation > curated estimate — and CACHES
+ * it to apyHistory. getApyMap() (per request) just reads that cache, so /api/strategies
+ * stays fast and never calls an external API inline.
  */
 export class ApyService {
-  constructor(private readonly repo: ApyRepo = prismaApyRepo) {}
+  constructor(
+    private readonly repo: ApyRepo = prismaApyRepo,
+    // mock token prices don't track real yield → skip on-chain snapshot/derivation
+    private readonly useMock: boolean = env.USE_MOCK_CONTRACTS,
+    // live-protocol APY source (DeFiLlama by default; injectable for tests)
+    private readonly fetchPoolApy: PoolApyFetch = defiLlamaApy,
+    // on-chain PriceFeed reader (injectable for tests)
+    private readonly readFeedPrice: FeedPriceRead = defaultReadFeedPrice,
+  ) {}
 
   /** Snapshot current prices for the derivable tokens. */
   async snapshotPrices(): Promise<void> {
-    if (env.USE_MOCK_CONTRACTS || !addresses.priceFeed) return;
+    if (this.useMock || !addresses.priceFeed) return;
     for (const sym of DERIVABLE_APY) {
       const t = TOKENS[sym];
       if (!t.address) continue;
-      const [price] = await publicClient.readContract({
-        address: as0x(addresses.priceFeed),
-        abi: PRICE_FEED_ABI,
-        functionName: "getPriceUnsafe",
-        args: [as0x(t.address)],
-      });
+      const price = await this.readFeedPrice(t.address);
       await this.repo.saveSnapshot(sym, price.toString());
     }
   }
@@ -98,29 +151,80 @@ export class ApyService {
     return apyFromSnapshots(await this.repo.windowSnapshots(asset, windowDays));
   }
 
-  /** APY map = configured estimate, with derived values where available. Resilient:
-   *  a failed read (e.g. DB down) falls back to the estimate rather than throwing. */
+  /** Pull live protocol APYs (real mainnet rates) for tokens with a source.
+   *  Per-token failures are swallowed (omitted → caller falls back to estimate). */
+  async fetchLiveApy(): Promise<ApyByToken> {
+    const entries = Object.entries(LIVE_APY_POOLS) as [TokenSymbol, string][];
+    const results = await Promise.all(
+      entries.map(async ([sym, pool]) => {
+        try {
+          return [sym, await this.fetchPoolApy(pool)] as const;
+        } catch {
+          return [sym, null] as const;
+        }
+      }),
+    );
+    const out: ApyByToken = {};
+    for (const [sym, apy] of results) {
+      if (apy != null && apy >= SANE_APY.min && apy <= SANE_APY.max) {
+        out[sym] = Math.round(apy * 100) / 100;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Effective APY map served to callers (e.g. /api/strategies). Reads the latest
+   * CACHED per-asset APY (written by run() from live + derived sources) and layers
+   * it over the estimate — so requests are fast (no external calls per request).
+   * Resilient: a failed read or mock mode falls back to the estimate.
+   */
   async getApyMap(): Promise<ApyByToken> {
     const map: ApyByToken = { ...currentApy() };
-    for (const sym of DERIVABLE_APY) {
-      try {
-        const d = await this.derivedApy(sym);
-        if (d != null && d >= SANE_APY.min && d <= SANE_APY.max) {
-          map[sym] = Math.round(d * 100) / 100;
-        } // out-of-band (noise) → keep the estimate
-      } catch (err) {
-        log.warn({ sym, err }, "derived APY failed — using estimate");
+    if (this.useMock) return map; // mock prices ≠ real yield
+    try {
+      const cached = await this.repo.latestApy();
+      for (const [asset, apy] of Object.entries(cached)) {
+        if (asset in TOKENS && apy >= SANE_APY.min && apy <= SANE_APY.max) {
+          map[asset as TokenSymbol] = apy;
+        }
       }
+    } catch (err) {
+      log.warn({ err }, "cached APY read failed — using estimate");
     }
     return map;
   }
 
-  /** Scheduler job: snapshot prices, then record the current APY map to history. */
+  /**
+   * Scheduler job: snapshot prices, then refresh + cache the APY map. Priority per
+   * token: live protocol rate (DeFiLlama) > on-chain snapshot derivation > estimate.
+   */
   async run(): Promise<void> {
     await this.snapshotPrices();
-    const map = await this.getApyMap();
+    const map: ApyByToken = { ...currentApy() };
+
+    const live = await this.fetchLiveApy(); // real mainnet rates where available
+    Object.assign(map, live);
+
+    if (!this.useMock) {
+      for (const sym of DERIVABLE_APY) {
+        if (sym in live) continue; // a live source already covers it
+        try {
+          const d = await this.derivedApy(sym);
+          if (d != null && d >= SANE_APY.min && d <= SANE_APY.max) {
+            map[sym] = Math.round(d * 100) / 100;
+          }
+        } catch (err) {
+          log.warn({ sym, err }, "derived APY failed — using estimate");
+        }
+      }
+    }
+
     for (const [asset, apy] of Object.entries(map)) await this.repo.recordApy(asset, apy ?? 0);
-    log.info({ assets: Object.keys(map).length }, "apy snapshot + history written");
+    log.info(
+      { assets: Object.keys(map).length, live: Object.keys(live).length },
+      "apy snapshot + history written",
+    );
   }
 }
 

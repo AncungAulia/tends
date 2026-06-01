@@ -20,17 +20,25 @@ export interface Projection {
 export type ApyByToken = Partial<Record<TokenSymbol, number>>;
 
 /**
- * Baseline per-token APY (%) estimates. NOT live protocol rates — overridable via
- * APY_PCT_JSON; real APY (Ondo/Mantle-LSP/Ethena oracles) is a follow-up.
+ * Baseline per-token APY (%) estimates — the FALLBACK when live protocol rates
+ * (ApyService.fetchLiveApy) are unavailable. Overridable via APY_PCT_JSON.
+ *
+ * Tuned so the blended strategy APYs come out LOW < MEDIUM < HIGH (the risk
+ * ladder), given the STRATEGY allocations in chain/tokens.ts:
+ *   LOW  = 90% mUSD + 10% USDY                         → ~4.55%
+ *   MED  = 40% mUSD + 30% mETH + 30% cmETH             → ~5.4%
+ *   HIGH = 40% cmETH + 30% sUSDe + 20% mETH + 10% WMNT → ~8.7%
+ * Rationale: stablecoins (mUSD/USDY, RWA/treasury yield) sit lowest; ETH LSTs
+ * (mETH staking, cmETH staking + restaking) mid; sUSDe (Ethena funding yield) top.
  */
 export const DEFAULT_APY_PCT: ApyByToken = {
-  USDC: 0,
-  mUSD: 5,
-  USDY: 5,
-  mETH: 3.5,
-  cmETH: 4,
-  sUSDe: 12,
-  WMNT: 0,
+  USDC: 0, // base asset, idle in the vault → no yield
+  mUSD: 4.5, // Mantle USD (RWA-backed stable)
+  USDY: 5, // Ondo USDY (tokenized US Treasuries)
+  mETH: 4, // Mantle ETH liquid staking
+  cmETH: 8, // Mantle cmETH (restaked ETH: staking + EigenLayer rewards)
+  sUSDe: 14, // Ethena sUSDe (staked USDe funding-rate yield; variable)
+  WMNT: 5, // MNT staking yield
 };
 
 /** Parse APY_PCT_JSON, keeping only known tokens with numeric values. Pure. */
