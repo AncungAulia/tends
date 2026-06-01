@@ -69,13 +69,7 @@ function buildChartData(
   days: number,
   raw: { time: UTCTimestamp; value: number }[],
 ): { time: UTCTimestamp; value: number }[] {
-  // Use real data only if it has meaningful variation (>0.05% spread)
-  if (raw.length >= 5) {
-    const vals = raw.map((d) => d.value);
-    if (Math.max(...vals) - Math.min(...vals) > 0.05) return raw;
-  }
-
-  // Anchor to last real value if available, else use base estimate
+  // Always simulate forward from today — raw data only anchors the starting APY
   const anchor =
     raw.length > 0 ? raw[raw.length - 1].value : (BASE_APY[asset] ?? 3.5);
   const vol = VOLATILITY[asset] ?? 0.4;
