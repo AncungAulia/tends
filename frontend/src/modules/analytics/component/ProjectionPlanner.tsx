@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card } from "@/components/elements/Card";
@@ -22,10 +22,26 @@ interface ProjectionResult {
   worst: number;
 }
 
-export function ProjectionPlanner() {
-  const [strategy, setStrategy] = useState<StrategyId>("LOW");
-  const [capital, setCapital] = useState("10000");
+export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare }: { initialCapital?: number; strategy?: StrategyId; bare?: boolean }) {
+  const [strategy, setStrategy] = useState<StrategyId>(strategyProp ?? "LOW");
+
+  useEffect(() => {
+    if (strategyProp) setStrategy(strategyProp);
+  }, [strategyProp]);
+  const [capital, setCapital] = useState(() =>
+    initialCapital != null && initialCapital > 0
+      ? String(Math.round(initialCapital))
+      : "1000",
+  );
   const [durationDays, setDurationDays] = useState("180");
+  const capitalSynced = useRef(false);
+  useEffect(() => {
+    if (!capitalSynced.current && initialCapital != null && initialCapital > 0) {
+      setCapital(String(Math.round(initialCapital)));
+      capitalSynced.current = true;
+    }
+  }, [initialCapital]);
+
   const [low, setLow] = useState("33");
   const [med, setMed] = useState("34");
   const [high, setHigh] = useState("33");
@@ -64,34 +80,9 @@ export function ProjectionPlanner() {
       }),
   });
 
-  return (
-    <Card>
-      <h3 className="mb-4 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
-        Projection
-      </h3>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
-            Strategy
-          </label>
-          <div className="flex gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
-            {STRATEGIES.map((s) => (
-              <button
-                key={s}
-                onClick={() => setStrategy(s)}
-                className={cn(
-                  "flex-1 rounded-md py-1 font-mono text-[0.6rem] uppercase transition-colors",
-                  strategy === s
-                    ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-                    : "text-[#5B7490] dark:text-white/45",
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
+  const content = (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
             Capital (USDC)
@@ -181,6 +172,17 @@ export function ProjectionPlanner() {
           </>
         )}
       </div>
+    </>
+  );
+
+  if (bare) return content;
+
+  return (
+    <Card>
+      <h3 className="mb-4 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+        Projection
+      </h3>
+      {content}
     </Card>
   );
 }

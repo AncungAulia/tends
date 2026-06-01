@@ -6,10 +6,9 @@ interface QuickActionsProps {
   paused: boolean;
   onDeposit: () => void;
   onWithdraw: () => void;
-  onStrategy: () => void;
 }
 
-export function QuickActions({ paused, onDeposit, onWithdraw, onStrategy }: QuickActionsProps) {
+export function QuickActions({ paused, onDeposit, onWithdraw }: QuickActionsProps) {
   return (
     <div className="flex flex-wrap gap-3">
       <span title={paused ? "Deposits unavailable — vault paused" : undefined}>
@@ -19,9 +18,6 @@ export function QuickActions({ paused, onDeposit, onWithdraw, onStrategy }: Quic
       </span>
       <Button variant="secondary" onClick={onWithdraw}>
         Withdraw
-      </Button>
-      <Button variant="secondary" onClick={onStrategy}>
-        Strategy
       </Button>
     </div>
   );
