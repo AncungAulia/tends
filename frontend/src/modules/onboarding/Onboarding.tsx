@@ -13,7 +13,7 @@ import { StepFirstDeposit } from "./component/StepFirstDeposit";
  * Onboarding overlay (3 steps). Rendered inside Dashboard when the user has no
  * vault yet. Stays mounted through the flow even after the vault is deployed.
  */
-export function Onboarding({ onComplete }: { onComplete: () => void }) {
+export function Onboarding({ onComplete, onDismiss }: { onComplete: () => void; onDismiss: () => void }) {
   const {
     hasVault,
     vaultAddress,
@@ -25,16 +25,16 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   } = useUserVault();
 
   const [step, setStep] = useState(1);
-  const [done, setDone] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const started = useRef(false);
 
-  const shouldShow = !isVaultLoading && !hasVault && !done;
+  const shouldShow = !isVaultLoading && !hasVault && !completed;
   if (shouldShow) started.current = true;
-  const visible = shouldShow || (started.current && !done);
+  const visible = (shouldShow || started.current) && !completed;
   if (!visible) return null;
 
   const finish = () => {
-    setDone(true);
+    setCompleted(true);
     onComplete();
   };
 
@@ -48,7 +48,11 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   };
 
   return (
-    <ResponsiveDialog open={visible} onClose={() => {}} locked>
+    <ResponsiveDialog
+      open={visible}
+      onClose={onDismiss}
+      locked={isPending || isConfirming}
+    >
       {/* Step dots */}
       <div className="mb-5 flex items-center gap-1.5">
         {[1, 2, 3].map((n) => (

@@ -16,9 +16,8 @@ import { QuickActions } from "./component/QuickActions";
 import { Onboarding } from "@/modules/onboarding/Onboarding";
 import { Deposit } from "@/modules/deposit/Deposit";
 import { Withdraw } from "@/modules/withdraw/Withdraw";
-import { Strategy } from "@/modules/strategy/Strategy";
 
-type ActiveModal = "deposit" | "withdraw" | "strategy" | null;
+type ActiveModal = "deposit" | "withdraw" | null;
 
 export function Dashboard() {
   const { ready, authenticated, login } = usePrivy();
@@ -43,6 +42,7 @@ export function Dashboard() {
       : undefined;
 
   const [modal, setModal] = useState<ActiveModal>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const close = () => setModal(null);
   const refresh = () => {
     refetchVault();
@@ -90,7 +90,6 @@ export function Dashboard() {
           paused={paused}
           onDeposit={() => setModal("deposit")}
           onWithdraw={() => setModal("withdraw")}
-          onStrategy={() => setModal("strategy")}
         />
       </div>
 
@@ -109,16 +108,15 @@ export function Dashboard() {
             vaultAddress={vaultAddress}
             onSuccess={refresh}
           />
-          <Strategy
-            open={modal === "strategy"}
-            onClose={close}
-            vaultAddress={vaultAddress}
-            onSuccess={refresh}
-          />
         </>
       )}
 
-      {!hasVault && <Onboarding onComplete={refresh} />}
+      {!hasVault && !onboardingDismissed && (
+        <Onboarding
+          onComplete={refresh}
+          onDismiss={() => setOnboardingDismissed(true)}
+        />
+      )}
     </>
   );
 }
