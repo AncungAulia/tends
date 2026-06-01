@@ -30,7 +30,7 @@ export function StepDeployVault({ onDeploy, isPending, isConfirming, error }: Pr
       </div>
 
       <ul className="space-y-1.5 text-sm text-[#5B7490] dark:text-white/45">
-        <li>· Agent Hermes rebalances automatically</li>
+        <li>· Tends Agent rebalances automatically</li>
         <li>· You can withdraw anytime</li>
         <li>· One-time deployment</li>
       </ul>

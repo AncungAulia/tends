@@ -16,7 +16,7 @@ export function ConnectPrompt({ onConnect }: { onConnect: () => void }) {
       </div>
 
       <p className="max-w-md text-base leading-relaxed text-[#5B7490] dark:text-white/45">
-        Connect your wallet to deploy a personal vault and let Agent Hermes
+        Connect your wallet to deploy a personal vault and let Tends Agent
         manage your strategy.
       </p>
 

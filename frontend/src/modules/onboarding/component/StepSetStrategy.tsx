@@ -16,7 +16,7 @@ export function StepSetStrategy({ vaultAddress, onNext, onSkip }: Props) {
           Choose Your Strategy
         </h2>
         <p className="mt-2 text-sm text-[#5B7490] dark:text-white/45">
-          Hermes will rebalance your vault according to your risk preference.
+          Tends Agent will rebalance your vault according to your risk preference.
         </p>
       </div>
 

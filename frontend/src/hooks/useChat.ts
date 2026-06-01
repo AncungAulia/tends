@@ -6,7 +6,7 @@ export interface ChatMessage {
   text: string;
 }
 
-/** Chat with Hermes via SSE (POST /api/chat). Streams reply token by token. */
+/** Chat with Tends Agent via SSE (POST /api/chat). Streams reply token by token. */
 export function useChat() {
   const { getAccessToken } = usePrivy();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -16,7 +16,7 @@ export function useChat() {
     async (message: string) => {
       if (!message.trim() || streaming) return;
 
-      // Add the user message AND an empty Hermes message up-front so the typing
+      // Add the user message AND an empty Tends Agent message up-front so the typing
       // loader appears during the whole wait (token + network + first token).
       setMessages((prev) => [
         ...prev,
@@ -81,11 +81,11 @@ export function useChat() {
           }
         }
       } catch {
-        // Replace the pending (empty) Hermes message with the error.
+        // Replace the pending (empty) Tends Agent message with the error.
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
-          const errored = { role: "hermes" as const, text: "Hermes is unavailable. Try again." };
+          const errored = { role: "hermes" as const, text: "Tends Agent is unavailable. Try again." };
           if (last?.role === "hermes") copy[copy.length - 1] = errored;
           else copy.push(errored);
           return copy;

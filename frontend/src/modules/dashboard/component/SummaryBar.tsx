@@ -86,7 +86,7 @@ export function SummaryBar({
         label="Last Rebalance"
         compact
         value={rebalance}
-        meta={rebalanced ? "Automatic · Agent Hermes" : "Not yet rebalanced"}
+        meta={rebalanced ? "Automatic · Tends Agent" : "Not yet rebalanced"}
       />
       <StatCard
         label="Status"

@@ -55,7 +55,7 @@ export function StepFirstDeposit({ vaultAddress, onDone, onSkip }: Props) {
           Make Your First Deposit
         </h2>
         <p className="mt-2 text-sm text-[#5B7490] dark:text-white/45">
-          Agent Hermes begins working as soon as funds are in your vault.
+          Tends Agent begins working as soon as funds are in your vault.
         </p>
       </div>
 

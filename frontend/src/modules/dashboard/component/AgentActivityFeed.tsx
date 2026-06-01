@@ -33,7 +33,7 @@ export function AgentActivityFeed() {
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
           <p className="text-sm text-[#5B7490] dark:text-white/45">No activity yet.</p>
           <p className="text-xs text-[#5B7490]/60 dark:text-white/30">
-            Agent Hermes begins working after your first deposit.
+            Tends Agent begins working after your first deposit.
           </p>
         </div>
       ) : (

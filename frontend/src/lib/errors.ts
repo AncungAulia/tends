@@ -18,7 +18,7 @@ const MESSAGES: Record<string, string> = {
     "Vault is paused. Deposits are unavailable, withdrawals remain open.",
   ZeroAmount: "Amount cannot be zero.",
   InvalidAllocationSum: "Custom allocation must total exactly 100%.",
-  NotAuthorizedAgent: "Only the Hermes agent can perform a rebalance.",
+  NotAuthorizedAgent: "Only the Tends Agent can perform a rebalance.",
   RebalanceTooSoon: "A rebalance was just performed. Try again later.",
   TokenNotAllowed: "This token is not allowed for swaps in the vault.",
   NoFeedConfigured: "This token has no configured price feed yet.",

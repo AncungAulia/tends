@@ -4,9 +4,14 @@ import { useEffect, useRef, useState } from "react";
 
 export type WSStatus = "connected" | "connecting" | "disconnected";
 
+// Exponential backoff delays: 2s, 4s, 8s, 16s, 30s max
+const BACKOFF = [2000, 4000, 8000, 16000, 30000];
+
 /**
  * Connects to /ws/dashboard, filters events by vault address, and invokes
- * `onUpdate` on any matching event. Auto-reconnects on close.
+ * `onUpdate` on any matching event. Auto-reconnects with exponential backoff.
+ * After the first failed attempt, stays "disconnected" instead of cycling
+ * through "connecting" on every retry.
  */
 export function useDashboardWS(
   vaultAddress: string | undefined,
@@ -23,20 +28,28 @@ export function useDashboardWS(
 
     let ws: WebSocket | undefined;
     let closed = false;
+    let attempt = 0;
 
     const connect = () => {
+      // Only show "connecting" on the very first attempt — subsequent retries
+      // stay "disconnected" to avoid the flickering dot.
+      if (attempt === 0) setStatus("connecting");
+
       try {
         ws = new WebSocket(url);
       } catch {
         setStatus("disconnected");
+        scheduleReconnect();
         return;
       }
-      setStatus("connecting");
 
-      ws.onopen = () => setStatus("connected");
+      ws.onopen = () => {
+        attempt = 0; // reset backoff on successful connection
+        setStatus("connected");
+      };
       ws.onclose = () => {
         setStatus("disconnected");
-        if (!closed) setTimeout(connect, 2000); // auto-reconnect
+        scheduleReconnect();
       };
       ws.onerror = () => setStatus("disconnected");
       ws.onmessage = (e) => {
@@ -51,6 +64,13 @@ export function useDashboardWS(
           // ignore malformed frames
         }
       };
+    };
+
+    const scheduleReconnect = () => {
+      if (closed) return;
+      const delay = BACKOFF[Math.min(attempt, BACKOFF.length - 1)];
+      attempt++;
+      setTimeout(connect, delay);
     };
 
     connect();
