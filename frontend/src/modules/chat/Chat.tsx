@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import makeBlockie from "ethereum-blockies-base64";
 import { Send, X, Maximize2, Minimize2, Plus } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useChatStore } from "@/hooks/useChatStore";
 import { Spinner } from "@/components/elements/Spinner";
 import { Markdown } from "@/components/elements/Markdown";
 import { cn } from "@/utils/cn";
@@ -26,10 +27,16 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
   const { address } = useAccount();
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const { consumePending } = useChatStore();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const pending = consumePending();
+    if (pending) sendMessage(pending);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = (text: string) => {
     if (!text.trim() || streaming) return;
@@ -58,7 +65,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
               isUser ? "flex-row-reverse" : "flex-row",
             )}
           >
-            {/* Mini avatar — blockies for the user, blue placeholder for Hermes */}
+            {/* Mini avatar — blockies for the user, blue placeholder for Tends Agent */}
             {isUser ? (
               address ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -82,7 +89,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
               <span
                 className="tends-typing ml-[18px] -mt-[3px]"
                 role="status"
-                aria-label="Hermes is typing"
+                aria-label="Tends Agent is typing"
               />
             ) : (
               // Bubble — fits its content; corner toward the avatar is squared
@@ -117,7 +124,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
     >
       <header className="flex items-center justify-between border-b border-[#DDE8F2] px-4 py-3 dark:border-white/10">
         <span className="font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
-          Hermes
+          Tends Agent
         </span>
         <div className="flex items-center gap-3 text-[#5B7490] dark:text-white/45">
           {expanded && !empty && (
@@ -155,7 +162,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
                 Your AI portfolio manager
               </h2>
               <p className="mt-3 max-w-md text-[#5B7490] dark:text-white/45">
-                Ask Hermes about your vault, strategy, or holdings.
+                Ask Tends Agent about your vault, strategy, or holdings.
               </p>
               <div className="mt-7 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (
@@ -171,7 +178,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
             </div>
           ) : (
             <p className="p-4 font-sans text-sm text-[#5B7490] dark:text-white/45">
-              Hello — I&apos;m Hermes, your AI portfolio manager. Ask me about
+              Hello — I&apos;m Tends Agent, your AI portfolio manager. Ask me about
               your vault, strategies, or holdings.
             </p>
           )
@@ -192,7 +199,7 @@ export function Chat({ onClose, expanded, onToggleExpand }: ChatProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={streaming}
-            placeholder="Message Hermes..."
+            placeholder="Message Tends Agent..."
             className={cn(
               "flex-1 rounded-xl border border-[#DDE8F2] bg-white outline-none focus:border-[#1591DC] disabled:opacity-50 dark:border-white/10 dark:bg-[#0C1A2B] dark:text-white",
               expanded ? "px-4 py-3 text-sm" : "px-3 py-2 text-sm",
