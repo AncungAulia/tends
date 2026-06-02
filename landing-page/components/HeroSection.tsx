@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useIsMobile } from "@/lib/useIsMobile";
-
-const VIDEO_SRC = "/video/video4.mp4";
+import LineWaves from "./LineWaves";
+import LogoMarquee from "./LogoMarquee";
 
 const SLIDES = [
   {
@@ -39,16 +39,11 @@ export default function HeroSection() {
   const counterRef = useRef<HTMLSpanElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const textRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const activeIdx  = useRef(-1);
   const entryDone  = useRef(false);
   const [hovered, setHovered] = useState(false);
   const isMobile    = useIsMobile();
   const isMobileRef = useRef(isMobile);
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = 0.6;
-  }, []);
 
   // ── Entry animation: zoom dari lingkaran kecil ────────────────────
   useEffect(() => {
@@ -254,20 +249,38 @@ export default function HeroSection() {
             overflow: "hidden",
           }}
         >
-          <video
-            ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            src={VIDEO_SRC}
-          />
+          {/* Base: gradient biru-menengah (teal-petrol → royal → deep navy-blue),
+              sesuai foto referensi. Tidak terlalu gelap supaya garis shader
+              tidak jadi neon. */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(160deg, rgba(12,26,43,0.62) 0%, rgba(12,26,43,0.38) 60%, rgba(12,26,43,0.55) 100%)",
+                "linear-gradient(135deg, #1B6A85 0%, #1F4FA0 45%, #16306E 100%)",
+            }}
+          >
+            <LineWaves
+              speed={0.35}
+              innerLineCount={21}
+              outerLineCount={36}
+              warpIntensity={1.4}
+              rotation={20}
+              edgeFadeWidth={0}
+              colorCycleSpeed={1.6}
+              brightness={0.18}
+              color1="#2E6FB5"
+              color2="#3A88B8"
+              color3="#4A9EBF"
+              enableMouseInteraction
+              mouseInfluence={1.8}
+            />
+          </div>
+          {/* Overlay tipis untuk kontras teks putih, tidak menggelapkan terlalu banyak */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(160deg, rgba(12,26,43,0.32) 0%, rgba(12,26,43,0.10) 55%, rgba(12,26,43,0.28) 100%)",
             }}
           />
         </div>
@@ -482,6 +495,9 @@ export default function HeroSection() {
           </div>
         </div>
       </section>
+
+      {/* ── Transition strip: infinite logo marquee (partners + stack) ── */}
+      <LogoMarquee />
 
       {/* ── Section 2: Slides — section terpisah di bawah hero ───── */}
       <div
