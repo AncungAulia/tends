@@ -27,7 +27,6 @@ const SLIDES = [
 export default function HeroSection() {
   const videoBgRef = useRef<HTMLDivElement>(null);
   const videoInnerRef = useRef<HTMLDivElement>(null);
-  const isExpanded = useRef(false);
   const loadOverlayRef = useRef<HTMLDivElement>(null);
   const line1Ref = useRef<HTMLDivElement>(null);
   const line2Ref = useRef<HTMLDivElement>(null);
@@ -36,7 +35,6 @@ export default function HeroSection() {
   const slidesOuterRef = useRef<HTMLDivElement>(null);
   const slidesOverRef = useRef<HTMLDivElement>(null);
   const progressFillRef = useRef<HTMLDivElement>(null);
-  const counterRef = useRef<HTMLSpanElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const textRefs = useRef<(HTMLDivElement | null)[]>([]);
   const activeIdx  = useRef(-1);
@@ -93,43 +91,47 @@ export default function HeroSection() {
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
 
   // ── Expand/restore frame berdasarkan scroll position ─────────────
+  // Scroll-tied: padding & borderRadius interpolate continuously with scrollY.
+  // No binary threshold + no GSAP tween — eliminates the on/off flicker that
+  // happened when Lenis-smoothed scrollY repeatedly crossed the old threshold.
   useEffect(() => {
-    const onScroll = () => {
-      if (!entryDone.current) return;
-      const atTop = window.scrollY < 80;
+    const EXPAND_DISTANCE = 80; // px of scroll over which the frame fully expands
+    const BASE_RADIUS = 20;
 
-      if (!atTop && !isExpanded.current) {
-        isExpanded.current = true;
-        gsap.to(videoBgRef.current, {
-          padding: 0,
-          duration: 0.25,
-          ease: "power2.out",
-          overwrite: true,
-        });
-        gsap.to(videoInnerRef.current, {
-          borderRadius: 0,
-          duration: 0.25,
-          ease: "power2.out",
-          overwrite: true,
-        });
-      } else if (atTop && isExpanded.current) {
-        isExpanded.current = false;
-        gsap.to(videoBgRef.current, {
-          padding: isMobileRef.current ? 8 : 14,
-          duration: 0.25,
-          ease: "power2.out",
-          overwrite: true,
-        });
-        gsap.to(videoInnerRef.current, {
-          borderRadius: 20,
-          duration: 0.25,
-          ease: "power2.out",
-          overwrite: true,
-        });
+    let rafId = 0;
+    let pending = false;
+
+    const update = () => {
+      pending = false;
+      if (!entryDone.current) return;
+      const basePadding = isMobileRef.current ? 8 : 14;
+      const t = Math.min(1, Math.max(0, window.scrollY / EXPAND_DISTANCE));
+      // Smoothstep (3t² − 2t³): linear in the middle, gentle at the endpoints
+      // — kills the abrupt change you'd feel with a pure linear ramp.
+      const eased = t * t * (3 - 2 * t);
+      const pad = basePadding * (1 - eased);
+      const radius = BASE_RADIUS * (1 - eased);
+      if (videoBgRef.current) {
+        videoBgRef.current.style.padding = `${pad}px`;
+      }
+      if (videoInnerRef.current) {
+        videoInnerRef.current.style.borderRadius = `${radius}px`;
       }
     };
+
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      rafId = requestAnimationFrame(update);
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    update(); // sync once on mount (handles refresh-with-scroll-position case)
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(rafId);
+    };
   }, []);
 
   // ── Slides ────────────────────────────────────────────────────────
@@ -189,8 +191,6 @@ export default function HeroSection() {
           const prev = activeIdx.current;
           activeIdx.current = next;
 
-          if (counterRef.current)
-            counterRef.current.textContent = `0${next + 1}`;
 
           if (prev >= 0) {
             const dir = next > prev ? -110 : 110;
@@ -530,142 +530,94 @@ export default function HeroSection() {
               />
             </div>
 
-            {/* ── Sidebar: How It Works + counter ──────────────────── */}
+            {/* ── Centered: "How It Works?" label + slide description ── */}
             <div
-              style={
-                isMobile
-                  ? {
-                      position: "absolute",
-                      top: "80px",
-                      left: "20px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "12px",
-                    }
-                  : {
-                      position: "absolute",
-                      top: "50%",
-                      left: "40px",
-                      transform: "translateY(-50%)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "16px",
-                    }
-              }
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: isMobile ? "24px" : "40px",
+                // Wider container so slide 3 ("Deploy... no babysitting needed")
+                // can fit in 2 lines instead of breaking to 3.
+                width: isMobile ? "calc(100% - 40px)" : "min(1280px, 90vw)",
+                textAlign: "center",
+              }}
             >
+              {/* Eyebrow label */}
               <span
                 style={{
                   fontFamily: "var(--font-sans)",
                   fontSize: isMobile
-                    ? "0.75rem"
-                    : "clamp(1.2rem, 2.5vw, 1.5rem)",
+                    ? "clamp(0.95rem, 4vw, 1.15rem)"
+                    : "clamp(1.4rem, 2.4vw, 1.85rem)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "rgba(255,255,255,0.45)",
-                  marginLeft: isMobile ? "0" : "40px",
+                  color: "rgba(255,255,255,0.55)",
                 }}
               >
                 How It Works?
               </span>
 
+              {/* Slide stack — absolute children swap via opacity + Y animation.
+                  minHeight reserves vertical space so siblings don't collapse. */}
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  border: "1px solid rgba(255,255,255,0.25)",
-                  borderRadius: "100px",
-                  padding: "8px 16px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.72rem",
-                  letterSpacing: "0.05em",
-                  color: "rgba(255,255,255,0.85)",
-                  width: "fit-content",
-                  marginLeft: isMobile ? "0" : "40px",
+                  position: "relative",
+                  width: "100%",
+                  minHeight: isMobile ? "150px" : "210px",
                 }}
               >
-                <span ref={counterRef}>01</span>
-                <span style={{ opacity: 0.4 }}>/ 0{SLIDES.length}</span>
-              </div>
-            </div>
-
-            {/* ── Slide text ────────────────────────────────────────── */}
-            <div
-              style={
-                isMobile
-                  ? {
-                      position: "absolute",
-                      top: "200px",
-                      left: "20px",
-                      right: "20px",
-                      width: "auto",
-                    }
-                  : {
-                      position: "absolute",
-                      top: "45%",
-                      left: "50%",
-                      transform: "translate(-10%, -50%)",
-                      width: "55%",
-                    }
-              }
-            >
-              {SLIDES.map((slide, i) => (
-                <div
-                  key={i}
-                  ref={(el) => {
-                    slideRefs.current[i] = el;
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    opacity: 0,
-                    visibility: "hidden",
-                  }}
-                >
+                {SLIDES.map((slide, i) => (
                   <div
+                    key={i}
+                    ref={(el) => {
+                      slideRefs.current[i] = el;
+                    }}
                     style={{
-                      overflow: "hidden",
-                      paddingBottom: "0.05em",
-                      marginRight: "40px",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      opacity: 0,
+                      visibility: "hidden",
                     }}
                   >
                     <div
-                      ref={(el) => {
-                        textRefs.current[i] = el;
+                      style={{
+                        overflow: "hidden",
+                        paddingBottom: "0.05em",
                       }}
                     >
                       <div
-                        style={{
-                          color: "rgba(255,255,255,0.45)",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: "0.8rem",
-                          letterSpacing: "0.12em",
-                          textTransform: "uppercase",
-                          marginBottom: "12px",
+                        ref={(el) => {
+                          textRefs.current[i] = el;
                         }}
-                      >
-                        {slide.title}
-                      </div>
-                      <div
                         style={{
                           color: "#ffffff",
                           fontFamily: "var(--font-sans)",
                           fontSize: isMobile
-                            ? "clamp(1.5rem, 7vw, 2rem)"
-                            : "clamp(1.8rem, 3.8vw, 3.5rem)",
-                          fontWeight: 400,
-                          lineHeight: 1.15,
-                          letterSpacing: "-0.02em",
+                            ? "clamp(1.85rem, 7.5vw, 2.6rem)"
+                            : "clamp(2.6rem, 5.2vw, 5rem)",
+                          fontWeight: 500,
+                          lineHeight: 1.1,
+                          letterSpacing: "-0.025em",
+                          textAlign: "center",
+                          // Balance line lengths — distributes characters more
+                          // evenly so slide 3 wraps to 2 lines like the others
+                          // (vs. orphaning "needed" on a third line).
+                          textWrap: "balance",
                         }}
                       >
                         {slide.description}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

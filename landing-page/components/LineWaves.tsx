@@ -190,25 +190,18 @@ export default function LineWaves({
       targetMouse = [0.5, 0.5];
     }
 
-    function resize() {
-      const w = container.offsetWidth;
-      const h = container.offsetHeight;
-      if (w === 0 || h === 0) return;
-      renderer.setSize(w, h);
-      if (program) {
-        program.uniforms.uResolution.value = [
-          gl.canvas.width,
-          gl.canvas.height,
-          gl.canvas.width / gl.canvas.height,
-        ];
-      }
-    }
-    window.addEventListener("resize", resize);
-    // Container can change size independently of the window (parent padding
-    // animating via GSAP, layout reflow, etc.) — keep the canvas in sync.
-    const ro = new ResizeObserver(resize);
+    // Batched resize: ResizeObserver / window.resize only SET A FLAG. The
+    // actual setSize + render happens inside the RAF render loop in the same
+    // frame, so the canvas never paints empty between clear (setSize side
+    // effect per WebGL spec) and refill (render). This was the source of the
+    // scroll-tied flicker when the parent's padding animated continuously.
+    let needsResize = true;
+    const requestResize = () => {
+      needsResize = true;
+    };
+    window.addEventListener("resize", requestResize);
+    const ro = new ResizeObserver(requestResize);
     ro.observe(container);
-    resize();
 
     const geometry = new Triangle(gl);
     const rotationRad = (rotation * Math.PI) / 180;
@@ -253,6 +246,24 @@ export default function LineWaves({
 
     function update(time: number) {
       animationFrameId = requestAnimationFrame(update);
+
+      // Resize-then-render in the SAME frame — closes the gap between
+      // setSize (clears canvas) and the next paint, eliminating flicker
+      // when the parent's padding animates continuously.
+      if (needsResize) {
+        needsResize = false;
+        const w = container.offsetWidth;
+        const h = container.offsetHeight;
+        if (w > 0 && h > 0) {
+          renderer.setSize(w, h);
+          program.uniforms.uResolution.value = [
+            gl.canvas.width,
+            gl.canvas.height,
+            gl.canvas.width / gl.canvas.height,
+          ];
+        }
+      }
+
       program.uniforms.uTime.value = time * 0.001;
 
       if (enableMouseInteraction) {
@@ -271,7 +282,7 @@ export default function LineWaves({
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", requestResize);
       ro.disconnect();
       if (enableMouseInteraction) {
         window.removeEventListener("mousemove", handleMouseMove);

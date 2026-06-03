@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import GlassSurface from "./GlassSurface";
 
 interface LogoSpec {
@@ -13,30 +14,63 @@ interface LogoSpec {
 // Partners — order: Alchemy, Hermes, Mantle, Privy, RedStone, Circle.
 const LOGOS: LogoSpec[] = [
   { src: "/logos/alchemy.svg", alt: "Alchemy", height: 48 },
-  // Hermes: PNG has more padding around the figure, so render at a larger
-  // height so the visible mark matches Alchemy/Mantle next to it.
-  { src: "/logos/hermes.png", alt: "Hermes", height: 68 },
+  { src: "/logos/hermes.webp", alt: "Hermes", height: 68 },
   { src: "/logos/mantle.svg", alt: "Mantle", height: 48 },
   { src: "/logos/privy.png", alt: "Privy", height: 44 },
   { src: "/logos/redstone.png", alt: "RedStone", height: 46 },
   { src: "/logos/circle.png", alt: "Circle", height: 46 },
 ];
 
-// Render twice — keyframe goes 0 → -50%, landing the loop point at the start
-// of the second copy = seamless. Each item uses padding-right (not flex gap)
-// so the math is exact.
+// Render twice — translateX wraps modulo (halfTrackWidth) so the loop point
+// lands at the start of the second copy = seamless.
 const TRACK = [...LOGOS, ...LOGOS];
 
+// Translate pixels per scroll pixel. 0.4 ≈ subtle, follows scroll without
+// feeling either dragged or runaway. Lower = slower, higher = faster.
+const SCROLL_FACTOR = 0.4;
+
 export default function LogoMarquee() {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let rafId = 0;
+    let pending = false;
+
+    const update = () => {
+      pending = false;
+      const track = trackRef.current;
+      if (!track) return;
+      const halfWidth = track.offsetWidth / 2;
+      if (halfWidth <= 0) return;
+      // Wrap with modulo so the track loops at the duplicate seam.
+      const offset = (window.scrollY * SCROLL_FACTOR) % halfWidth;
+      track.style.transform = `translate3d(${-offset}px, 0, 0)`;
+    };
+
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      rafId = requestAnimationFrame(update);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    update(); // initial position
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   return (
     <section
       aria-label="Partners"
       style={{
         position: "relative",
         zIndex: 2,
-        // marginTop sits BELOW the hero's bg expand trigger (scrollY 80 in
-        // HeroSection). The marquee enters the viewport naturally as the user
-        // continues scrolling — it does NOT animate in alongside the bg expand.
+        // marginTop sits below the hero's bg expand trigger (scrollY 80).
+        // The marquee enters the viewport naturally as the user continues
+        // scrolling — it doesn't animate in alongside the bg expand.
         marginTop: 120,
       }}
     >
@@ -45,10 +79,6 @@ export default function LogoMarquee() {
         width="100%"
         height={104}
         borderRadius={0}
-        // Glass settings:
-        //   frost            → backgroundOpacity 0.20 (light white tint)
-        //   dispersion       → default RGB offsets (0/10/20) at -180 scale
-        //   saturation       → 1.8
         backgroundOpacity={0.2}
         saturation={1.8}
         blur={11}
@@ -60,7 +90,7 @@ export default function LogoMarquee() {
         mixBlendMode="difference"
       >
         <div className="logo-marquee-viewport">
-          <div className="logo-marquee-track">
+          <div ref={trackRef} className="logo-marquee-track">
             {TRACK.map((logo, i) => (
               <div key={i} className="logo-marquee-item">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -81,9 +111,7 @@ export default function LogoMarquee() {
       </GlassSurface>
 
       <style>{`
-        /* Force WHITE frost tint regardless of color-scheme. GlassSurface
-           ships with light-dark() default that flips to black in dark mode;
-           we want white on this dark hero. */
+        /* Force WHITE frost tint regardless of color-scheme. */
         .logo-marquee-glass.glass-surface--svg {
           background: hsl(0 0% 100% / var(--glass-frost, 0));
         }
@@ -100,15 +128,14 @@ export default function LogoMarquee() {
           display: flex;
           align-items: center;
           position: relative;
-          /* Soft edge fade — logos don't pop at the strip ends */
           -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
                   mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
         }
         .logo-marquee-track {
           display: flex;
           width: max-content;
-          animation: logo-marquee 38s linear infinite;
           will-change: transform;
+          /* No CSS animation — transform is driven by scrollY in the effect above. */
         }
         .logo-marquee-item {
           padding-right: 96px;
@@ -116,13 +143,6 @@ export default function LogoMarquee() {
           display: flex;
           align-items: center;
           height: 80px;
-        }
-        @keyframes logo-marquee {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .logo-marquee-track { animation: none; }
         }
       `}</style>
     </section>
