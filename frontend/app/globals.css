@@ -42,8 +42,7 @@
 
 @theme inline {
   --font-sans: "Aspekta", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Roboto Mono", var(--font-roboto-mono), ui-monospace, Menlo,
-    Consolas, monospace;
+  --font-mono: "Aspekta", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   /* Brand palette (DESIGN.md) */
   --color-bg: #f7f9fc;
@@ -64,7 +63,7 @@
 
 /* Page background + text flip with theme (dark-first product) */
 :root {
-  --page-bg: #f7f9fc;
+  --page-bg: #ffffff;
   --page-text: #0c1a2b;
 }
 .dark {
@@ -127,6 +126,40 @@ body {
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+/* Log line reveal (agent terminal) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Page enter (route transition) — re-fires on each navigation via template.tsx.
+   CSS keyframe (not a persistent transform) so it leaves no containing block
+   behind, keeping sticky/fixed descendants (sidebar, chat composer, modals) intact. */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-enter {
+  animation: pageEnter 0.28s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
   }
 }
 

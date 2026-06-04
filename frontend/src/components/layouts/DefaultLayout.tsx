@@ -25,7 +25,7 @@ export function DefaultLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 px-4 py-6 pb-24 sm:px-8 md:pb-6">{children}</main>
+      <main className="flex-1 bg-white px-4 py-6 pb-24 sm:px-8 md:pb-6">{children}</main>
       {authenticated && <ChatBubble />}
     </div>
   );

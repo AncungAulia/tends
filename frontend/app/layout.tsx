@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
-import { Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-
-const robotoMono = Roboto_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-roboto-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Tends",
@@ -21,7 +13,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${robotoMono.variable} h-full`}
+      className="h-full"
       suppressHydrationWarning
     >
       <body className="min-h-full">

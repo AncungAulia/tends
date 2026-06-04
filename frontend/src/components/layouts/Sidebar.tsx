@@ -24,7 +24,7 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-[#DDE8F2] bg-white px-4 py-6 dark:border-white/8 dark:bg-[#0F2035] md:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-[#DDE8F2] bg-[#F7F9FC] px-4 py-6 dark:border-white/8 dark:bg-[#0F2035] md:flex">
         <Link
           href="/dashboard"
           className="px-3 font-sans text-xl font-bold tracking-tight text-[#0C1A2B] dark:text-white"
@@ -43,7 +43,7 @@ export function Sidebar() {
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
                   active
                     ? "bg-[#EAF4FC] font-medium text-[#2C5EAD] dark:bg-[#1591DC]/10 dark:text-[#4BB8FA]"
-                    : "text-[#5B7490] hover:bg-[#F7F9FC] hover:text-[#0C1A2B] dark:text-white/45 dark:hover:bg-white/5 dark:hover:text-white",
+                    : "text-[#5B7490] hover:bg-white hover:text-[#0C1A2B] dark:text-white/45 dark:hover:bg-white/5 dark:hover:text-white",
                 )}
               >
                 <Icon size={18} />
@@ -69,7 +69,7 @@ export function Sidebar() {
               <button
                 onClick={() => logout()}
                 aria-label="Disconnect wallet"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#5B7490] transition-colors hover:bg-[#F7F9FC] hover:text-red-500 dark:hover:bg-white/5 dark:hover:text-red-400"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#5B7490] transition-colors hover:bg-white hover:text-red-500 dark:hover:bg-white/5 dark:hover:text-red-400"
               >
                 <LogOut size={14} />
               </button>
@@ -88,7 +88,7 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-[#DDE8F2] bg-white py-2 dark:border-white/8 dark:bg-[#0F2035] md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-[#DDE8F2] bg-[#F7F9FC] py-2 dark:border-white/8 dark:bg-[#0F2035] md:hidden">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
