@@ -67,7 +67,7 @@ function Stat({
     tone === "pos"
       ? "text-green-600"
       : tone === "neg"
-        ? "text-orange-600"
+        ? "text-red-600"
         : "text-[#0C1A2B]";
   return (
     <div className="flex items-center justify-between">
@@ -144,7 +144,7 @@ function StatsChart({ period }: { period: string }) {
     <div className="grid grid-cols-1 gap-6 rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5 md:grid-cols-[210px_1fr]">
       {/* left: stats */}
       <div className="flex flex-col">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+        <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
           Portfolio Value
         </p>
         <div className="mt-1 flex gap-2">
@@ -159,7 +159,7 @@ function StatsChart({ period }: { period: string }) {
             </span>
           </p>
         </div>
-        <p className="text-[11px] text-[#94A3B8]">over {period}</p>
+        <p className="text-[0.6875rem] text-[#94A3B8]">over {period}</p>
 
         <div className="my-4 h-px bg-[#E3EAF2]" />
 
@@ -167,14 +167,13 @@ function StatsChart({ period }: { period: string }) {
           <Stat label="Rebalances" value={12} />
           <Stat label="Deposited" value={2500} prefix="+$" tone="pos" />
           <Stat label="Withdrawn" value={500} prefix="-$" tone="neg" />
-          <Stat label="Net flow" value={2000} prefix="+$" tone="pos" />
         </div>
       </div>
 
       {/* right: chart */}
       <div ref={wrapRef} className="relative min-w-0">
         <svg
-          width={w}
+          width="100%"
           height={CHART_H}
           className="block"
           onMouseMove={(e) => {
@@ -272,13 +271,13 @@ function StatsChart({ period }: { period: string }) {
               exit={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
               transition={{ duration: 0.14, ease: "easeOut" }}
             >
-              <p className="text-[10px] font-medium text-white/45">
+              <p className="text-[0.625rem] font-medium text-white/45">
                 Portfolio value
               </p>
               <p className="text-sm font-semibold tabular-nums text-white">
                 ${hv.value.toLocaleString("en-US")}
               </p>
-              <p className="mt-0.5 text-[10px] text-white/50">{hv.date}</p>
+              <p className="mt-0.5 text-[0.625rem] text-white/50">{hv.date}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -287,7 +286,7 @@ function StatsChart({ period }: { period: string }) {
           {TICKS.map((i) => (
             <span
               key={`tick-${i}`}
-              className="absolute -translate-x-1/2 text-[10px] text-[#5B7490]"
+              className="absolute -translate-x-1/2 text-[0.625rem] text-[#5B7490]"
               style={{ left: pts[i].x }}
             >
               {dateForIndex(i)}
@@ -295,7 +294,7 @@ function StatsChart({ period }: { period: string }) {
           ))}
         </div>
         <div className="mt-1 flex justify-center">
-          <span className="flex items-center gap-1.5 text-[10px] text-[#5B7490]">
+          <span className="flex items-center gap-1.5 text-[0.625rem] text-[#5B7490]">
             <span className="h-2 w-2 rounded-full border-2 border-[#1591DC] bg-white" />{" "}
             Agent rebalanced
           </span>
@@ -423,7 +422,7 @@ type Act = {
 const TAG: Record<Act["type"], string> = {
   Rebalance: "bg-[#EAF4FC] text-[#1591DC]",
   Deposit: "bg-green-50 text-green-700",
-  Withdraw: "bg-orange-50 text-orange-600",
+  Withdraw: "bg-red-50 text-red-600",
   Monitor: "bg-[#EDF2F7] text-[#5B7490]",
 };
 
@@ -766,18 +765,18 @@ function Row({ a, onClick }: { a: Act; onClick: () => void }) {
     a.impactTone === "pos"
       ? "text-green-600"
       : a.impactTone === "neg"
-        ? "text-orange-600"
+        ? "text-red-600"
         : "text-[#94A3B8]";
   return (
     <button
       onClick={onClick}
       className="flex w-full items-center gap-4 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[#F7F9FC]"
     >
-      <span className="w-12 shrink-0 font-mono text-[11px] text-[#94A3B8]">
+      <span className="w-12 shrink-0 font-mono text-[0.6875rem] text-[#94A3B8]">
         {a.time}
       </span>
       <span
-        className={`w-24 shrink-0 rounded-md px-2 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider ${TAG[a.type]}`}
+        className={`w-24 shrink-0 rounded-md px-2 py-0.5 text-center text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[a.type]}`}
       >
         {a.type}
       </span>
@@ -808,7 +807,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
     act?.impactTone === "pos"
       ? "text-green-600"
       : act?.impactTone === "neg"
-        ? "text-orange-600"
+        ? "text-red-600"
         : "text-[#94A3B8]";
   return (
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
@@ -826,7 +825,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
             <div className="flex items-start justify-between border-b border-[#E8EAEC] p-5">
               <div>
                 <span
-                  className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${TAG[act.type]}`}
+                  className={`inline-block rounded-md px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[act.type]}`}
                 >
                   {act.type}
                 </span>
@@ -853,7 +852,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
             <div className="flex-1 overflow-y-auto p-5">
               {act.steps ? (
                 <>
-                  <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-[#94A3B8]">
+                  <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
                     How it happened
                   </p>
                   <div>
@@ -872,7 +871,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
                           className={`flex-1 ${i < act.steps!.length - 1 ? "pb-5" : ""}`}
                         >
                           <span
-                            className={`inline-block rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${STEP_TAG[s.tag]}`}
+                            className={`inline-block rounded-md px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-wider ${STEP_TAG[s.tag]}`}
                           >
                             {s.tag}
                           </span>
@@ -889,7 +888,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
                 </>
               ) : (
                 <>
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[#94A3B8]">
+                  <p className="mb-3 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
                     Details
                   </p>
                   <p className="text-sm leading-relaxed text-[#5B7490]">
@@ -949,7 +948,7 @@ export default function ActivityPreview() {
             <div className="flex items-center gap-2">
               {period === "Custom range" && (
                 <div className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1">
-                  <span className="text-[11px] font-medium text-[#94A3B8]">
+                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
                     From
                   </span>
                   <input
@@ -958,7 +957,7 @@ export default function ActivityPreview() {
                     onChange={(e) => setFrom(e.target.value)}
                     className="bg-transparent text-xs text-[#0C1A2B] outline-none [color-scheme:light]"
                   />
-                  <span className="text-[11px] font-medium text-[#94A3B8]">
+                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
                     to
                   </span>
                   <input
@@ -1023,7 +1022,7 @@ export default function ActivityPreview() {
                   animate="show"
                   variants={{ show: { transition: { staggerChildren: 0.05 } } }}
                 >
-                  <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8]">
+                  <p className="px-3 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
                     {day}
                   </p>
                   {visible
@@ -1055,7 +1054,7 @@ export default function ActivityPreview() {
                   Load more
                 </button>
               ) : (
-                <p className="text-[11px] text-[#94A3B8]">
+                <p className="text-[0.6875rem] text-[#94A3B8]">
                   You&apos;re all caught up
                 </p>
               )}

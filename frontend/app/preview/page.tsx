@@ -5,7 +5,7 @@ export const metadata = { title: "Component Preview — Tends" };
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-14">
-      <p className="mb-5 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5B7490]">
+      <p className="mb-5 font-sans text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-[#5B7490]">
         {title}
       </p>
       {children}
@@ -15,7 +15,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Divider({ label }: { label: string }) {
   return (
-    <p className="mb-3 mt-6 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">{label}</p>
+    <p className="mb-3 mt-6 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">{label}</p>
   );
 }
 
@@ -25,7 +25,7 @@ export default function PreviewPage() {
       <div className="mx-auto max-w-2xl px-8 py-16">
 
         {/* Header */}
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5B7490]">
+        <p className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-[#5B7490]">
           Tends · Component System
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
@@ -155,10 +155,10 @@ export default function PreviewPage() {
             {[
               { label: "Rebalance", color: "bg-[#EAF4FC] text-[#1591DC] border-[#1591DC]/20" },
               { label: "Deposit", color: "bg-green-50 text-green-700 border-green-200" },
-              { label: "Withdraw", color: "bg-orange-50 text-orange-600 border-orange-200" },
+              { label: "Withdraw", color: "bg-red-50 text-red-600 border-red-200" },
               { label: "Scan", color: "bg-[#F7F9FC] text-[#5B7490] border-[#DDE8F2]" },
             ].map(({ label, color }) => (
-              <span key={label} className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${color}`}>
+              <span key={label} className={`inline-flex rounded-md border px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] ${color}`}>
                 {label}
               </span>
             ))}
@@ -198,20 +198,20 @@ export default function PreviewPage() {
               { sym: "USDC",  name: "Stablecoin", pct: 25, val: "$3,107", delta: "—", bar: "bg-[#4BB8FA]", w: "w-1/2", icon: "bg-[#EAF4FC] text-[#4BB8FA]" },
             ].map((h, i, arr) => (
               <div key={h.sym} className={`flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#edf2f7] ${i < arr.length - 1 ? "border-b border-white/60" : ""}`}>
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${h.icon}`}>{h.sym.slice(0,2)}</div>
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[0.5625rem] font-bold ${h.icon}`}>{h.sym.slice(0,2)}</div>
                 <div className="w-20 shrink-0">
                   <p className="text-sm font-semibold text-[#0C1A2B]">{h.sym}</p>
-                  <p className="text-[10px] text-[#5B7490]">{h.name}</p>
+                  <p className="text-[0.625rem] text-[#5B7490]">{h.name}</p>
                 </div>
                 <div className="flex flex-1 items-center gap-2">
                   <div className="h-1.5 flex-1 rounded-[2px] bg-[#e8eef4]">
                     <div className={`h-1.5 rounded-[2px] ${h.bar} ${h.w}`} />
                   </div>
-                  <span className="w-8 text-right text-[10px] text-[#5B7490]">{h.pct}%</span>
+                  <span className="w-8 text-right text-[0.625rem] text-[#5B7490]">{h.pct}%</span>
                 </div>
                 <div className="w-16 text-right">
                   <p className="text-sm font-semibold text-[#0C1A2B]">{h.val}</p>
-                  <p className={`text-[10px] ${h.delta === "—" ? "text-[#DDE8F2]" : "text-green-600"}`}>{h.delta}</p>
+                  <p className={`text-[0.625rem] ${h.delta === "—" ? "text-[#DDE8F2]" : "text-green-600"}`}>{h.delta}</p>
                 </div>
               </div>
             ))}
@@ -235,7 +235,7 @@ export default function PreviewPage() {
                 className="flex-1 bg-transparent text-lg font-semibold tracking-[-0.02em] text-[#0C1A2B] outline-none placeholder:text-[#DDE8F2]"
               />
               <span className="text-sm font-medium text-[#5B7490]">USDC</span>
-              <button className="rounded-md bg-[#EAF4FC] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#1591DC] hover:bg-[#1591DC] hover:text-white transition-colors">
+              <button className="rounded-md bg-[#EAF4FC] px-2 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-[#1591DC] hover:bg-[#1591DC] hover:text-white transition-colors">
                 Max
               </button>
             </div>
@@ -251,7 +251,7 @@ export default function PreviewPage() {
             <div className="flex items-center gap-3 rounded-xl border border-[#1591DC] px-4 py-3">
               <input defaultValue="500" className="flex-1 bg-transparent text-lg font-semibold tracking-[-0.02em] text-[#0C1A2B] outline-none" />
               <span className="text-sm font-medium text-[#5B7490]">USDC</span>
-              <button className="rounded-md bg-[#1591DC] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-white">Max</button>
+              <button className="rounded-md bg-[#1591DC] px-2 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-white">Max</button>
             </div>
           </div>
 
@@ -264,7 +264,7 @@ export default function PreviewPage() {
             <div className="flex items-center gap-3 rounded-xl border border-red-300 px-4 py-3">
               <input defaultValue="2000" className="flex-1 bg-transparent text-lg font-semibold tracking-[-0.02em] text-[#0C1A2B] outline-none" />
               <span className="text-sm font-medium text-[#5B7490]">USDC</span>
-              <button className="rounded-md bg-[#EAF4FC] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#1591DC]">Max</button>
+              <button className="rounded-md bg-[#EAF4FC] px-2 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-[#1591DC]">Max</button>
             </div>
             <p className="mt-2 text-xs text-red-500">Amount exceeds your balance</p>
           </div>
@@ -274,7 +274,7 @@ export default function PreviewPage() {
         {/* ── LIVE RUN CARD ───────────────────────────────────── */}
         <Section title="Live Run Card — agent execution, real-time">
           <LiveRunCard />
-          <p className="mt-3 text-[11px] text-[#5B7490]">
+          <p className="mt-3 text-[0.6875rem] text-[#5B7490]">
             Klik &ldquo;Run agent&rdquo; untuk lihat agent jalan step-by-step. Tiap step punya data visualnya sendiri (harga, sinyal, guardrail, keputusan, swap, ringkasan).
           </p>
         </Section>
@@ -289,13 +289,13 @@ export default function PreviewPage() {
                   <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
                   <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
                 </div>
-                <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-white/25">Tends Agent · log</span>
+                <span className="text-[0.625rem] font-medium uppercase tracking-[0.1em] text-white/25">Tends Agent · log</span>
               </div>
-              <button className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-[10px] text-white/40 hover:text-white/70 transition-colors">
+              <button className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-[0.625rem] text-white/40 hover:text-white/70 transition-colors">
                 See full log ↑
               </button>
             </div>
-            <div className="space-y-0.5 px-5 py-4 font-mono text-[11px]">
+            <div className="space-y-0.5 px-5 py-4 font-mono text-[0.6875rem]">
               {[
                 { ts: "14:32:09", tag: "DONE",    tagCls: "bg-green-950 text-green-400",   msg: "Portfolio rebalanced · +0.3% APY · view reasoning" },
                 { ts: "14:32:07", tag: "EXEC",    tagCls: "bg-purple-950 text-purple-300", msg: "Confirmed · tx 0x8c1b...3f9e" },
@@ -305,7 +305,7 @@ export default function PreviewPage() {
               ].map(({ ts, tag, tagCls, msg }) => (
                 <div key={ts} className="flex items-baseline gap-3 py-1">
                   <span className="w-14 shrink-0 text-white/20">{ts}</span>
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${tagCls}`}>{tag}</span>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] ${tagCls}`}>{tag}</span>
                   <span className="text-white/45">{msg}</span>
                 </div>
               ))}
@@ -317,29 +317,29 @@ export default function PreviewPage() {
         <Section title="Typography">
           <div className="space-y-4">
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">Page title</p>
+              <p className="mb-1 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">Page title</p>
               <p className="text-4xl font-semibold tracking-[-0.04em] text-[#0C1A2B]">Portfolio</p>
             </div>
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">Section title</p>
+              <p className="mb-1 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">Section title</p>
               <p className="text-base font-semibold text-[#0C1A2B]">Holdings</p>
             </div>
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">Body</p>
+              <p className="mb-1 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">Body</p>
               <p className="text-sm text-[#5B7490]">Tends Agent manages your portfolio automatically based on your risk preference. You can withdraw at any time.</p>
             </div>
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">Label / caption</p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">Total Portfolio Value</p>
+              <p className="mb-1 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">Label / caption</p>
+              <p className="text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">Total Portfolio Value</p>
             </div>
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">Big number</p>
+              <p className="mb-1 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">Big number</p>
               <p className="text-3xl font-semibold tracking-[-0.04em] text-[#0C1A2B]">$12,430.50</p>
             </div>
           </div>
         </Section>
 
-        <p className="mt-16 border-t border-[#DDE8F2] pt-6 text-[10px] uppercase tracking-[0.1em] text-[#DDE8F2]">
+        <p className="mt-16 border-t border-[#DDE8F2] pt-6 text-[0.625rem] uppercase tracking-[0.1em] text-[#DDE8F2]">
           Preview only — Tends component system
         </p>
       </div>
