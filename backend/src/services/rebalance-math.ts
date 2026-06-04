@@ -190,5 +190,24 @@ export function computeSwapInstructions(
     }
   }
 
-  return [...sells, ...buys];
+  // Budget buys against the USDC the vault is GUARANTEED to hold after the sells:
+  // its current USDC + Σ(sell minAmountOut). The contract executes each buy with its
+  // full amountIn, so if Σbuys exceeds that floor the last buy reverts on insufficient
+  // USDC (sells realize ≥ minAmountOut, never the full estimate). Scale buys down
+  // proportionally so Σbuys ≤ guaranteed — under-buying converges over cycles, a revert
+  // never does.
+  const guaranteedUsdc = usdc.balance + sells.reduce((s, x) => s + x.minAmountOut, 0n);
+  const desiredBuyUsdc = buys.reduce((s, x) => s + x.amountIn, 0n);
+  const cappedBuys =
+    desiredBuyUsdc > guaranteedUsdc && desiredBuyUsdc > 0n
+      ? buys
+          .map((b) => ({
+            ...b,
+            amountIn: (b.amountIn * guaranteedUsdc) / desiredBuyUsdc,
+            minAmountOut: (b.minAmountOut * guaranteedUsdc) / desiredBuyUsdc,
+          }))
+          .filter((b) => b.amountIn > 0n)
+      : buys;
+
+  return [...sells, ...cappedBuys];
 }

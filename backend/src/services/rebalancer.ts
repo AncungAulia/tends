@@ -1,6 +1,6 @@
 import { childLogger } from "../lib/logger.js";
 import { env } from "../config/env.js";
-import { publicClient, getAgentWallet, activeChain } from "../chain/index.js";
+import { publicClient, getAgentWallet, agentAddress, activeChain } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import {
   USER_VAULT_ABI,
@@ -47,7 +47,7 @@ export interface VaultMeta {
 
 /** Why a vault was skipped (or that it was rebalanced) — surfaced for tests/telemetry. */
 export type VaultOutcome =
-  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" }
+  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" | "unsafe" }
   | { action: "rebalanced"; hash: `0x${string}`; swaps: number };
 
 // Injectable dependencies (faked in tests).
@@ -61,6 +61,11 @@ export interface RebalancerDeps {
     risk: number,
     guardrails?: Guardrails,
   ) => Promise<SwapInstruction[]>;
+  /** Dry-run the rebalance (eth_call) — true if it would succeed, false if it'd revert. */
+  simulateRebalance: (
+    vault: `0x${string}`,
+    instructions: SwapInstruction[],
+  ) => Promise<boolean>;
   sendRebalance: (
     vault: `0x${string}`,
     instructions: SwapInstruction[],
@@ -171,6 +176,22 @@ export const defaultRebalancerDeps: RebalancerDeps = {
   },
   readAgentConfig: getAgentConfig,
   buildInstructions: defaultBuildInstructions,
+  async simulateRebalance(vault, instructions) {
+    const account = agentAddress();
+    if (!account) return true; // no agent configured (mock) — let send path handle it
+    try {
+      await publicClient.simulateContract({
+        address: vault,
+        abi: USER_VAULT_ABI,
+        functionName: "rebalance",
+        args: [instructions],
+        account,
+      });
+      return true;
+    } catch {
+      return false; // would revert on-chain → caller skips instead of burning gas
+    }
+  },
   async sendRebalance(vault, instructions) {
     const wallet = getAgentWallet();
     return wallet.writeContract({
@@ -231,6 +252,10 @@ export class RebalancerService {
       log.info({ vault }, "already balanced, skip");
       return { action: "skip", reason: "balanced" };
     }
+    if (!(await this.deps.simulateRebalance(vault, instructions))) {
+      log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip — no gas spent");
+      return { action: "skip", reason: "unsafe" };
+    }
 
     const hash = await this.deps.sendRebalance(vault, instructions);
     log.info({ vault, hash, swaps: instructions.length }, "rebalanced");
@@ -250,6 +275,10 @@ export class RebalancerService {
     if (meta.paused) return { action: "skip", reason: "paused" };
     const instructions = await this.deps.buildInstructions(vault, meta.riskPreference, config);
     if (instructions.length === 0) return { action: "skip", reason: "balanced" };
+    if (!(await this.deps.simulateRebalance(vault, instructions))) {
+      log.warn({ vault }, "manual rebalance would revert (sim), skip");
+      return { action: "skip", reason: "unsafe" };
+    }
     const hash = await this.deps.sendRebalance(vault, instructions);
     log.info({ vault, hash, swaps: instructions.length }, "manual rebalance");
     return { action: "rebalanced", hash, swaps: instructions.length };

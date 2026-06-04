@@ -91,6 +91,25 @@ test("minAmountOut applies 1% slippage tolerance", () => {
   assert.equal(mUSD.minAmountOut, 891n * E18);
 });
 
+test("budget cap: buys never exceed the USDC the sells guarantee (no insufficient-USDC revert)", () => {
+  // 0 standalone USDC; liquidate $2000 mETH into mUSD/USDY (LOW). Buys want the full
+  // $2000 but sells only GUARANTEE $1980 (1% slippage floor) → must scale down.
+  const states = [
+    usdc(0n),
+    tok("mUSD", 0n, E18),
+    tok("USDY", 0n, E18),
+    tok("mETH", 1n * E18, 2000n * E18),
+  ];
+  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const sells = ins.filter((i) => i.tokenOut === A.USDC);
+  const buys = ins.filter((i) => i.tokenIn === A.USDC);
+  const guaranteed = sells.reduce((s, x) => s + x.minAmountOut, 0n); // + 0 starting USDC
+  const spent = buys.reduce((s, x) => s + x.amountIn, 0n);
+  assert.ok(buys.length >= 1, "still buys");
+  assert.ok(spent <= guaranteed, `Σbuys ${spent} must be ≤ guaranteed ${guaranteed}`);
+  assert.ok(spent <= 1_980_000_000n); // pre-fix it was 2000e6 (> 1980e6) → reverted
+});
+
 test("resolveTargetBps: each preset sums to 10000", () => {
   for (const risk of [0, 1, 2] as const) {
     const total = [...resolveTargetBps(risk).values()].reduce((a, b) => a + b, 0);

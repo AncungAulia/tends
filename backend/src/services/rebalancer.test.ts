@@ -38,6 +38,7 @@ function makeDeps(over: Partial<RebalancerDeps> = {}) {
     readVaultMeta: async () => meta(),
     readAgentConfig: async () => cfg(),
     buildInstructions: async () => [SWAP],
+    simulateRebalance: async () => true,
     sendRebalance: async (vault, instr) => {
       calls.sendRebalance.push({ vault, instr });
       return "0xhash";
@@ -70,6 +71,13 @@ test("processVault: off-chain cadence not elapsed → skip", async () => {
   });
   const out = await new RebalancerService(deps).processVault(V1);
   assert.deepEqual(out, { action: "skip", reason: "cooldown" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: simulation says it would revert → skip 'unsafe', no tx sent", async () => {
+  const { deps, calls } = makeDeps({ simulateRebalance: async () => false });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "unsafe" });
   assert.equal(calls.sendRebalance.length, 0);
 });
 
