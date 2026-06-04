@@ -15,6 +15,7 @@ import { strategiesRouter } from "./api/routes/strategies.js";
 import { projectionRouter } from "./api/routes/projection.js";
 import { usersRouter } from "./api/routes/users.js";
 import { txRouter } from "./api/routes/tx.js";
+import { agentRouter } from "./api/routes/agent.js";
 import { authRouter } from "./api/routes/auth.js";
 import { apyRouter } from "./api/routes/apy.js";
 import { chatRouter } from "./api/routes/chat.js";
@@ -55,6 +56,7 @@ app.route("/api/chat", chatRouter);
 app.route("/api/chat-v2", chatV2Router); // PoC: Mastra agent (Hermes model + Supabase memory)
 app.route("/api/users/me", usersRouter);
 app.route("/api/users/me", txRouter);
+app.route("/api/users/me", agentRouter); // agent config/guardrails, run-now, holdings, portfolio, prefs
 // TODO: WS /ws/dashboard
 
 let stopIndexer: (() => void) | undefined;

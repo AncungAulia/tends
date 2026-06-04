@@ -84,6 +84,53 @@ export function resolveTargetBps(
 }
 
 /**
+ * Pure guardrail: clamp each token's target to its cap (bps), redistributing the
+ * removed weight to under-cap tokens proportional to their headroom. Any residual
+ * that can't fit (all caps saturated) is dropped → effectively raises USDC's implicit
+ * weight, which is the safe outcome. Tokens absent from `caps` are uncapped.
+ */
+export function clampTargetToCaps(
+  target: Map<TokenSymbol, number>,
+  caps: Partial<Record<TokenSymbol, number>>,
+): Map<TokenSymbol, number> {
+  const result = new Map(target);
+  let residual = 0;
+  for (const [token, bps] of result) {
+    const cap = caps[token];
+    if (cap !== undefined && bps > cap) {
+      residual += bps - cap;
+      result.set(token, cap);
+    }
+  }
+  // Redistribute the excess 1 bps at a time into whichever token has the most
+  // headroom. Exact (total conserved), never exceeds a cap; any excess that can't
+  // fit (all caps saturated) is simply dropped → raises USDC's implicit weight.
+  const headroomOf = (token: TokenSymbol): number => {
+    const cap = caps[token];
+    return cap === undefined ? 10_000 - (result.get(token) ?? 0) : cap - (result.get(token) ?? 0);
+  };
+  while (residual > 0) {
+    let best: TokenSymbol | null = null;
+    let bestRoom = 0;
+    for (const token of result.keys()) {
+      const room = headroomOf(token);
+      if (room > bestRoom) {
+        bestRoom = room;
+        best = token;
+      }
+    }
+    if (best === null) break; // no headroom left → residual falls through to USDC
+    result.set(best, (result.get(best) ?? 0) + 1);
+    residual--;
+  }
+  return result;
+}
+
+/** Min-swap USD floor from a drift threshold (bps of portfolio): skip churn below it. */
+export const driftFloorWad = (driftThresholdBps: number, totalValueWad: bigint): bigint =>
+  (BigInt(driftThresholdBps) * totalValueWad) / BPS;
+
+/**
  * Pure rebalance planner. Routes everything through USDC (the vault's base asset
  * and unit of account): overweight RWA tokens are sold to USDC, then idle USDC is
  * spent buying underweight tokens. USDC itself has an implicit 0% target.
