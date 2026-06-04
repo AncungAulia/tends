@@ -2,15 +2,25 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { listStrategies, riskLevelFromId } from "../../strategies.js";
 import { projectForRisk } from "../../services/projection.js";
+import { readHoldings } from "../../services/holdings.js";
+import { getAgentConfig } from "../../services/agent-config.js";
+import { prismaApyReader } from "../../api/routes/apy.js";
 import { prisma } from "../../db/client.js";
+import { as0x } from "../../chain/addresses.js";
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid wallet address");
 const strategyId = z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
 
+/** Resolve a user's wallet → their vault address (null if none deployed). */
+async function vaultOf(walletAddress: string): Promise<`0x${string}` | null> {
+  const vault = await prisma.vault.findUnique({ where: { owner: walletAddress } });
+  return vault ? as0x(vault.address) : null;
+}
+
 /**
- * PoC subset of the portfolio tools, ported from src/mcp/tools.ts to native Mastra
- * tools. Same pure services — listStrategies / projectForRisk — so behaviour matches
- * the existing Hermes-MCP path. (Full migration ports all 8 + on-chain holdings.)
+ * Tools for the Tends portfolio agent — native Mastra ports reusing the same pure
+ * services + on-chain readers the REST API / rebalancer use, so the chat agent's
+ * answers match the dashboard exactly.
  */
 
 const listStrategiesTool = createTool({
@@ -26,7 +36,7 @@ const computeProjectionTool = createTool({
   description: "Project the future USD value of a capital amount in a strategy over a number of days.",
   inputSchema: z.object({
     strategyId,
-    capital: z.number().positive().describe("USD principal to invest"),
+    capital: z.number().positive().describe("USD principal"),
     durationDays: z.number().int().positive(),
   }),
   outputSchema: z.any(),
@@ -40,7 +50,7 @@ const computeProjectionTool = createTool({
 const readUserPositionTool = createTool({
   id: "readUserPosition",
   description:
-    "Read the user's on-chain Tends vault (deployed address, risk preference, deposit). Pass the user's wallet address.",
+    "Read the user's Tends vault record (address, risk preference, deposit). Pass the user's wallet address.",
   inputSchema: z.object({ walletAddress: address }),
   outputSchema: z.any(),
   execute: async ({ walletAddress }) => {
@@ -49,8 +59,71 @@ const readUserPositionTool = createTool({
   },
 });
 
+const getHoldingsTool = createTool({
+  id: "getHoldings",
+  description:
+    "Read the user's CURRENT on-chain holdings: each token's balance, USD value, and allocation %, plus total portfolio value. Pass the user's wallet address.",
+  inputSchema: z.object({ walletAddress: address }),
+  outputSchema: z.any(),
+  execute: async ({ walletAddress }) => {
+    const vault = await vaultOf(walletAddress);
+    if (!vault) return { holdings: [], totalValueUsd: "0", note: "no vault deployed yet" };
+    const { holdings, totalValueUsd } = await readHoldings(vault);
+    return { holdings, totalValueUsd };
+  },
+});
+
+const getAgentSettingsTool = createTool({
+  id: "getAgentSettings",
+  description:
+    "Read the user's agent guardrails/settings: auto-rebalance on/off, rebalance cadence, drift threshold, max slippage, per-token caps, notes. Pass the user's wallet address.",
+  inputSchema: z.object({ walletAddress: address }),
+  outputSchema: z.any(),
+  execute: async ({ walletAddress }) => {
+    const vault = await vaultOf(walletAddress);
+    if (!vault) return { note: "no vault deployed yet" };
+    return getAgentConfig(vault);
+  },
+});
+
+const getRecentActivityTool = createTool({
+  id: "getRecentActivity",
+  description:
+    "Recent agent activity for the user's vault (rebalances, deposits, withdrawals, pauses). Pass the user's wallet address.",
+  inputSchema: z.object({
+    walletAddress: address,
+    limit: z.number().int().min(1).max(50).default(10),
+  }),
+  outputSchema: z.any(),
+  execute: async ({ walletAddress, limit }) => {
+    const vault = await vaultOf(walletAddress);
+    if (!vault) return { activities: [] };
+    const activities = await prisma.agentActivity.findMany({
+      where: { vaultAddress: vault },
+      orderBy: { timestamp: "desc" },
+      take: limit,
+    });
+    return { activities };
+  },
+});
+
+const getApyHistoryTool = createTool({
+  id: "getApyHistory",
+  description: "Historical APY series for an asset (e.g. sUSDe, USDY, cmETH) over the last N days.",
+  inputSchema: z.object({
+    asset: z.string(),
+    days: z.number().int().min(1).max(365).default(30),
+  }),
+  outputSchema: z.any(),
+  execute: async ({ asset, days }) => ({ asset, history: await prismaApyReader.history(asset, days) }),
+});
+
 export const tendsTools = {
   listStrategies: listStrategiesTool,
   computeProjection: computeProjectionTool,
   readUserPosition: readUserPositionTool,
+  getHoldings: getHoldingsTool,
+  getAgentSettings: getAgentSettingsTool,
+  getRecentActivity: getRecentActivityTool,
+  getApyHistory: getApyHistoryTool,
 };
