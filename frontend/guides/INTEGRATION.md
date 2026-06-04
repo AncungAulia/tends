@@ -797,6 +797,25 @@ export const ERC20Abi = [
 
 # Part 3 — User Flows
 
+> **ARCHITECTURE NOTE — Read before implementing write hooks.**
+>
+> Write operations (deploy vault, deposit, withdraw, strategy switch) go through the
+> **backend API**, not direct contract calls. The backend returns an unsigned tx,
+> the frontend verifies the `tx.to` address, and signs with the Privy embedded wallet.
+>
+> See **`guides/BACKEND.md`** for the complete implementation:
+> - `src/lib/api.ts` — authenticated fetch helper
+> - `src/hooks/useBackendTx.ts` — core signing engine with tx verification
+> - `src/hooks/useUserVault.ts` — vault address from `/position` + deployVault
+> - `src/hooks/useDeposit.ts` — `POST /api/users/me/prepare-deposit`
+> - `src/hooks/useWithdraw.ts` — `POST /api/users/me/prepare-withdraw`
+> - `src/hooks/useRiskLevel.ts` — reads SC direct, writes via `prepare-switch`
+>
+> The sections below (§3.1–3.4, §3.8) are **superseded by BACKEND.md** for write logic.
+> They are kept here for ABI and read-path reference only.
+
+---
+
 ## Arsitektur Singkat
 
 ```
@@ -804,19 +823,19 @@ User
  │
  ├─ connect wallet (Privy)
  │
- ├─ VaultFactory.deployVault()          ← satu kali per user
- │     └─ deploy ERC1967Proxy → UserVault (per-user)
+ ├─ POST /api/users/me/deploy-vault → sign tx   ← satu kali per user
  │
- ├─ USDC.approve(vaultAddress, amount)  ← atau gunakan permit (gasless)
+ ├─ POST /api/users/me/prepare-deposit          ← backend returns [approveTx, depositTx]
+ │     └─ sign steps[0] (USDC approve)
+ │     └─ sign steps[1] (vault deposit)
  │
- ├─ UserVault.deposit(amount, receiver) ← user transfer USDC ke vault
+ ├─ POST /api/users/me/prepare-switch           ← backend returns [setRiskTx] or [setCustomTx]
+ │     └─ sign tx
  │
- ├─ UserVault.setRiskLevel(level)       ← user pilih LOW / MEDIUM / HIGH
- │
- └─ [Agent Hermes rebalance otomatis]   ← backend, bukan user
+ └─ [Agent Hermes rebalance otomatis]           ← backend, bukan user
 ```
 
-**Risk Levels:**
+**Risk Levels (on-chain `riskPreference` value):**
 - `0` = LOW — alokasi konservatif (bonds, stablecoin yield)
 - `1` = MEDIUM — campuran (bonds + commodities + funds)
 - `2` = HIGH — agresif (stocks, commodities, high-yield)

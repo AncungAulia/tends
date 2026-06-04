@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Aspekta';
+  src: url('/font/Aspekta-400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: url('/font/Aspekta-500.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: url('/font/Aspekta-600.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: url('/font/Aspekta-700.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: url('/font/Aspekta-800.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --font-sans: 'Aspekta', -apple-system, BlinkMacSystemFont, "avenir next", avenir, "segoe ui", "helvetica neue", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif;
+  --font-mono: 'Roboto Mono', var(--font-roboto-mono), Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+
+  /* Light theme */
+  --color-bg:           #F7F9FC;
+  --color-surface:      #FFFFFF;
+  --color-border:       #DDE8F2;
+  --color-text:         #0C1A2B;
+  --color-muted:        #5B7490;
+
+  /* Brand blues — used sparingly */
+  --color-blue-deep:    #2C5EAD;
+  --color-blue-primary: #1591DC;
+  --color-blue-light:   #4BB8FA;
+  --color-blue-pale:    #EAF4FC;
+}
+
+/* ── Responsive spacing tokens ──────────────────────────────────── */
+:root {
+  --page-px:   70px;   /* horizontal page padding */
+  --nav-inset: 70px;   /* navbar left / right offset */
+  --hero-px:   40px;   /* hero inner text indent */
+}
+@media (max-width: 768px) {
+  :root {
+    --page-px:   20px;
+    --nav-inset: 20px;
+    --hero-px:   16px;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  background: #F7F9FC;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #F7F9FC;
+  color: #0C1A2B;
+  overflow-x: hidden;
+}
+
+/* Clip reveal wrapper — overflow:hidden mask */
+.clip-line {
+  overflow: hidden;
+  padding-bottom: 0.2em;
+}
+
+/* Marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 22s linear infinite;
+}
