@@ -22,6 +22,10 @@ export const envSchema = z.object({
     .default("info"),
 
   DATABASE_URL: z.string().url(),
+  // Direct (non-pooled) DB connection for `prisma migrate deploy` — read by the
+  // Prisma CLI, not the running app. Required once schema.prisma references it
+  // (on a non-pooled Postgres, set it to the same value as DATABASE_URL).
+  DIRECT_URL: z.string().url().optional().or(z.literal("")),
   // Optional — Redis isn't consumed yet (reserved for cache/rate-limit). No need
   // to provision it to deploy.
   REDIS_URL: z.string().url().optional().or(z.literal("")),
