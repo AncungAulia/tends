@@ -233,6 +233,26 @@ contract UserVault is
         emit RiskPreferenceUpdated(msg.sender, RiskLevel.CUSTOM, lowBps, medBps, highBps);
     }
 
+    // === Agent: liquidate for withdrawal ===
+
+    /// @notice Sell all non-USDC holdings to USDC so the user can immediately withdraw.
+    ///         Called by the backend before returning a withdraw tx — no cooldown applies
+    ///         (unlike rebalance) and lastRebalanceTime is intentionally NOT updated.
+    function agentLiquidate() external onlyAgent nonReentrant {
+        address usdc_ = asset();
+        for (uint256 i = 0; i < allowedTokens.length; i++) {
+            address token = allowedTokens[i];
+            if (token == usdc_) continue;
+            uint256 bal = IERC20(token).balanceOf(address(this));
+            if (bal == 0) continue;
+            uint256 expected = IStrategyRouter(strategyRouter).getExpectedOutput(token, usdc_, bal);
+            if (expected == 0) continue;
+            uint256 minOut = (expected * (10_000 - maxSlippageBps)) / 10_000;
+            IERC20(token).approve(strategyRouter, bal);
+            IStrategyRouter(strategyRouter).executeSwap(token, usdc_, bal, minOut);
+        }
+    }
+
     // === Agent: rebalance ===
 
     /// @notice Execute a set of swaps as determined by agent Hermes from skill.md strategy.
