@@ -102,6 +102,12 @@ export const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   APY_SCRAPER_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
+  // PnL snapshotter: records each vault's totalAssets() over time (FE PnL chart).
+  PNL_SNAPSHOT_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  PNL_SNAPSHOT_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
   // Ondo USDY oracle lives on Mantle MAINNET, so the relayer needs a mainnet RPC.
   MANTLE_MAINNET_RPC: z.string().url().default("https://rpc.mantle.xyz"),
   USDY_ORACLE_ADDRESS: z
