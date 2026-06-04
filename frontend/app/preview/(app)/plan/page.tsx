@@ -280,7 +280,7 @@ function GrowthChart({
     <div>
       <div ref={wrapRef} className="relative min-w-0">
         <svg
-          width={w}
+          width="100%"
           height={CH}
           className="block"
           onMouseMove={(e) => {
@@ -392,7 +392,7 @@ function GrowthChart({
               exit={{ opacity: 0, scale: 0.9, y: -4, x: "-50%" }}
               transition={{ duration: 0.14, ease: "easeOut" }}
             >
-              <p className="text-[10px] text-white/55">{hv.when}</p>
+              <p className="text-[0.625rem] text-white/55">{hv.when}</p>
               {hv.rows.map((r) => (
                 <p
                   key={r.k}
@@ -410,7 +410,7 @@ function GrowthChart({
           )}
         </AnimatePresence>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[#94A3B8]">
+      <div className="mt-2 flex items-center gap-1.5 text-[0.625rem] text-[#94A3B8]">
         <span>
           {impliedPct !== null
             ? `Projected approximately at ${impliedPct}%/year`
@@ -420,11 +420,11 @@ function GrowthChart({
         <span className="group relative inline-flex">
           <button
             aria-label="About this projection"
-            className="flex h-3 w-3 items-center justify-center rounded-full border border-[#CBD5E1] text-[8px] font-semibold leading-none text-[#94A3B8] transition-colors hover:border-[#5B7490] hover:text-[#5B7490]"
+            className="flex h-3 w-3 items-center justify-center rounded-full border border-[#CBD5E1] text-[0.5rem] font-semibold leading-none text-[#94A3B8] transition-colors hover:border-[#5B7490] hover:text-[#5B7490]"
           >
             i
           </button>
-          <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-[10px] leading-snug text-white/80 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-[0.625rem] leading-snug text-white/80 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             Estimate from current yields and typical volatility. Actual results
             will vary.
           </span>
@@ -581,7 +581,7 @@ export default function PlanPreview() {
         {/* ─── LEFT: strategy ─── */}
         <div className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
           {/* role header */}
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
             Strategy
           </p>
           <p className="mb-4 mt-0.5 text-xs text-[#5B7490]">
@@ -624,7 +624,7 @@ export default function PlanPreview() {
                       ? `${strat.apy}%`
                       : "—"}
                 </span>
-                <span className="text-[10px] tracking-wider text-[#94A3B8]">
+                <span className="text-[0.625rem] tracking-wider text-[#94A3B8]">
                   estimated APY
                 </span>
               </p>
@@ -653,7 +653,7 @@ export default function PlanPreview() {
                       <span className="text-sm font-medium text-[#0C1A2B]">
                         {lvl} Risk
                       </span>
-                      {/* <span className="text-[10px] text-[#94A3B8]">
+                      {/* <span className="text-[0.625rem] text-[#94A3B8]">
                             {LVL_HINT[lvl]}
                           </span> */}
                     </div>
@@ -700,7 +700,7 @@ export default function PlanPreview() {
                   </span>
                 </div>
                 {!customValid && (
-                  <p className="mt-1 text-right text-[10px] text-[#EF4444]">
+                  <p className="mt-1 text-right text-[0.625rem] text-[#EF4444]">
                     Must equal 100%
                   </p>
                 )}
@@ -743,7 +743,7 @@ export default function PlanPreview() {
 
           {/* Avoid — composition constraint, lives with the strategy */}
           <div className="mt-5 border-t border-[#E8EAEC] pt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
               Avoid
             </p>
             <p className="mb-3 mt-0.5 text-xs text-[#5B7490]">
@@ -768,7 +768,7 @@ export default function PlanPreview() {
         {/* ─── RIGHT: projection ─── */}
         <div className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
           {/* role header */}
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
             Projection
           </p>
           <p className="mb-4 mt-0.5 text-xs text-[#5B7490]">
@@ -780,7 +780,7 @@ export default function PlanPreview() {
           {/* inputs */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#94A3B8]">
+              <label className="text-[0.625rem] uppercase tracking-wider text-[#94A3B8]">
                 Capital
               </label>
               <div className="mt-1 flex items-center gap-1 rounded-lg border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1.5 transition-all focus-within:border-[#1591DC] focus-within:ring-2 focus-within:ring-[#1591DC]/15">
@@ -794,12 +794,12 @@ export default function PlanPreview() {
                   className="w-24 bg-transparent text-sm font-semibold text-[#0C1A2B] outline-none"
                 />
               </div>
-              <p className="mt-1 text-[10px] text-[#94A3B8]">
+              <p className="mt-1 text-[0.625rem] text-[#94A3B8]">
                 From your balance
               </p>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#94A3B8]">
+              <label className="text-[0.625rem] uppercase tracking-wider text-[#94A3B8]">
                 Duration
               </label>
               <div className="mt-1">
@@ -821,7 +821,7 @@ export default function PlanPreview() {
             <>
               {/* allocation — what it buys */}
               <div className="mt-6">
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
                   Allocation
                 </p>
                 <div className="relative">
@@ -857,7 +857,7 @@ export default function PlanPreview() {
                         <p className="text-xs font-semibold text-white">
                           {ah.sym}
                         </p>
-                        <p className="text-[10px] text-white/55">
+                        <p className="text-[0.625rem] text-white/55">
                           {ah.pct}% · {fmtUSD((capital * ah.pct) / 100)}
                         </p>
                       </motion.div>
@@ -883,7 +883,7 @@ export default function PlanPreview() {
 
               {/* growth — principal vs projected earnings (Likely) */}
               <div className="mt-6">
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
                   Growth
                 </p>
                 <div className="flex items-end justify-between">
@@ -935,7 +935,7 @@ export default function PlanPreview() {
                       key={c.label}
                       className="rounded-xl bg-[#F7F9FC] p-3.5"
                     >
-                      <p className="text-[10px] uppercase tracking-wider text-[#5B7490]">
+                      <p className="text-[0.625rem] uppercase tracking-wider text-[#5B7490]">
                         {c.label}
                       </p>
                       <p className="mt-1 flex items-center text-xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
@@ -971,7 +971,7 @@ export default function PlanPreview() {
         <div className="mt-5 rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
                 Projected growth
               </p>
               <p className="mt-1 text-xs text-[#5B7490]">
@@ -1004,7 +1004,7 @@ export default function PlanPreview() {
                           }
                         : undefined
                     }
-                    className={`rounded-full border-[1.25px] px-3 py-1 text-[11px] font-medium capitalize transition-colors ${
+                    className={`rounded-full border-[1.25px] px-3 py-1 text-[0.6875rem] font-medium capitalize transition-colors ${
                       active
                         ? ""
                         : "border-[#E8EAEC] text-[#5B7490] hover:text-[#0C1A2B]"
