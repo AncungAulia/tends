@@ -143,5 +143,21 @@ export function computeSwapInstructions(
     }
   }
 
+  // Safety guard: total USDC consumed by buy legs must not exceed what is actually
+  // available after sells execute. Uses sell minAmountOut (post-slippage floor) so
+  // the vault never tries to spend USDC it hasn't received yet.
+  const usdcAvailableForBuys =
+    usdc.balance +
+    sells.reduce((sum, s) => sum + s.minAmountOut, 0n);
+  const usdcNeededForBuys = buys.reduce((sum, b) => sum + b.amountIn, 0n);
+
+  if (usdcNeededForBuys > usdcAvailableForBuys && usdcNeededForBuys > 0n) {
+    const scale = (usdcAvailableForBuys * BPS) / usdcNeededForBuys;
+    for (const b of buys) {
+      b.amountIn = (b.amountIn * scale) / BPS;
+      b.minAmountOut = (b.minAmountOut * scale) / BPS;
+    }
+  }
+
   return [...sells, ...buys];
 }
