@@ -1,23 +1,13 @@
 name: Fly Deploy (backend)
 
-# Auto-deploy the backend stack to Fly.io on push to the `backend` branch.
-# - tends-api    rebuilds when the API source / Dockerfile / fly.toml change
-# - tends-hermes rebuilds when the shared src / prisma / hermes/** change
-#   (the MCP server inside hermes is built from backend/src, so src changes
-#    redeploy BOTH apps).
-# Builds run on Fly's remote builders (--remote-only) so no Docker is needed here.
+# Manual deploy only (auto-deploy on push DISABLED 2026-06-04 — we deploy by hand
+# with `cd backend && fly deploy -c fly.toml` / `-c fly.hermes.toml`).
+# Run from the Actions tab ("Run workflow") if you ever want the CI path back.
+# - tends-api uses fly.toml, tends-hermes uses fly.hermes.toml.
+# Builds run on Fly's remote builders (--remote-only).
 
 on:
-  push:
-    branches: [backend]
-    paths:
-      - "backend/**"
-      - ".github/workflows/fly-deploy.yml"
-
-# Never cancel a deploy mid-flight; queue if a new push lands while one runs.
-concurrency:
-  group: fly-deploy-${{ github.ref }}
-  cancel-in-progress: false
+  workflow_dispatch:
 
 jobs:
   changes:
