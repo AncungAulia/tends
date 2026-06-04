@@ -12,6 +12,10 @@ import {
 } from "../../services/agent-config.js";
 import { rebalancerService } from "../../services/rebalancer.js";
 import { readHoldings } from "../../services/holdings.js";
+import { enforceGuardrails } from "../../agents/mastra/workflows/enforce-guardrails.js";
+import { childLogger } from "../../lib/logger.js";
+
+const log = childLogger("agent-routes");
 
 /** Per-user agent + portfolio data access. Injectable so routes test without DB/chain. */
 export interface AgentDeps {
@@ -25,6 +29,8 @@ export interface AgentDeps {
   holdings: (vault: `0x${string}`) => Promise<{ holdings: unknown[]; totalValueUsd: string }>;
   getPrefs: (privyId: string) => Promise<unknown>;
   savePrefs: (privyId: string, prefs: unknown) => Promise<unknown>;
+  /** Fired (non-blocking) after a guardrail change → enforce new caps if violated. */
+  onConfigChanged?: (vault: `0x${string}`) => void;
 }
 
 const USDC = 1e6;
@@ -48,6 +54,10 @@ export const prismaAgentDeps: AgentDeps = {
       take: limit,
     }),
   holdings: (vault) => readHoldings(vault),
+  onConfigChanged: (vault) => {
+    // enforce the just-saved guardrails (rebalance if a cap is now violated) — async
+    void enforceGuardrails(vault).catch((err) => log.warn({ vault, err }, "guardrail enforce failed"));
+  },
   getPrefs: async (privyId) => {
     const user = await prisma.user.findUnique({ where: { privyId }, select: { preferences: true } });
     return user?.preferences ?? {};
@@ -98,7 +108,11 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
     const parsed = configBody.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid body", issues: parsed.error.issues }, 400);
     try {
-      const out = await withVault(c.get("privyId"), (v) => deps.saveConfig(v, parsed.data));
+      const out = await withVault(c.get("privyId"), async (v) => {
+        const saved = await deps.saveConfig(v, parsed.data);
+        deps.onConfigChanged?.(v); // fire-and-forget: enforce new caps if now violated
+        return saved;
+      });
       return out === null ? c.json(NO_VAULT, 404) : c.json(out);
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
