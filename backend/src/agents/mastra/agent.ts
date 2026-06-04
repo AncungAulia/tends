@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
-import { env } from "../../config/env.js";
 import { tendsMemory } from "./memory.js";
 import { tendsTools } from "./tools.js";
+import { hermesModel } from "./hermes-model.js";
 
 /**
  * Grounding prompt — mirrors the existing Hermes system prompt (api/routes/chat.ts)
@@ -27,14 +27,9 @@ export const tendsAgent = new Agent({
   id: "tends-portfolio-agent",
   name: "Tends Portfolio Agent",
   instructions: INSTRUCTIONS,
-  // Custom OpenAI-compatible endpoint: id is the provider/model routing form, url is
-  // the gateway BASE url (not the /chat/completions path). Mastra sends the bare
-  // model name (after the first slash) to Hermes.
-  model: {
-    id: `hermes/${env.HERMES_MODEL}`,
-    url: env.HERMES_BASE_URL,
-    apiKey: env.HERMES_API_KEY,
-  },
+  // Hermes gateway as the model (persona preserved), with its non-OpenAI agent
+  // frames filtered out — see hermes-model.ts.
+  model: hermesModel,
   tools: tendsTools,
   memory: tendsMemory,
 });

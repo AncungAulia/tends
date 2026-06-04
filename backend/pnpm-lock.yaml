@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^2.0.48
+        version: 2.0.48(zod@3.25.76)
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.14(hono@4.12.22)
@@ -101,6 +104,12 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@ai-sdk/openai-compatible@2.0.48':
+    resolution: {integrity: sha512-z9MC6M4Oh/yUY/F/eszOtO8wc2nMz99XmZQKd2gWTtyIfe716xTfrKe3aYZKg20NZDtyjqPPKPSR+wqz7q1T7Q==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/provider-utils@3.0.25':
     resolution: {integrity: sha512-CvsRu+32Y8a167s+lrIBtsybvgTHp8j9y+6BeTvLeoW3Q+okw/b4CnNUFOLIXsRaKHQKAH+IHNJPYWywfpw0LA==}
@@ -1860,6 +1869,12 @@ snapshots:
   '@adraffy/ens-normalize@1.10.1': {}
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@ai-sdk/openai-compatible@2.0.48(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@ai-sdk/provider-utils': 4.0.27(zod@3.25.76)
+      zod: 3.25.76
 
   '@ai-sdk/provider-utils@3.0.25(zod@3.25.76)':
     dependencies:
