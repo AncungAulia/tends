@@ -3,25 +3,32 @@ import { z } from "zod";
 import { listStrategies, riskLevelFromId } from "../../strategies.js";
 import { projectForRisk } from "../../services/projection.js";
 import { readHoldings } from "../../services/holdings.js";
-import { getAgentConfig } from "../../services/agent-config.js";
+import { getAgentConfig, upsertAgentConfig } from "../../services/agent-config.js";
 import { prismaApyReader } from "../../api/routes/apy.js";
 import { prisma } from "../../db/client.js";
 import { as0x } from "../../chain/addresses.js";
 
-const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid wallet address");
 const strategyId = z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
 
-/** Resolve a user's wallet → their vault address (null if none deployed). */
+/** RequestContext shape the chat route binds from the authenticated Privy session. */
+export type AgentRequestContext = { walletAddress: string | null };
+
+/**
+ * The user's wallet ALWAYS comes from the authenticated session (RequestContext),
+ * NEVER from the LLM — so a prompt-injected message can't make the agent read or
+ * mutate someone else's account. The chat route sets it from the Privy token.
+ */
+function sessionWallet(context: unknown): string | null {
+  const ctx = context as { requestContext?: { get?: (k: string) => unknown } } | undefined;
+  return (ctx?.requestContext?.get?.("walletAddress") as string | null | undefined) ?? null;
+}
+
 async function vaultOf(walletAddress: string): Promise<`0x${string}` | null> {
   const vault = await prisma.vault.findUnique({ where: { owner: walletAddress } });
   return vault ? as0x(vault.address) : null;
 }
 
-/**
- * Tools for the Tends portfolio agent — native Mastra ports reusing the same pure
- * services + on-chain readers the REST API / rebalancer use, so the chat agent's
- * answers match the dashboard exactly.
- */
+// ── Read tools that don't need the user ──────────────────────────────────────
 
 const listStrategiesTool = createTool({
   id: "listStrategies",
@@ -47,14 +54,25 @@ const computeProjectionTool = createTool({
   },
 });
 
+const getApyHistoryTool = createTool({
+  id: "getApyHistory",
+  description: "Historical APY series for an asset (e.g. sUSDe, USDY, cmETH) over the last N days.",
+  inputSchema: z.object({ asset: z.string(), days: z.number().int().min(1).max(365).default(30) }),
+  outputSchema: z.any(),
+  execute: async ({ asset, days }) => ({ asset, history: await prismaApyReader.history(asset, days) }),
+});
+
+// ── User-scoped tools — wallet from the session, NOT the LLM ──────────────────
+
 const readUserPositionTool = createTool({
   id: "readUserPosition",
-  description:
-    "Read the user's Tends vault record (address, risk preference, deposit). Pass the user's wallet address.",
-  inputSchema: z.object({ walletAddress: address }),
+  description: "Read the signed-in user's Tends vault (address, risk preference, deposit).",
+  inputSchema: z.object({}),
   outputSchema: z.any(),
-  execute: async ({ walletAddress }) => {
-    const vault = await prisma.vault.findUnique({ where: { owner: walletAddress } });
+  execute: async (_input, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { vault: null, note: "no wallet linked to this session" };
+    const vault = await prisma.vault.findUnique({ where: { owner: wallet } });
     return vault ? { vault } : { vault: null, note: "no vault deployed yet" };
   },
 });
@@ -62,11 +80,13 @@ const readUserPositionTool = createTool({
 const getHoldingsTool = createTool({
   id: "getHoldings",
   description:
-    "Read the user's CURRENT on-chain holdings: each token's balance, USD value, and allocation %, plus total portfolio value. Pass the user's wallet address.",
-  inputSchema: z.object({ walletAddress: address }),
+    "Read the signed-in user's CURRENT on-chain holdings: each token's balance, USD value, allocation %, and total portfolio value.",
+  inputSchema: z.object({}),
   outputSchema: z.any(),
-  execute: async ({ walletAddress }) => {
-    const vault = await vaultOf(walletAddress);
+  execute: async (_input, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { holdings: [], totalValueUsd: "0", note: "no wallet linked" };
+    const vault = await vaultOf(wallet);
     if (!vault) return { holdings: [], totalValueUsd: "0", note: "no vault deployed yet" };
     const { holdings, totalValueUsd } = await readHoldings(vault);
     return { holdings, totalValueUsd };
@@ -76,11 +96,13 @@ const getHoldingsTool = createTool({
 const getAgentSettingsTool = createTool({
   id: "getAgentSettings",
   description:
-    "Read the user's agent guardrails/settings: auto-rebalance on/off, rebalance cadence, drift threshold, max slippage, per-token caps, notes. Pass the user's wallet address.",
-  inputSchema: z.object({ walletAddress: address }),
+    "Read the signed-in user's agent guardrails: auto-rebalance on/off, cadence, drift threshold, max slippage, per-token caps, notes.",
+  inputSchema: z.object({}),
   outputSchema: z.any(),
-  execute: async ({ walletAddress }) => {
-    const vault = await vaultOf(walletAddress);
+  execute: async (_input, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { note: "no wallet linked" };
+    const vault = await vaultOf(wallet);
     if (!vault) return { note: "no vault deployed yet" };
     return getAgentConfig(vault);
   },
@@ -88,15 +110,13 @@ const getAgentSettingsTool = createTool({
 
 const getRecentActivityTool = createTool({
   id: "getRecentActivity",
-  description:
-    "Recent agent activity for the user's vault (rebalances, deposits, withdrawals, pauses). Pass the user's wallet address.",
-  inputSchema: z.object({
-    walletAddress: address,
-    limit: z.number().int().min(1).max(50).default(10),
-  }),
+  description: "Recent agent activity for the signed-in user's vault (rebalances, deposits, withdrawals, pauses).",
+  inputSchema: z.object({ limit: z.number().int().min(1).max(50).default(10) }),
   outputSchema: z.any(),
-  execute: async ({ walletAddress, limit }) => {
-    const vault = await vaultOf(walletAddress);
+  execute: async ({ limit }, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { activities: [] };
+    const vault = await vaultOf(wallet);
     if (!vault) return { activities: [] };
     const activities = await prisma.agentActivity.findMany({
       where: { vaultAddress: vault },
@@ -107,23 +127,42 @@ const getRecentActivityTool = createTool({
   },
 });
 
-const getApyHistoryTool = createTool({
-  id: "getApyHistory",
-  description: "Historical APY series for an asset (e.g. sUSDe, USDY, cmETH) over the last N days.",
+// ── Action tool — mutates the signed-in user's OWN guardrails (off-chain, reversible) ──
+
+const setAgentGuardrailsTool = createTool({
+  id: "setAgentGuardrails",
+  description:
+    "Update the signed-in user's agent guardrails. Include ONLY the fields to change. Off-chain, takes effect immediately, fully reversible — no wallet signature needed. Use this to: pause/resume auto-rebalance (autoRebalanceEnabled), set max slippage (maxSlippageBps, 100=1%), cap a token's max allocation (perTokenCapsBps, e.g. {\"sUSDe\":3000} = 30%), change rebalance cadence (cadenceSec), set a drift threshold (driftThresholdBps), or save preference notes.",
   inputSchema: z.object({
-    asset: z.string(),
-    days: z.number().int().min(1).max(365).default(30),
+    autoRebalanceEnabled: z.boolean().optional(),
+    cadenceSec: z.number().int().nonnegative().nullable().optional(),
+    driftThresholdBps: z.number().int().min(0).max(10_000).nullable().optional(),
+    maxSlippageBps: z.number().int().min(0).max(5_000).optional(),
+    perTokenCapsBps: z.record(z.string(), z.number().int().min(0).max(10_000)).nullable().optional(),
+    notes: z.string().max(1_000).nullable().optional(),
   }),
   outputSchema: z.any(),
-  execute: async ({ asset, days }) => ({ asset, history: await prismaApyReader.history(asset, days) }),
+  execute: async (patch, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { error: "no wallet linked to this session" };
+    const vault = await vaultOf(wallet);
+    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    try {
+      const updated = await upsertAgentConfig(vault, patch);
+      return { ok: true, settings: updated };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
 });
 
 export const tendsTools = {
   listStrategies: listStrategiesTool,
   computeProjection: computeProjectionTool,
+  getApyHistory: getApyHistoryTool,
   readUserPosition: readUserPositionTool,
   getHoldings: getHoldingsTool,
   getAgentSettings: getAgentSettingsTool,
   getRecentActivity: getRecentActivityTool,
-  getApyHistory: getApyHistoryTool,
+  setAgentGuardrails: setAgentGuardrailsTool,
 };

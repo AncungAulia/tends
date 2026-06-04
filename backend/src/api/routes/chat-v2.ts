@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import { RequestContext } from "@mastra/core/request-context";
 import { tendsAgent } from "../../agents/mastra/agent.js";
+import type { AgentRequestContext } from "../../agents/mastra/tools.js";
 import { childLogger } from "../../lib/logger.js";
 import { requireAuth, type AuthVars } from "../auth.js";
 import { prismaUserResolver, type UserResolver } from "./chat.js";
@@ -37,17 +39,26 @@ export function makeChatV2Router(
     }
 
     // resource = the user (wallet → memory grows with user across sessions);
-    // thread = a single conversation. Wallet grounding is injected per message so
-    // the agent knows which address to pass to readUserPosition.
+    // thread = a single conversation.
     const resource = walletAddress ?? privyId;
     const thread = parsed.data.thread ?? `chat-${resource}`;
+
+    // SECURITY: the wallet the tools act on comes from the authenticated Privy
+    // session via RequestContext — NOT from the message — so a prompt-injected
+    // message can't make the agent read or mutate another user's account.
+    const requestContext = new RequestContext<AgentRequestContext>();
+    requestContext.set("walletAddress", walletAddress);
+
     const grounded = walletAddress
-      ? `(My wallet is ${walletAddress}${vaultAddress ? `, vault ${vaultAddress}` : ", no vault deployed yet"}.)\n\n${parsed.data.message}`
+      ? `(I'm signed in${vaultAddress ? " with a deployed vault" : " but have no vault yet"}.)\n\n${parsed.data.message}`
       : parsed.data.message;
 
     return streamSSE(c, async (s) => {
       try {
-        const stream = await tendsAgent.stream(grounded, { memory: { resource, thread } });
+        const stream = await tendsAgent.stream(grounded, {
+          memory: { resource, thread },
+          requestContext,
+        });
         for await (const chunk of stream.textStream) {
           await s.writeSSE({ event: "text", data: chunk });
         }
