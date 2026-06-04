@@ -73,7 +73,7 @@ function SignalCards() {
           </div>
           <div className="flex-1">
             <p className="text-xs font-semibold text-[#0C1A2B]">{s.title}</p>
-            <p className="text-[11px] text-[#5B7490]">{s.detail}</p>
+            <p className="text-[0.6875rem] text-[#5B7490]">{s.detail}</p>
           </div>
           <span
             className={`text-xs font-semibold ${
@@ -98,11 +98,11 @@ function GuardrailChecks() {
     <div className="space-y-1.5">
       {checks.map((c) => (
         <div key={c.label} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[10px] text-green-600">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[0.625rem] text-green-600">
             ✓
           </span>
           <span className="text-xs text-[#0C1A2B]">{c.label}</span>
-          <span className="ml-auto text-[10px] font-medium text-green-600">passed</span>
+          <span className="ml-auto text-[0.625rem] font-medium text-green-600">passed</span>
         </div>
       ))}
     </div>
@@ -115,30 +115,30 @@ function DecisionCard() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5 rounded-md bg-[#F7F9FC] px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-[#2C5EAD]" />
-          <span className="text-[11px] font-medium text-[#0C1A2B]">cmETH 40%</span>
+          <span className="text-[0.6875rem] font-medium text-[#0C1A2B]">cmETH 40%</span>
         </div>
         <span className="text-[#5B7490]">→</span>
         <div className="flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-          <span className="text-[11px] font-medium text-red-600">cmETH 30%</span>
+          <span className="text-[0.6875rem] font-medium text-red-600">cmETH 30%</span>
         </div>
         <span className="mx-1 text-[#DDE8F2]">·</span>
         <div className="flex items-center gap-1.5 rounded-md bg-[#F7F9FC] px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-[#1591DC]" />
-          <span className="text-[11px] font-medium text-[#0C1A2B]">sUSDe 35%</span>
+          <span className="text-[0.6875rem] font-medium text-[#0C1A2B]">sUSDe 35%</span>
         </div>
         <span className="text-[#5B7490]">→</span>
         <div className="flex items-center gap-1.5 rounded-md bg-green-50 px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-          <span className="text-[11px] font-medium text-green-600">sUSDe 45%</span>
+          <span className="text-[0.6875rem] font-medium text-green-600">sUSDe 45%</span>
         </div>
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
+          <span className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
             Confidence
           </span>
-          <span className="text-[11px] font-semibold text-[#1591DC]">87%</span>
+          <span className="text-[0.6875rem] font-semibold text-[#1591DC]">87%</span>
         </div>
         <div className="h-1.5 w-full rounded-[2px] bg-[#F7F9FC]">
           <div className="h-1.5 rounded-[2px] bg-[#1591DC]" style={{ width: "87%" }} />
@@ -159,9 +159,9 @@ function ExecCard() {
           <p className="text-xs font-semibold text-[#0C1A2B]">
             Swap cmETH → sUSDe
           </p>
-          <p className="text-[11px] text-[#5B7490]">Amount: $1,857.00</p>
+          <p className="text-[0.6875rem] text-[#5B7490]">Amount: $1,857.00</p>
         </div>
-        <a className="text-[11px] font-medium text-[#1591DC] hover:opacity-70">
+        <a className="text-[0.6875rem] font-medium text-[#1591DC] hover:opacity-70">
           0x8c1b...3f9e ↗
         </a>
       </div>
@@ -177,11 +177,11 @@ function SummaryCard() {
           <p className="text-xs font-semibold text-green-700">
             Portfolio rebalanced
           </p>
-          <p className="text-[11px] text-green-600/70">
+          <p className="text-[0.6875rem] text-green-600/70">
             2 swaps executed · est. APY +0.3%/yr
           </p>
         </div>
-        <button className="rounded-lg bg-white px-3 py-1.5 text-[11px] font-medium text-[#1591DC]">
+        <button className="rounded-lg bg-white px-3 py-1.5 text-[0.6875rem] font-medium text-[#1591DC]">
           View reasoning
         </button>
       </div>
@@ -214,7 +214,7 @@ const TAG_COLORS: Record<string, string> = {
 function StatusIcon({ status }: { status: StepStatus }) {
   if (status === "done") {
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[11px] text-green-600">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[0.6875rem] text-green-600">
         ✓
       </div>
     );
@@ -332,7 +332,7 @@ export function LiveRunCard({
                   <div className={`flex-1 ${isLast ? "pb-1" : "pb-4"}`}>
                     <div className="mb-2 flex items-center gap-2">
                       <span
-                        className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${TAG_COLORS[step.tag]}`}
+                        className={`rounded-md px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] ${TAG_COLORS[step.tag]}`}
                       >
                         {step.tag}
                       </span>

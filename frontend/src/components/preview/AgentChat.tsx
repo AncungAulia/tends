@@ -53,7 +53,7 @@ function HoldingsCard() {
             <div className="h-1.5 flex-1 rounded-[2px] bg-[#F0F4F8]">
               <div className="h-1.5 rounded-[2px]" style={{ background: r.bar, width: r.w }} />
             </div>
-            <span className="w-8 text-right text-[10px] text-[#5B7490]">{r.pct}%</span>
+            <span className="w-8 text-right text-[0.625rem] text-[#5B7490]">{r.pct}%</span>
             <span className="w-14 text-right text-xs font-medium text-[#0C1A2B]">{r.val}</span>
           </div>
         ))}
@@ -79,7 +79,7 @@ function ActionCard({ kind }: { kind: "move" | "deposit" | "withdraw" }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[#0C1A2B]">{config.title}</p>
-          <p className="text-[11px] text-[#5B7490]">{config.sub}</p>
+          <p className="text-[0.6875rem] text-[#5B7490]">{config.sub}</p>
         </div>
       </div>
 
@@ -179,7 +179,7 @@ function SlashMenu({
     <div className="absolute inset-x-0 bottom-[calc(100%+8px)] z-20 max-h-72 overflow-y-auto rounded-xl border border-[#DDE8F2] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8">
       {groups.map((g, gi) => (
         <div key={g} className={gi > 0 ? "mt-1 border-t border-[#F0F4F8] pt-1" : ""}>
-          <p className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-widest text-[#94A3B8]">{g}</p>
+          <p className="px-3 pb-1 pt-1.5 text-[0.5625rem] font-semibold uppercase tracking-widest text-[#94A3B8]">{g}</p>
           {items
             .map((s, idx) => ({ s, idx }))
             .filter(({ s }) => s.group === g)
@@ -199,7 +199,7 @@ function SlashMenu({
             ))}
         </div>
       ))}
-      <div className="mt-1 flex items-center gap-2 border-t border-[#F0F4F8] px-3 py-1.5 text-[9px] text-[#94A3B8]">
+      <div className="mt-1 flex items-center gap-2 border-t border-[#F0F4F8] px-3 py-1.5 text-[0.5625rem] text-[#94A3B8]">
         <span>↑↓ navigate</span>
         <span>↵ select</span>
         <span>esc dismiss</span>
@@ -430,7 +430,7 @@ export function AgentChat() {
             </button>
           </div>
         </div>
-        <p className="mt-2 text-center text-[10px] text-[#94A3B8]">
+        <p className="mt-2 text-center text-[0.625rem] text-[#94A3B8]">
           Tends Agent can make mistakes. Review actions before you confirm.
         </p>
       </div>

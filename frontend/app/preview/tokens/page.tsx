@@ -137,16 +137,16 @@ export default function TokensComparison() {
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-[#0C1A2B]">{s.name}</p>
                 {s.key === "tuned" && (
-                  <span className="rounded-full bg-[#EAF4FC] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#1591DC]">
+                  <span className="rounded-full bg-[#EAF4FC] px-2 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-wider text-[#1591DC]">
                     Pick
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-[#5B7490]">{s.note}</p>
+              <p className="mt-0.5 text-[0.6875rem] leading-snug text-[#5B7490]">{s.note}</p>
               <div className="mt-5 space-y-5">
                 {STRATEGIES.map((st) => (
                   <div key={st.id}>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8]">{st.id}</p>
+                    <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-widest text-[#94A3B8]">{st.id}</p>
                     <Bar alloc={st.alloc} scheme={s.key} />
                   </div>
                 ))}
@@ -169,7 +169,7 @@ export default function TokensComparison() {
           const tokens = ALL_TOKENS.filter((t) => t.category === cat);
           return (
             <section key={cat} className="mt-8">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">{CAT_LABEL[cat]}</p>
+              <p className="mb-3 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">{CAT_LABEL[cat]}</p>
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {tokens.map((t) => (
                   <div key={t.sym} className="flex items-center gap-3 rounded-xl border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2.5">
@@ -192,7 +192,7 @@ export default function TokensComparison() {
           );
         })}
 
-        <div className="mt-8 text-[11px] text-[#5B7490]">swatch order: Raw · From icon · Curated</div>
+        <div className="mt-8 text-[0.6875rem] text-[#5B7490]">swatch order: Raw · From icon · Curated</div>
       </div>
     </div>
   );

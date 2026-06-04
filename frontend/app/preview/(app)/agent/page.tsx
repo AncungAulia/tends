@@ -56,7 +56,7 @@ function SectionLabel({
 }) {
   return (
     <div className="mb-2 flex items-center justify-between">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+      <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
         {children}
       </p>
       {right}
@@ -687,7 +687,7 @@ function AgentLog({
                   className="flex items-center gap-3 rounded-lg px-2 py-2"
                 >
                   <span className="w-[4.5rem] shrink-0">
-                    <span className="flex w-full justify-center rounded-md bg-[#EDF2F7] py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[#5B7490]">
+                    <span className="flex w-full justify-center rounded-md bg-[#EDF2F7] py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] text-[#5B7490]">
                       Idle
                     </span>
                   </span>
@@ -698,7 +698,7 @@ function AgentLog({
                     </span>
                     Watching your portfolio
                   </span>
-                  <span className="shrink-0 text-[10px] tabular-nums text-[#94A3B8]">
+                  <span className="shrink-0 text-[0.625rem] tabular-nums text-[#94A3B8]">
                     next check in {clock(secs)}
                   </span>
                 </div>
@@ -710,7 +710,7 @@ function AgentLog({
                 className="flex items-center gap-2 px-2 py-1.5"
               >
                 <span className="h-px flex-1 bg-[#F0F3F6]" />
-                <span className="shrink-0 text-[10px] text-[#C5D0DC]">
+                <span className="shrink-0 text-[0.625rem] text-[#C5D0DC]">
                   idled {dur(entry.mins)}
                 </span>
                 <span className="h-px flex-1 bg-[#F0F3F6]" />
@@ -738,7 +738,7 @@ function AgentLog({
                     >
                       <span className="w-[4.5rem] shrink-0">
                         <span
-                          className={`flex w-full justify-center rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${s.tagCls}`}
+                          className={`flex w-full justify-center rounded-md py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] ${s.tagCls}`}
                         >
                           {s.tag}
                         </span>
@@ -752,7 +752,7 @@ function AgentLog({
                         )}
                       </span>
                       {di === 0 && (
-                        <span className="shrink-0 text-[10px] text-[#C5D0DC]">
+                        <span className="shrink-0 text-[0.625rem] text-[#C5D0DC]">
                           {ago(entry.mins)}
                         </span>
                       )}
@@ -821,9 +821,9 @@ function OperatingCard({
     },
   ];
   const heading =
-    "text-[10px] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]";
+    "text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]";
   const link =
-    "flex items-center gap-1 text-[11px] font-medium text-[#1591DC] transition-opacity hover:opacity-70";
+    "flex items-center gap-1 text-[0.6875rem] font-medium text-[#1591DC] transition-opacity hover:opacity-70";
   return (
     <div className="flex flex-col">
       <SectionLabel>Agent Rules</SectionLabel>
@@ -845,7 +845,7 @@ function OperatingCard({
         {/* Target mix — the basket this risk aims for (mirror of Plan), so the
             cockpit shows not just the rules but what they actually hold. */}
         <div className="mt-3">
-          <p className="mb-1.5 text-[10px] text-[#94A3B8]">
+          <p className="mb-1.5 text-[0.625rem] text-[#94A3B8]">
             Agent targets this mix
           </p>
           <div className="relative">
@@ -876,7 +876,7 @@ function OperatingCard({
                   transition={{ duration: 0.14, ease: "easeOut" }}
                 >
                   <p className="text-xs font-semibold text-white">{mh.sym}</p>
-                  <p className="text-[10px] text-white/55">{mh.pct}% of target</p>
+                  <p className="text-[0.625rem] text-white/55">{mh.pct}% of target</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -885,7 +885,7 @@ function OperatingCard({
             {mix.map((m) => (
               <span
                 key={m.sym}
-                className="flex items-center gap-1 text-[10px] text-[#5B7490]"
+                className="flex items-center gap-1 text-[0.625rem] text-[#5B7490]"
               >
                 <span
                   className="h-1.5 w-1.5 rounded-full"
@@ -993,7 +993,7 @@ function ControlTab({
                 <p className="flex justify-center text-lg font-semibold text-[#0C1A2B]">
                   <SlidingNumber number={47} />
                 </p>
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
                   Rebalances
                 </p>
               </div>
@@ -1001,13 +1001,13 @@ function ControlTab({
                 <p className="flex items-center justify-center text-lg font-semibold text-green-600">
                   +<SlidingNumber number={8.4} decimalPlaces={1} />%
                 </p>
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
                   Est. APY
                 </p>
               </div>
               <div>
                 <p className="text-lg font-semibold text-[#0C1A2B]">2h ago</p>
-                <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
                   Last run
                 </p>
               </div>
@@ -1024,7 +1024,7 @@ function ControlTab({
           right={
             <Link
               href="/preview/activity"
-              className="text-[11px] font-medium text-[#1591DC] transition-opacity hover:opacity-70"
+              className="text-[0.6875rem] font-medium text-[#1591DC] transition-opacity hover:opacity-70"
             >
               See all records
             </Link>
@@ -1112,7 +1112,7 @@ function GuardrailsTab({
           right={
             <div className="flex items-center gap-2">
               {!advanced && (
-                <span className="text-[10px] text-[#5B7490]">
+                <span className="text-[0.625rem] text-[#5B7490]">
                   Toggle to change
                 </span>
               )}

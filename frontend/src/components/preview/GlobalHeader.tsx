@@ -47,7 +47,7 @@ function MoveMoney() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-[#0C1A2B]">Deposit</p>
-                <p className="text-[10px] text-[#5B7490]">Add funds to vault</p>
+                <p className="text-[0.625rem] text-[#5B7490]">Add funds to vault</p>
               </div>
             </button>
             <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[#F7F9FC]">
@@ -56,7 +56,7 @@ function MoveMoney() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-[#0C1A2B]">Withdraw</p>
-                <p className="text-[10px] text-[#5B7490]">Take funds out</p>
+                <p className="text-[0.625rem] text-[#5B7490]">Take funds out</p>
               </div>
             </button>
           </motion.div>
