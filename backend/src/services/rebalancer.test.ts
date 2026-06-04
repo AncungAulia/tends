@@ -36,6 +36,7 @@ function makeDeps(over: Partial<RebalancerDeps> = {}) {
   const deps: RebalancerDeps = {
     listVaults: async () => [V1],
     readVaultMeta: async () => meta(),
+    arePricesFresh: async () => true,
     readAgentConfig: async () => cfg(),
     buildInstructions: async () => [SWAP],
     simulateRebalance: async () => true,
@@ -71,6 +72,21 @@ test("processVault: off-chain cadence not elapsed → skip", async () => {
   });
   const out = await new RebalancerService(deps).processVault(V1);
   assert.deepEqual(out, { action: "skip", reason: "cooldown" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: stale price feeds → skip 'stale', never builds/sends (no getPrice revert)", async () => {
+  let built = false;
+  const { deps, calls } = makeDeps({
+    arePricesFresh: async () => false,
+    buildInstructions: async () => {
+      built = true;
+      return [SWAP];
+    },
+  });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "stale" });
+  assert.equal(built, false); // gated before buildInstructions (which would hit getPrice)
   assert.equal(calls.sendRebalance.length, 0);
 });
 

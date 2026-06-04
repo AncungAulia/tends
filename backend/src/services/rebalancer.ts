@@ -47,13 +47,16 @@ export interface VaultMeta {
 
 /** Why a vault was skipped (or that it was rebalanced) — surfaced for tests/telemetry. */
 export type VaultOutcome =
-  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" | "unsafe" }
+  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" | "unsafe" | "stale" }
   | { action: "rebalanced"; hash: `0x${string}`; swaps: number };
 
 // Injectable dependencies (faked in tests).
 export interface RebalancerDeps {
   listVaults: () => Promise<`0x${string}`[]>;
   readVaultMeta: (vault: `0x${string}`) => Promise<VaultMeta>;
+  /** Are all pushable token feeds fresh (≤ PriceFeed.maxStaleness)? Gates rebalancing
+   *  so we never plan/trade on a stale price (and buildInstructions' getPrice never reverts). */
+  arePricesFresh: () => Promise<boolean>;
   /** Off-chain agent guardrails (pause, cadence, caps, drift, slippage). */
   readAgentConfig: (vault: `0x${string}`) => Promise<AgentConfigValue>;
   buildInstructions: (
@@ -174,6 +177,24 @@ export const defaultRebalancerDeps: RebalancerDeps = {
       ]);
     return { paused, lastRebalanceTime, minRebalanceInterval, riskPreference };
   },
+  async arePricesFresh() {
+    if (env.USE_MOCK_CONTRACTS || !addresses.priceFeed) return true;
+    const pf = { address: as0x(addresses.priceFeed), abi: PRICE_FEED_ABI } as const;
+    const [block, maxStaleness] = await Promise.all([
+      publicClient.getBlock(),
+      publicClient.readContract({ ...pf, functionName: "maxStaleness" }),
+    ]);
+    for (const t of Object.values(TOKENS)) {
+      if (t.static || !t.feed || !t.address) continue;
+      const [, updatedAt] = await publicClient.readContract({
+        ...pf,
+        functionName: "getPriceUnsafe",
+        args: [as0x(t.address)],
+      });
+      if (updatedAt === 0n || block.timestamp - updatedAt > maxStaleness) return false;
+    }
+    return true;
+  },
   readAgentConfig: getAgentConfig,
   buildInstructions: defaultBuildInstructions,
   async simulateRebalance(vault, instructions) {
@@ -242,6 +263,10 @@ export class RebalancerService {
       log.info({ vault }, "off-chain cadence not elapsed, skip");
       return { action: "skip", reason: "cooldown" };
     }
+    if (!(await this.deps.arePricesFresh())) {
+      log.warn({ vault }, "price feeds stale — skip (won't plan/trade on stale prices)");
+      return { action: "skip", reason: "stale" };
+    }
 
     const instructions = await this.deps.buildInstructions(
       vault,
@@ -273,6 +298,10 @@ export class RebalancerService {
       this.deps.readAgentConfig(vault),
     ]);
     if (meta.paused) return { action: "skip", reason: "paused" };
+    if (!(await this.deps.arePricesFresh())) {
+      log.warn({ vault }, "manual rebalance: price feeds stale, skip");
+      return { action: "skip", reason: "stale" };
+    }
     const instructions = await this.deps.buildInstructions(vault, meta.riskPreference, config);
     if (instructions.length === 0) return { action: "skip", reason: "balanced" };
     if (!(await this.deps.simulateRebalance(vault, instructions))) {
