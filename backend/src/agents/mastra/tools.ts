@@ -132,7 +132,12 @@ const getRecentActivityTool = createTool({
 const setAgentGuardrailsTool = createTool({
   id: "setAgentGuardrails",
   description:
-    "Update the signed-in user's agent guardrails. Include ONLY the fields to change. Off-chain, takes effect immediately, fully reversible — no wallet signature needed. Use this to: pause/resume auto-rebalance (autoRebalanceEnabled), set max slippage (maxSlippageBps, 100=1%), cap a token's max allocation (perTokenCapsBps, e.g. {\"sUSDe\":3000} = 30%), change rebalance cadence (cadenceSec), set a drift threshold (driftThresholdBps), or save preference notes.",
+    "Update the signed-in user's agent GUARDRAILS (safety limits the auto-rebalancer respects). Off-chain, instant, reversible, NO signature. Include ONLY fields to change. Fields: " +
+    "autoRebalanceEnabled (pause/resume the agent); " +
+    "maxSlippageBps (swap slippage tolerance, 100=1%, 200=2%); " +
+    "perTokenCapsBps — an independent MAXIMUM per token in bps (3000 = max 30% of portfolio). Each token is a separate ceiling; they do NOT need to sum to 100. e.g. cap sUSDe at 25% → {\"sUSDe\":2500}. This is a safety limit, NOT the strategy allocation; " +
+    "cadenceSec (min seconds between rebalances); driftThresholdBps (only rebalance if drift exceeds this); notes (free text). " +
+    "NOTE: this does NOT change the on-chain risk strategy (that needs the user's signature in the app).",
   inputSchema: z.object({
     autoRebalanceEnabled: z.boolean().optional(),
     cadenceSec: z.number().int().nonnegative().nullable().optional(),
@@ -156,7 +161,8 @@ const setAgentGuardrailsTool = createTool({
   },
 });
 
-export const tendsTools = {
+/** Read + advisory tools — safe for any model (no mutations). */
+export const tendsReadTools = {
   listStrategies: listStrategiesTool,
   computeProjection: computeProjectionTool,
   getApyHistory: getApyHistoryTool,
@@ -164,5 +170,13 @@ export const tendsTools = {
   getHoldings: getHoldingsTool,
   getAgentSettings: getAgentSettingsTool,
   getRecentActivity: getRecentActivityTool,
+};
+
+/** Mutating tools — only give these to a model that RELIABLY calls tools (NOT Hermes,
+ *  which hallucinates write-tool success). See the action-agent (reliable model). */
+export const tendsActionTools = {
   setAgentGuardrails: setAgentGuardrailsTool,
 };
+
+/** Default toolset for the chat agent (Hermes) = reads only. */
+export const tendsTools = tendsReadTools;
