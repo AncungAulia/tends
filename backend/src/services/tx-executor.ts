@@ -74,7 +74,7 @@ export class TxExecutorService {
     };
   }
 
-  /** UserVault.withdraw(assets, receiver, owner). */
+  /** UserVault.withdraw(assets, receiver, owner) — plain USDC-only exit (vault must already hold enough USDC). */
   prepareWithdraw(vault: `0x${string}`, owner: `0x${string}`, amount: number): PreparedTx {
     return {
       to: vault,
@@ -86,6 +86,7 @@ export class TxExecutorService {
       value: "0",
     };
   }
+
 
   /** VaultFactory.deployVault() — first-time users create their vault. */
   prepareDeployVault(): PreparedTx {
