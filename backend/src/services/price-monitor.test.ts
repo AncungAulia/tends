@@ -4,6 +4,8 @@ import {
   classifyFreshness,
   assessBounds,
   criticalBreaches,
+  staleAlert,
+  type FeedStatus,
   PriceMonitorService,
   type PriceMonitorDeps,
   type PriceBoundStatus,
@@ -60,6 +62,17 @@ test("checkPrices: flags a token below its band (depeg), others ok", async () =>
   assert.equal(breaches.length, 1);
   assert.equal(breaches[0]!.symbol, "USDY");
   assert.equal(breaches[0]!.reason, "below");
+});
+
+test("staleAlert: null when all fresh; aggregates stale feeds otherwise", () => {
+  const mk = (symbol: string, stale: boolean, ageSeconds: number): FeedStatus =>
+    ({ symbol: symbol as FeedStatus["symbol"], price: E18, updatedAt: 1n, ageSeconds, stale });
+  assert.equal(staleAlert([mk("USDY", false, 10), mk("mETH", false, 20)]), null);
+  assert.deepEqual(staleAlert([mk("USDY", true, 88120), mk("mETH", false, 20), mk("sUSDe", true, 90000)]), {
+    count: 2,
+    symbols: ["USDY", "sUSDe"],
+    maxAgeSeconds: 90000,
+  });
 });
 
 test("criticalBreaches: below/zero are critical; above/ok are not", () => {

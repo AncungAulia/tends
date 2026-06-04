@@ -1,8 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { listStrategies, getStrategy, riskLevelFromId } from "./strategies.js";
+import { currentApy } from "./services/projection.js";
 
 const APY = { mUSD: 5, USDY: 5, mETH: 4, cmETH: 4, sUSDe: 10, WMNT: 1 };
+
+test("blended APY follows the risk ladder: LOW < MEDIUM < HIGH (default APYs)", () => {
+  const byId = Object.fromEntries(
+    listStrategies(currentApy()).map((s) => [s.id, s.blendedApyPct]),
+  );
+  assert.ok(byId.LOW! < byId.MEDIUM!, `LOW ${byId.LOW} < MEDIUM ${byId.MEDIUM}`);
+  assert.ok(byId.MEDIUM! < byId.HIGH!, `MEDIUM ${byId.MEDIUM} < HIGH ${byId.HIGH}`);
+  // HIGH must be materially higher than LOW (not a hair) — ≥ 1.5× the LOW yield
+  assert.ok(byId.HIGH! >= byId.LOW! * 1.5, `HIGH ${byId.HIGH} ≥ 1.5×LOW ${byId.LOW}`);
+});
 
 test("listStrategies: returns all four with blended APY (CUSTOM null)", () => {
   const list = listStrategies(APY);

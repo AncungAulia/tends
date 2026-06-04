@@ -1,15 +1,37 @@
 # Hermes Agent config — Tends portfolio assistant.
 # Provider: GitHub Copilot. Auth via COPILOT_GITHUB_TOKEN (see hermes/.env.example).
 # Canonical config shape: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+#
+# NOTE: entrypoint.sh expands the ${VARS} below from the container environment when
+# seeding /root/.hermes/config.yaml. Hermes spawns the MCP server with ONLY the env
+# declared here (it does NOT inherit the gateway's env), so DATABASE_URL + the chain
+# config must be passed explicitly or the server exits ("Invalid environment variables").
 
 model:
   default: gpt-4o # Copilot model (auto-detected from the live catalog). GPT-5+ uses
   provider: copilot # the Responses API; gpt-4o uses Chat Completions.
 
 # MCP: the Tends tools server (Hermes spawns it as a subprocess and exposes
-# mcp_tends_*). It needs DATABASE_URL + contract addresses (inherited from the
-# container env via .env.prod) to read data.
+# mcp_tends_*). It needs DATABASE_URL + RPC + contract addresses to read data.
 mcp_servers:
   tends:
     command: node
     args: ["/app/dist/mcp/server.js"]
+    env:
+      DATABASE_URL: "${DATABASE_URL}"
+      MANTLE_RPC_URL: "${MANTLE_RPC_URL}"
+      MANTLE_RPC_URL_FALLBACK: "${MANTLE_RPC_URL_FALLBACK}"
+      CHAIN_ID: "${CHAIN_ID}"
+      USE_MOCK_CONTRACTS: "${USE_MOCK_CONTRACTS}"
+      VAULT_FACTORY_ADDRESS: "${VAULT_FACTORY_ADDRESS}"
+      PRICE_FEED_ADDRESS: "${PRICE_FEED_ADDRESS}"
+      ACTIVITY_LOG_ADDRESS: "${ACTIVITY_LOG_ADDRESS}"
+      STRATEGY_ROUTER_ADDRESS: "${STRATEGY_ROUTER_ADDRESS}"
+      MOCK_ORACLE_ADDRESS: "${MOCK_ORACLE_ADDRESS}"
+      USDC_ADDR: "${USDC_ADDR}"
+      MUSD_ADDR: "${MUSD_ADDR}"
+      USDY_ADDR: "${USDY_ADDR}"
+      METH_ADDR: "${METH_ADDR}"
+      CMETH_ADDR: "${CMETH_ADDR}"
+      SUSDE_ADDR: "${SUSDE_ADDR}"
+      WMNT_ADDR: "${WMNT_ADDR}"

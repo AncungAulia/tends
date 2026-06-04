@@ -68,6 +68,27 @@ export function criticalBreaches(statuses: PriceBoundStatus[]): PriceBoundStatus
   return statuses.filter((s) => s.reason === "below" || s.reason === "zero");
 }
 
+export interface StaleAlert {
+  count: number;
+  symbols: TokenSymbol[];
+  maxAgeSeconds: number;
+}
+
+/**
+ * Pure: aggregate stale-feed alert (the relayer has likely stopped pushing), or
+ * null if every feed is fresh. Distinct from the per-feed warn — this is the loud,
+ * error-level signal log-based alerting should page on.
+ */
+export function staleAlert(statuses: FeedStatus[]): StaleAlert | null {
+  const stale = statuses.filter((s) => s.stale);
+  if (stale.length === 0) return null;
+  return {
+    count: stale.length,
+    symbols: stale.map((s) => s.symbol),
+    maxAgeSeconds: Math.max(...stale.map((s) => s.ageSeconds)),
+  };
+}
+
 export interface RiskGuardOpts {
   enabled: boolean;
   listVaults: () => Promise<`0x${string}`[]>;
@@ -149,6 +170,8 @@ export class PriceMonitorService {
       if (stale) log.warn({ symbol: t.symbol, ageSeconds }, "stale price feed");
       statuses.push({ symbol: t.symbol, price, updatedAt, ageSeconds, stale });
     }
+    const alert = staleAlert(statuses);
+    if (alert) log.error(alert, "ORACLE ALERT: price feeds stale — relayer may be down");
     return statuses;
   }
 

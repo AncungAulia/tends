@@ -5,8 +5,19 @@ import { publicClient } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
 import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI } from "../chain/abis.js";
 import { wsHub, type WsEvent } from "../ws/hub.js";
+import { rebalancerService } from "./rebalancer.js";
 
 const log = childLogger("indexer");
+
+/** Default deposit hook: rebalance the vault now (processVault respects cooldown/pause/balanced). */
+async function defaultTriggerRebalance(vault: `0x${string}`): Promise<void> {
+  await rebalancerService.processVault(vault);
+}
+
+/** Default on-chain owner reader for backfill: UserVault.owner(). */
+function defaultReadVaultOwner(vault: `0x${string}`): Promise<string> {
+  return publicClient.readContract({ address: vault, abi: USER_VAULT_ABI, functionName: "owner" });
+}
 
 export interface VaultRecord {
   address: string;
@@ -33,6 +44,58 @@ export function toVaultRecord(
   blockNumber: bigint | null,
 ): VaultRecord {
   return { address: vault, owner: user, deployedBlock: blockNumber };
+}
+
+/**
+ * Vault upsert args that CREATE the owner `User` if it doesn't exist yet
+ * (`connectOrCreate`). On-chain `VaultDeployed`/`Deposit` events can be indexed
+ * before the owner has authenticated (no User row), and `Vault.owner` is a FK to
+ * `User.walletAddress` — without this the upsert fails with a foreign-key error
+ * (P2003) and the vault is never recorded. The owner FK is set via the relation,
+ * so we must NOT also pass a scalar `owner`.
+ */
+export function toVaultUpsertArgs(rec: VaultRecord): Prisma.VaultUpsertArgs {
+  return {
+    where: { address: rec.address },
+    create: {
+      address: rec.address,
+      deployedBlock: rec.deployedBlock,
+      user: {
+        connectOrCreate: {
+          where: { walletAddress: rec.owner },
+          create: { walletAddress: rec.owner },
+        },
+      },
+    },
+    update: { deployedBlock: rec.deployedBlock },
+  };
+}
+
+/** Position upsert args (deposit) — same owner-User `connectOrCreate` guard. */
+export function toPositionUpsertArgs(
+  vault: string,
+  owner: string,
+  shares: bigint,
+  assets: bigint,
+): Prisma.VaultUpsertArgs {
+  return {
+    where: { address: vault },
+    create: {
+      address: vault,
+      shares: shares.toString(),
+      initialDeposit: assets.toString(),
+      user: {
+        connectOrCreate: {
+          where: { walletAddress: owner },
+          create: { walletAddress: owner },
+        },
+      },
+    },
+    update: {
+      shares: { increment: shares.toString() },
+      initialDeposit: { increment: assets.toString() },
+    },
+  };
 }
 
 /** UserVault `Rebalanced(timestamp, agent, instructions)` → an AgentActivity record. */
@@ -112,11 +175,7 @@ export interface IndexerRepo {
 
 export const prismaIndexerRepo: IndexerRepo = {
   async upsertVault(rec) {
-    await prisma.vault.upsert({
-      where: { address: rec.address },
-      create: { address: rec.address, owner: rec.owner, deployedBlock: rec.deployedBlock },
-      update: { deployedBlock: rec.deployedBlock },
-    });
+    await prisma.vault.upsert(toVaultUpsertArgs(rec));
   },
   async recordActivity(rec) {
     await prisma.agentActivity.create({
@@ -124,19 +183,7 @@ export const prismaIndexerRepo: IndexerRepo = {
     });
   },
   async addToPosition(vault, owner, shares, assets) {
-    await prisma.vault.upsert({
-      where: { address: vault },
-      create: {
-        address: vault,
-        owner,
-        shares: shares.toString(),
-        initialDeposit: assets.toString(),
-      },
-      update: {
-        shares: { increment: shares.toString() },
-        initialDeposit: { increment: assets.toString() },
-      },
-    });
+    await prisma.vault.upsert(toPositionUpsertArgs(vault, owner, shares, assets));
   },
   async subFromPosition(vault, shares) {
     await prisma.vault.update({
@@ -166,12 +213,28 @@ export class IndexerService {
   constructor(
     private readonly repo: IndexerRepo = prismaIndexerRepo,
     private readonly broadcast: (e: WsEvent) => void = (e) => wsHub.broadcast(e),
+    // event-driven: deploy a fresh deposit immediately instead of waiting for the poll
+    private readonly triggerRebalance: (vault: `0x${string}`) => Promise<void> = defaultTriggerRebalance,
+    // backfill: read an existing vault's owner on-chain (UserVault.owner())
+    private readonly readVaultOwner: (vault: `0x${string}`) => Promise<string> = defaultReadVaultOwner,
   ) {}
 
   async onVaultDeployed(user: string, vault: string, blockNumber: bigint | null): Promise<void> {
     await this.repo.upsertVault(toVaultRecord(user, vault, blockNumber));
     this.broadcast({ type: "vault_deployed", user, vault });
     log.info({ user, vault }, "vault deployed");
+  }
+
+  /**
+   * Backfill an already-deployed vault into the DB. watchContractEvent only sees
+   * events from when the watcher attaches, so vaults deployed before startup (or
+   * during a restart's downtime) would never be recorded otherwise. Idempotent
+   * (upsert); reads the owner on-chain. Runs for every existing vault at startup.
+   */
+  async backfillVault(vault: `0x${string}`): Promise<void> {
+    const owner = await this.readVaultOwner(vault);
+    await this.repo.upsertVault(toVaultRecord(owner, vault, null));
+    log.info({ vault, owner }, "vault backfilled");
   }
 
   async onRebalanced(args: {
@@ -204,6 +267,10 @@ export class IndexerService {
     await this.repo.addToPosition(vault, owner, shares, assets);
     this.broadcast({ type: "deposit", vault, owner });
     log.info({ vault, owner }, "deposit indexed");
+    // deploy the new funds right away (best-effort — never breaks indexing)
+    await this.triggerRebalance(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "deposit-triggered rebalance failed"),
+    );
   }
 
   async onWithdraw(vault: string, owner: string, assets: bigint, shares: bigint): Promise<void> {
@@ -296,9 +363,14 @@ export class IndexerService {
           },
         }),
       );
-      // attach watchers for vaults that already exist
+      // attach watchers for vaults that already exist + backfill them into the DB
       void this.listVaults()
-        .then((vaults) => vaults.forEach((v) => this.watchVault(v, unwatch)))
+        .then((vaults) =>
+          vaults.forEach((v) => {
+            this.watchVault(v, unwatch);
+            void this.backfillVault(v).catch((err) => log.warn({ err, vault: v }, "vault backfill failed"));
+          }),
+        )
         .catch((err) => log.error({ err }, "failed to enumerate vaults for watching"));
     }
     if (addresses.activityLog) {

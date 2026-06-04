@@ -207,6 +207,13 @@ const SWAP_INSTRUCTION = {
 
 export const USER_VAULT_ABI = [
   {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }], // the user this vault belongs to
+  },
+  {
     name: "riskPreference",
     type: "function",
     stateMutability: "view",

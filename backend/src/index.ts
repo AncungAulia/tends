@@ -18,6 +18,7 @@ import { txRouter } from "./api/routes/tx.js";
 import { authRouter } from "./api/routes/auth.js";
 import { apyRouter } from "./api/routes/apy.js";
 import { chatRouter } from "./api/routes/chat.js";
+import { chatV2Router } from "./api/routes/chat-v2.js";
 import { rateLimit } from "./api/rate-limit.js";
 
 const log = childLogger("server");
@@ -51,6 +52,7 @@ app.route("/api/strategies", strategiesRouter);
 app.route("/api/projection", projectionRouter);
 app.route("/api/apy", apyRouter);
 app.route("/api/chat", chatRouter);
+app.route("/api/chat-v2", chatV2Router); // PoC: Mastra agent (Hermes model + Supabase memory)
 app.route("/api/users/me", usersRouter);
 app.route("/api/users/me", txRouter);
 // TODO: WS /ws/dashboard

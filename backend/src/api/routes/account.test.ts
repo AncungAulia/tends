@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { makeAuthRouter } from "./auth.js";
 import { makeApyRouter, type ApyReader } from "./apy.js";
-import { makeChatRouter } from "./chat.js";
+import { makeChatRouter, buildSystemPrompt } from "./chat.js";
+import type { ChatMessage } from "../../agents/hermes-client.js";
 import { makeAuthMiddleware } from "../auth.js";
 
 const okAuth = makeAuthMiddleware(async (t) => {
@@ -51,6 +52,38 @@ test("GET /api/apy/history: validates params and calls the reader", async () => 
   const ok = await app.request("/api/apy/history?asset=mETH&days=7");
   assert.equal(ok.status, 200);
   assert.deepEqual(seen, [{ asset: "mETH", days: 7 }]);
+});
+
+// ── chat grounding ───────────────────────────────────────────────────────────
+test("buildSystemPrompt: grounds 'vault' as on-chain + injects wallet/vault", () => {
+  const p = buildSystemPrompt("0xWALLET", "0xVAULT");
+  assert.match(p, /on-chain ERC-4626 RWA vault/);
+  assert.match(p, /NEVER a secrets\/file\/password vault/);
+  assert.match(p, /0xWALLET/);
+  assert.match(p, /0xVAULT/);
+  assert.match(p, /readUserPosition/);
+  assert.match(buildSystemPrompt(null, null), /has not linked a wallet/);
+});
+
+test("POST /api/chat: prepends a grounding system prompt with the resolved wallet", async () => {
+  let captured: ChatMessage[] = [];
+  async function* capture(messages: ChatMessage[]) {
+    captured = messages;
+    yield "ok";
+  }
+  const resolveUser = async () => ({ walletAddress: "0xWALLET", vaultAddress: "0xVAULT" });
+  const app = new Hono().route("/api/chat", makeChatRouter(okAuth, capture, async () => {}, resolveUser));
+  const res = await app.request("/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer good" },
+    body: JSON.stringify({ message: "what's in my vault?" }),
+  });
+  await res.text(); // drain the stream
+  assert.equal(captured[0]!.role, "system");
+  assert.match(captured[0]!.content, /0xWALLET/);
+  assert.match(captured[0]!.content, /0xVAULT/);
+  assert.equal(captured[1]!.role, "user");
+  assert.equal(captured[1]!.content, "what's in my vault?");
 });
 
 // ── /api/chat (SSE) ──────────────────────────────────────────────────────────

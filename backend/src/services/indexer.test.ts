@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   toVaultRecord,
+  toVaultUpsertArgs,
+  toPositionUpsertArgs,
   toRebalanceActivity,
   toActivityLogRecord,
   toRiskUpdate,
@@ -21,6 +23,33 @@ test("toVaultRecord maps user/vault/block", () => {
     address: VAULT,
     owner: USER,
     deployedBlock: 42n,
+  });
+});
+
+test("toVaultUpsertArgs creates the owner User (connectOrCreate), no scalar owner", () => {
+  const args = toVaultUpsertArgs({ address: VAULT, owner: USER, deployedBlock: 7n });
+  assert.equal(args.where.address, VAULT);
+  // owner FK set via the relation, NOT a scalar owner (which would violate the FK)
+  assert.ok(!("owner" in args.create), "create must not pass a scalar owner");
+  assert.deepEqual(args.create.user, {
+    connectOrCreate: { where: { walletAddress: USER }, create: { walletAddress: USER } },
+  });
+  assert.equal(args.create.address, VAULT);
+  assert.equal(args.create.deployedBlock, 7n);
+  assert.deepEqual(args.update, { deployedBlock: 7n });
+});
+
+test("toPositionUpsertArgs creates owner User + increments shares/deposit", () => {
+  const args = toPositionUpsertArgs(VAULT, USER, 999n, 1_000_000n);
+  assert.ok(!("owner" in args.create), "create must not pass a scalar owner");
+  assert.deepEqual(args.create.user, {
+    connectOrCreate: { where: { walletAddress: USER }, create: { walletAddress: USER } },
+  });
+  assert.equal(args.create.shares, "999");
+  assert.equal(args.create.initialDeposit, "1000000");
+  assert.deepEqual(args.update, {
+    shares: { increment: "999" },
+    initialDeposit: { increment: "1000000" },
   });
 });
 
@@ -82,6 +111,16 @@ test("onVaultDeployed upserts the mapped vault record", async () => {
   assert.deepEqual(vaults[0], { address: VAULT, owner: USER, deployedBlock: 7n });
 });
 
+test("backfillVault reads owner on-chain and upserts an existing vault", async () => {
+  const { repo, vaults } = fakeRepo();
+  const seen: string[] = [];
+  const readOwner = async (v: `0x${string}`) => (seen.push(v), USER);
+  const svc = new IndexerService(repo, () => {}, async () => {}, readOwner);
+  await svc.backfillVault(VAULT as `0x${string}`);
+  assert.deepEqual(seen, [VAULT]); // owner read for that vault
+  assert.deepEqual(vaults, [{ address: VAULT, owner: USER, deployedBlock: null }]);
+});
+
 test("onRebalanced records the mapped activity", async () => {
   const { repo, activities } = fakeRepo();
   await new IndexerService(repo).onRebalanced({
@@ -132,12 +171,24 @@ test("toRiskUpdate: keeps bps only for CUSTOM (level 3)", () => {
   });
 });
 
-test("onDeposit adds shares + cost basis to the position", async () => {
+test("onDeposit adds shares + cost basis, then triggers a rebalance", async () => {
   const { repo, positions } = fakeRepo();
-  await new IndexerService(repo).onDeposit(VAULT, USER, 1_000_000n, 999n);
+  const triggered: string[] = [];
+  const svc = new IndexerService(repo, () => {}, async (v) => void triggered.push(v));
+  await svc.onDeposit(VAULT, USER, 1_000_000n, 999n);
   assert.deepEqual(positions, [
     { vault: VAULT, owner: USER, shares: 999n, assets: 1_000_000n, op: "add" },
   ]);
+  assert.deepEqual(triggered, [VAULT]); // event-driven rebalance fired for this vault
+});
+
+test("onDeposit: a failing rebalance trigger does not break indexing", async () => {
+  const { repo, positions } = fakeRepo();
+  const svc = new IndexerService(repo, () => {}, async () => {
+    throw new Error("rebalance blew up");
+  });
+  await assert.doesNotReject(() => svc.onDeposit(VAULT, USER, 1n, 1n));
+  assert.equal(positions.length, 1); // position still recorded despite the trigger failing
 });
 
 test("onWithdraw reduces shares", async () => {
@@ -158,7 +209,7 @@ test("onRiskPreferenceUpdated persists the mapped risk update", async () => {
 test("deposit/withdraw/risk handlers broadcast WS events", async () => {
   const { repo } = fakeRepo();
   const events: { type: string }[] = [];
-  const svc = new IndexerService(repo, (e) => events.push(e));
+  const svc = new IndexerService(repo, (e) => events.push(e), async () => {});
   await svc.onDeposit(VAULT, USER, 1n, 1n);
   await svc.onWithdraw(VAULT, USER, 1n, 1n);
   await svc.onRiskPreferenceUpdated(VAULT, 1, 0, 0, 0);
