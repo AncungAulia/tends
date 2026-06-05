@@ -5,15 +5,15 @@ import { tendsMemory } from "./memory.js";
 import { tendsReadTools, tendsActionTools } from "./tools.js";
 
 /**
- * Reliable tool-calling model (gpt-4o via OpenRouter) for the ACTION agent. Unlike
+ * Reliable tool-calling model (gpt-4o via GitHub Models) for the ACTION agent. Unlike
  * Hermes — which hallucinates write-tool success — gpt-4o actually invokes tools, so
- * this agent can DO things, not just advise. OpenRouter is plain OpenAI-compatible
- * (no frame filter needed).
+ * this agent can DO things, not just advise. GitHub Models is plain OpenAI-compatible
+ * (auth = a GitHub PAT with models:read).
  */
 const actionModel = createOpenAICompatible({
-  name: "openrouter",
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: env.OPENROUTER_API_KEY,
+  name: "github-models",
+  baseURL: env.ACTION_AGENT_BASE_URL,
+  apiKey: env.GITHUB_TOKEN,
 }).chatModel(env.ACTION_AGENT_MODEL);
 
 const INSTRUCTIONS = [

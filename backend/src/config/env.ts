@@ -119,9 +119,11 @@ export const envSchema = z.object({
   HERMES_API_KEY: z.string().default("change-me-local-dev"),
   HERMES_MODEL: z.string().default("hermes-agent"),
   OPENROUTER_KEY: z.string().default(""),
-  // Reliable model for the ACTION agent (gpt-4o via OpenRouter) — calls tools properly,
-  // unlike Hermes which hallucinates write-tool success.
   OPENROUTER_API_KEY: z.string().default(""),
+  // Reliable model for the ACTION agent (gpt-4o via GitHub Models) — calls tools
+  // properly, unlike Hermes which hallucinates write-tool success.
+  GITHUB_TOKEN: z.string().default(""), // PAT with models:read
+  ACTION_AGENT_BASE_URL: z.string().url().default("https://models.github.ai/inference"),
   ACTION_AGENT_MODEL: z.string().default("openai/gpt-4o"),
   LLM_MODEL: z.string().default("anthropic/claude-sonnet-4.6"),
 
