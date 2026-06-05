@@ -3,19 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard,
   Sparkles,
   History,
   Map,
   User,
-  ChevronDown,
+  PanelLeftClose,
 } from "lucide-react";
-import { tokenColor } from "@/components/preview/TokenIcon";
 
 /* Shared sidebar for the /preview app shell.
-   Real navigation: each item routes to its preview page, active = current path. */
+   Collapses into an icon rail. Collapse = the PanelLeftClose button; expand =
+   click the empty space between the nav and the profile. The trick for a smooth
+   collapse: keep the SAME px-3 padding in both states so the icon never moves
+   horizontally — only the width and the label change. State lives here so it
+   survives navigation (the layout keeps this mounted across page changes). */
 
 const NAV = [
   { label: "Overview", href: "/preview/overview", icon: LayoutDashboard },
@@ -44,77 +46,51 @@ function Blockie() {
   );
 }
 
-const HOLDINGS = [
-  { sym: "mUSD", pct: 40, val: "$4,972" },
-  { sym: "mETH", pct: 30, val: "$3,729" },
-  { sym: "cmETH", pct: 30, val: "$3,729" },
-];
-
-// collapsible holdings peek — glance at the vault from any page
-function Holdings() {
-  const [open, setOpen] = useState(false);
+// label that slides out on hover while the rail is collapsed
+function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border-[1.25px] border-[#E8EAEC] bg-white">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-xs font-semibold text-[#0C1A2B]"
-      >
-        Holdings
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-[#94A3B8] transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            className="overflow-hidden"
-          >
-            <div className="space-y-2 px-3 pb-3">
-              <div className="flex h-1.5 overflow-hidden rounded-full">
-                {HOLDINGS.map((h) => (
-                  <div
-                    key={h.sym}
-                    style={{ flexGrow: h.pct, background: tokenColor(h.sym) }}
-                  />
-                ))}
-              </div>
-              {HOLDINGS.map((h) => (
-                <div key={h.sym} className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[0.6875rem] font-medium text-[#0C1A2B]">
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: tokenColor(h.sym) }}
-                    />
-                    {h.sym}
-                  </span>
-                  <span className="text-[0.6875rem] text-[#94A3B8]">
-                    {h.pct}% · {h.val}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+    <span className="pointer-events-none absolute left-[calc(100%+0.6rem)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#0C1A2B] px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+      {children}
+    </span>
   );
 }
 
 export function PreviewSidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col self-start border-r-[1.5px] border-[#E8EAEC] bg-[#F9FBFC] px-3 py-5 md:flex">
-      <div className="flex items-center gap-2 px-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon/tends-black.svg" alt="Tends" className="h-7 w-auto" />
-        <span className="text-lg font-bold tracking-tight text-[#0C1A2B]">
-          Tends
-        </span>
+    <aside
+      className={`sticky top-0 hidden h-screen shrink-0 flex-col self-start border-r-[1.5px] border-[#E8EAEC] bg-[#F9FBFC] px-3 py-5 transition-[width] duration-200 ease-out md:flex ${
+        collapsed ? "w-16" : "w-52"
+      }`}
+    >
+      {/* brand + collapse button (button shows only when expanded) */}
+      <div className="flex items-center justify-between px-3">
+        <div className="flex items-center gap-2 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon/tends-black.svg"
+            alt="Tends"
+            className="h-4 w-4 shrink-0"
+          />
+          {!collapsed && (
+            <span className="whitespace-nowrap text-lg font-bold tracking-tight text-[#0C1A2B]">
+              Tends
+            </span>
+          )}
+        </div>
+        {!collapsed && (
+          <button
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse sidebar"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5B7490] transition-colors hover:bg-white hover:text-[#0C1A2B]"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
       </div>
+
       <nav className="mt-6 flex flex-col gap-1">
         {NAV.map((n) => {
           const active = pathname === n.href;
@@ -123,34 +99,54 @@ export function PreviewSidebar() {
             <Link
               key={n.label}
               href={n.href}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                collapsed ? "" : "overflow-hidden"
+              } ${
                 active
                   ? "bg-[#EAF4FC] font-semibold text-[#1591DC]"
                   : "text-[#5B7490] hover:bg-white hover:text-[#0C1A2B]"
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.3 : 2} />
-              {n.label}
+              {collapsed ? (
+                <Tip>{n.label}</Tip>
+              ) : (
+                <span className="whitespace-nowrap">{n.label}</span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto space-y-3 pt-3">
-        <Holdings />
-        <Link
-          href="/preview/account"
-          className="flex items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-white"
-        >
-          <Blockie />
-          <div className="min-w-0">
+      {/* the gap between nav and profile — click it to expand when collapsed */}
+      {collapsed ? (
+        <button
+          onClick={() => setCollapsed(false)}
+          aria-label="Expand sidebar"
+          className="flex-1 cursor-pointer"
+        />
+      ) : (
+        <div className="flex-1" />
+      )}
+
+      <Link
+        href="/preview/account"
+        className={`group relative flex items-center gap-2.5 rounded-lg px-1 py-1 transition-colors hover:bg-white ${
+          collapsed ? "" : "overflow-hidden"
+        }`}
+      >
+        <Blockie />
+        {collapsed ? (
+          <Tip>ancung.eth</Tip>
+        ) : (
+          <div className="min-w-0 whitespace-nowrap">
             <p className="truncate text-xs font-semibold text-[#0C1A2B]">
               ancung.eth
             </p>
             <p className="text-[0.625rem] text-[#5B7490]">0x3f4a...c82b</p>
           </div>
-        </Link>
-      </div>
+        )}
+      </Link>
     </aside>
   );
 }
