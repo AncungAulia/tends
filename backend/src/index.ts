@@ -18,7 +18,7 @@ import { txRouter } from "./api/routes/tx.js";
 import { agentRouter } from "./api/routes/agent.js";
 import { authRouter } from "./api/routes/auth.js";
 import { apyRouter } from "./api/routes/apy.js";
-import { chatV2Router } from "./api/routes/chat-v2.js";
+import { chatV2Router, actionChatRouter } from "./api/routes/chat-v2.js";
 import { rateLimit } from "./api/rate-limit.js";
 
 const log = childLogger("server");
@@ -53,8 +53,8 @@ app.route("/api/projection", projectionRouter);
 app.route("/api/apy", apyRouter);
 // /api/chat now serves the Mastra agent (Hermes model + Supabase "grow with user"
 // memory + 7 portfolio tools). /api/chat-v2 kept as an alias for compatibility.
-app.route("/api/chat", chatV2Router);
-app.route("/api/chat-v2", chatV2Router);
+app.route("/api/chat", chatV2Router); // Hermes read+advisory agent (persona)
+app.route("/api/chat-v2", actionChatRouter); // gpt-4o action agent (reads + executes)
 app.route("/api/users/me", usersRouter);
 app.route("/api/users/me", txRouter);
 app.route("/api/users/me", agentRouter); // agent config/guardrails, run-now, holdings, portfolio, prefs
