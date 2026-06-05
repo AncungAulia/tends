@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { TrendingUp, ArrowUpRight } from "lucide-react";
+import {
+  TrendingUp,
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { TokenIcon, tokenColor } from "@/components/preview/TokenIcon";
@@ -295,37 +300,73 @@ const HOLDINGS = [
   {
     sym: "cmETH",
     name: "Mantle LST",
-    pct: 40,
-    val: 4972,
+    pct: 30,
+    val: 3729,
+    qty: 1.151,
+    qDec: 3,
     delta: "+0.8%",
-    bar: "#2C5EAD",
-    w: "80%",
-    icon: "bg-[#EAF4FC] text-[#2C5EAD]",
   },
   {
     sym: "sUSDe",
     name: "Ethena",
-    pct: 35,
-    val: 4351,
+    pct: 22,
+    val: 2735,
+    qty: 2733,
+    qDec: 0,
     delta: "+0.1%",
-    bar: "#1591DC",
-    w: "70%",
-    icon: "bg-[#EAF4FC] text-[#1591DC]",
   },
   {
     sym: "USDC",
     name: "Stablecoin",
-    pct: 25,
-    val: 3107,
+    pct: 16,
+    val: 1989,
+    qty: 1989,
+    qDec: 0,
     delta: "—",
-    bar: "#4BB8FA",
-    w: "50%",
-    icon: "bg-[#EAF4FC] text-[#4BB8FA]",
+  },
+  {
+    sym: "mETH",
+    name: "Mantle ETH",
+    pct: 13,
+    val: 1616,
+    qty: 0.505,
+    qDec: 3,
+    delta: "+0.5%",
+  },
+  {
+    sym: "USDY",
+    name: "Ondo yield",
+    pct: 11,
+    val: 1367,
+    qty: 1353,
+    qDec: 0,
+    delta: "+0.2%",
+  },
+  {
+    sym: "WMNT",
+    name: "Wrapped MNT",
+    pct: 8,
+    val: 994,
+    qty: 1228,
+    qDec: 0,
+    delta: "-0.3%",
   },
 ];
 
 function Holdings() {
   const [hover, setHover] = useState<number | null>(null);
+  const [unit, setUnit] = useState<"usd" | "token">("usd");
+  const [page, setPage] = useState(0);
+  const [dir, setDir] = useState(1);
+
+  const PER = 3;
+  const pages = Math.ceil(HOLDINGS.length / PER);
+  const rows = HOLDINGS.slice(page * PER, page * PER + PER);
+
+  function go(next: number) {
+    setDir(next > page ? 1 : -1);
+    setPage(next);
+  }
 
   const centerPct =
     hover === null
@@ -333,27 +374,54 @@ function Holdings() {
       : HOLDINGS.slice(0, hover).reduce((s, h) => s + h.pct, 0) +
         HOLDINGS[hover].pct / 2;
 
-  // legend shows only the top 3 holdings (the bar still reflects all of them)
-  const shown = HOLDINGS.slice(0, 3);
-
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
+      className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
-          Your Holdings
-        </p>
-        <Link
-          href="/preview/plan"
-          aria-label="Open plan"
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]"
-        >
-          <ArrowUpRight className="h-4 w-4" />
-        </Link>
+      {/* header: title + value-unit toggle (no more link out — holdings is "now") */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 truncate text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+            Your Holdings
+          </p>
+          <div className="flex items-center justify-center gap-0 ">
+            <button
+              onClick={() => go(Math.max(0, page - 1))}
+              disabled={page === 0}
+              aria-label="Previous holdings"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => go(Math.min(pages - 1, page + 1))}
+            disabled={page === pages - 1}
+            aria-label="Next holdings"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex shrink-0 gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5 text-[0.6875rem] font-medium">
+          {(["usd", "token"] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => setUnit(u)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                unit === u
+                  ? "bg-[#EAF4FC] text-[#1591DC]"
+                  : "text-[#5B7490] hover:text-[#0C1A2B]"
+              }`}
+            >
+              {u === "usd" ? "$" : "Ξ"}
+            </button>
+          ))}
+        </div>
       </div>
-      {/* segmented allocation bar — seamless, lightly rounded */}
+
+      {/* segmented allocation bar — reflects ALL holdings, not just this page */}
       <div className="relative">
         <div className="flex h-3.5">
           {HOLDINGS.map((h, i) => (
@@ -377,7 +445,10 @@ function Holdings() {
           {hover !== null && (
             <motion.div
               className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-left shadow-lg"
-              style={{ left: `${centerPct}%`, transformOrigin: "bottom center" }}
+              style={{
+                left: `${centerPct}%`,
+                transformOrigin: "bottom center",
+              }}
               initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
               animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
               exit={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
@@ -387,7 +458,8 @@ function Holdings() {
                 {HOLDINGS[hover].sym}
               </p>
               <p className="text-[0.625rem] text-white/55">
-                {HOLDINGS[hover].pct}% · ${HOLDINGS[hover].val.toLocaleString("en-US")} ·{" "}
+                {HOLDINGS[hover].pct}% · $
+                {HOLDINGS[hover].val.toLocaleString("en-US")} ·{" "}
                 {HOLDINGS[hover].name}
               </p>
             </motion.div>
@@ -395,35 +467,56 @@ function Holdings() {
         </AnimatePresence>
       </div>
 
-      {/* legend (always visible in the bento card) */}
-      <div className="mt-3">
-        {shown.map((h, i) => (
-          <div
-            key={h.sym}
-            className={`flex items-center gap-3 py-2.5 ${i < shown.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
+      {/* paged legend — height follows the 3 rows (both pages have 3) so the
+          card never jumps; popLayout pops the exiting page out of flow during
+          the slide, overflow-hidden clips the horizontal overshoot */}
+      <div className="relative mt-3 flex-1 overflow-hidden">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, x: dir * 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: dir * -28 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
           >
-            <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-[#0C1A2B]">{h.sym}</p>
-              <p className="text-[0.625rem] text-[#5B7490]">{h.name}</p>
-            </div>
-            <span className="w-10 text-right text-xs font-medium text-[#5B7490]">
-              {h.pct}%
-            </span>
-            <div className="w-16 text-right">
-              <p className="flex items-center justify-end text-sm font-semibold text-[#0C1A2B]">
-                <span>$</span>
-                <SlidingNumber number={h.val} />
-              </p>
-              <p
-                className={`text-[0.625rem] ${h.delta === "—" ? "text-[#E8EAEC]" : "text-green-600"}`}
+            {rows.map((h, i) => (
+              <div
+                key={h.sym}
+                className={`flex items-center gap-3 py-2.5 ${i < rows.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
               >
-                {h.delta}
-              </p>
-            </div>
-          </div>
-        ))}
+                <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[#0C1A2B]">
+                    {h.sym}
+                  </p>
+                  <p className="text-[0.625rem] text-[#5B7490]">{h.name}</p>
+                </div>
+                <span className="w-10 text-right text-xs font-medium text-[#5B7490]">
+                  {h.pct}%
+                </span>
+                <div className="w-24 text-right">
+                  {unit === "usd" ? (
+                    <p className="flex items-center justify-end text-sm font-semibold text-[#0C1A2B]">
+                      <span>$</span>
+                      <SlidingNumber number={h.val} />
+                    </p>
+                  ) : (
+                    <p className="flex items-center justify-end gap-1 text-sm font-semibold text-[#0C1A2B]">
+                      <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
+                      <span className="text-[0.625rem] font-medium text-[#94A3B8]">
+                        {h.sym}
+                      </span>
+                    </p>
+                  )}
+                
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
       </div>
+
+      {/* pager: prev · dots · next */}
     </motion.div>
   );
 }
@@ -543,47 +636,50 @@ export default function OverviewPreview() {
   return (
     <>
       <div className="mx-auto max-w-5xl px-8 py-8">
-          {/* title row — actions live up here now */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
-                Overview
-              </h1>
-              <p className="mt-1 text-sm text-[#5B7490]">
-                Where your money sits today.
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <button
-                onClick={() => setModal("withdraw")}
-                className="rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2 text-sm font-medium text-[#5B7490] transition-colors hover:text-[#0C1A2B]"
-              >
-                Withdraw
-              </button>
-              <button
-                onClick={() => setModal("deposit")}
-                className="rounded-full bg-[#1591DC] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-              >
-                Deposit
-              </button>
-            </div>
+        {/* title row — actions live up here now */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+              Overview
+            </h1>
+            <p className="mt-1 text-sm text-[#5B7490]">
+              Where your money sits today.
+            </p>
           </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => setModal("withdraw")}
+              className="rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2 text-sm font-medium text-[#5B7490] transition-colors hover:text-[#0C1A2B]"
+            >
+              Withdraw
+            </button>
+            <button
+              onClick={() => setModal("deposit")}
+              className="rounded-full bg-[#1591DC] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Deposit
+            </button>
+          </div>
+        </div>
 
-          {/* three sections: portfolio (full) · holdings + agent.
+        {/* three sections: portfolio (full) · holdings + agent.
               two cards in the same grid row stay equal height automatically. */}
-          <motion.div
-            className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2"
-            initial="hidden"
-            animate="show"
-            variants={BENTO_CONTAINER}
-          >
-            <PortfolioCard />
-            <Holdings />
-            <AgentCard />
-          </motion.div>
+        <motion.div
+          className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2"
+          initial="hidden"
+          animate="show"
+          variants={BENTO_CONTAINER}
+        >
+          <PortfolioCard />
+          <Holdings />
+          <AgentCard />
+        </motion.div>
       </div>
       <DepositModal open={modal === "deposit"} onClose={() => setModal(null)} />
-      <WithdrawModal open={modal === "withdraw"} onClose={() => setModal(null)} />
+      <WithdrawModal
+        open={modal === "withdraw"}
+        onClose={() => setModal(null)}
+      />
     </>
   );
 }
