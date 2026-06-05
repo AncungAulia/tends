@@ -71,6 +71,7 @@ contract UserVault is
     event Rebalanced(uint256 timestamp, address indexed agent, SwapInstruction[] instructions);
     event RiskPreferenceUpdated(address indexed user, RiskLevel level, uint16 lowBps, uint16 medBps, uint16 highBps);
     event AgentExecutorUpdated(address indexed oldAgent, address indexed newAgent);
+    event MinRebalanceIntervalUpdated(uint256 oldInterval, uint256 newInterval);
     event EmergencyPaused(address indexed by, string reason);
     event EmergencyUnpaused(address indexed by);
 
@@ -81,6 +82,7 @@ contract UserVault is
     error TokenNotAllowed();
     error InvalidAllocationSum();
     error ZeroAmount();
+    error IntervalTooShort();
 
     // === Modifiers ===
 
@@ -294,6 +296,13 @@ contract UserVault is
         address old = agentExecutor;
         agentExecutor = newAgent;
         emit AgentExecutorUpdated(old, newAgent);
+    }
+
+    function setMinRebalanceInterval(uint256 newInterval) external onlyOwner {
+        if (newInterval < 5 minutes) revert IntervalTooShort();
+        uint256 old = minRebalanceInterval;
+        minRebalanceInterval = newInterval;
+        emit MinRebalanceIntervalUpdated(old, newInterval);
     }
 
     function emergencyPause(string calldata reason) external {

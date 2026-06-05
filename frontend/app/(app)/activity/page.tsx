@@ -3,306 +3,17 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Search,
-  TrendingUp,
   ChevronRight,
   ChevronDown,
   X,
   Check,
-  Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import SlidingNumber from "@/components/preview/SlidingNumber";
 
 /* ──────────────────────────────────────────────────────────
-   Activity page mock — Tends
-   Filters · portfolio chart (with agent action markers) · full history
+   Activity page — Tends
+   Filters · full history
    ────────────────────────────────────────────────────────── */
-
-// ─── Chart (portfolio value + agent action markers) ─────────
-
-const DATA = [
-  11800, 11820, 11790, 11850, 11910, 11880, 11950, 12010, 11980, 12060, 12040,
-  12110, 12090, 12150, 12200, 12180, 12130, 12090, 12160, 12230, 12280, 12250,
-  12310, 12290, 12350, 12330, 12290, 12360, 12410, 12430,
-];
-const REBALANCES = [6, 14, 22, 29];
-const TICKS = [4, 11, 18, 25]; // x-axis date ticks (inner, weekly-ish)
-const CHART_H = 220;
-const PADY = 14;
-
-// Catmull-Rom → bezier: smooth line through the points
-function smoothPath(pts: { x: number; y: number }[]) {
-  if (pts.length < 2) return "";
-  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    const c1x = p1.x + (p2.x - p0.x) / 8;
-    const c1y = p1.y + (p2.y - p0.y) / 8;
-    const c2x = p2.x - (p3.x - p1.x) / 8;
-    const c2y = p2.y - (p3.y - p1.y) / 8;
-    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-  }
-  return d;
-}
-
-function Stat({
-  label,
-  value,
-  prefix = "",
-  suffix = "",
-  decimals = 0,
-  tone,
-}: {
-  label: string;
-  value: number;
-  prefix?: string;
-  suffix?: string;
-  decimals?: number;
-  tone?: "pos" | "neg";
-}) {
-  const c =
-    tone === "pos"
-      ? "text-green-600"
-      : tone === "neg"
-        ? "text-orange-600"
-        : "text-[#0C1A2B]";
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-[#5B7490]">{label}</span>
-      <span className={`flex items-center text-sm font-semibold ${c}`}>
-        {prefix}
-        <SlidingNumber className="inline-flex" number={value} decimalPlaces={decimals} />
-        {suffix}
-      </span>
-    </div>
-  );
-}
-
-function StatsChart({ period }: { period: string }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const lineRef = useRef<SVGPathElement>(null);
-  const [w, setW] = useState(680);
-  const [hoverX, setHoverX] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!wrapRef.current) return;
-    const ro = new ResizeObserver((entries) =>
-      setW(entries[0].contentRect.width),
-    );
-    ro.observe(wrapRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  // compute points at the real pixel width — no aspect-ratio stretch
-  const min = Math.min(...DATA);
-  const max = Math.max(...DATA);
-  const range = max - min || 1;
-  const n = DATA.length;
-  const pts = DATA.map((v, i) => ({
-    x: (i / (n - 1)) * (w - 8) + 4,
-    y: CHART_H - PADY - ((v - min) / range) * (CHART_H - PADY * 2),
-  }));
-  const line = smoothPath(pts);
-  const area = `${line} L${pts[n - 1].x.toFixed(1)},${CHART_H} L${pts[0].x.toFixed(1)},${CHART_H} Z`;
-
-  // exact y on the smooth curve at a given x (binary search by path length)
-  function yAtX(targetX: number) {
-    const path = lineRef.current;
-    if (!path) return 0;
-    const len = path.getTotalLength();
-    let lo = 0;
-    let hi = len;
-    for (let k = 0; k < 18; k++) {
-      const mid = (lo + hi) / 2;
-      if (path.getPointAtLength(mid).x < targetX) lo = mid;
-      else hi = mid;
-    }
-    return path.getPointAtLength((lo + hi) / 2).y;
-  }
-
-  // derive hover readout
-  let hv: { x: number; y: number; value: number; date: string } | null = null;
-  if (hoverX !== null) {
-    const frac = Math.max(0, Math.min(1, (hoverX - 4) / (w - 8)));
-    const pos = frac * (n - 1);
-    const i0 = Math.floor(pos);
-    const i1 = Math.min(n - 1, i0 + 1);
-    const t = pos - i0;
-    const value = Math.round(DATA[i0] + (DATA[i1] - DATA[i0]) * t);
-    hv = {
-      x: hoverX,
-      y: yAtX(hoverX),
-      value,
-      date: dateForIndex(Math.round(pos)),
-    };
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-6 rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5 md:grid-cols-[210px_1fr]">
-      {/* left: stats */}
-      <div className="flex flex-col">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#5B7490]">
-          Portfolio Value
-        </p>
-        <div className="mt-1 flex gap-2">
-          <p className="flex items-center text-2xl font-semibold tracking-[-0.04em] text-[#0C1A2B]">
-            <span>$</span>
-            <SlidingNumber number={12430.5} decimalPlaces={2} />
-          </p>
-          <p className="flex items-center gap-1 text-sm font-medium text-green-600">
-            <TrendingUp className="h-4 w-4" strokeWidth={2.2} />
-            <span className="flex items-center">
-              +$<SlidingNumber className="inline-flex" number={630} />
-            </span>
-          </p>
-        </div>
-        <p className="text-[11px] text-[#94A3B8]">over {period}</p>
-
-        <div className="my-4 h-px bg-[#E3EAF2]" />
-
-        <div className="space-y-2.5">
-          <Stat label="Rebalances" value={12} />
-          <Stat label="Deposited" value={2500} prefix="+$" tone="pos" />
-          <Stat label="Withdrawn" value={500} prefix="-$" tone="neg" />
-        </div>
-      </div>
-
-      {/* right: chart */}
-      <div ref={wrapRef} className="relative min-w-0">
-        <svg
-          width={w}
-          height={CHART_H}
-          className="block"
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            setHoverX(
-              Math.max(pts[0].x, Math.min(pts[n - 1].x, e.clientX - rect.left)),
-            );
-          }}
-          onMouseLeave={() => setHoverX(null)}
-        >
-          <defs>
-            <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1591DC" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="#1591DC" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <motion.path
-            d={area}
-            fill="url(#fill)"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.45 }}
-          />
-
-          {/* vertical drop-lines: only as tall as the value at that tick, dashed */}
-          {TICKS.map((i) => (
-            <line
-              key={`grid-${i}`}
-              x1={pts[i].x}
-              y1={pts[i].y}
-              x2={pts[i].x}
-              y2={CHART_H - PADY}
-              stroke="#5B7490"
-              strokeOpacity="0.25"
-              strokeWidth="1"
-              strokeDasharray="3 3"
-            />
-          ))}
-          <motion.path
-            ref={lineRef}
-            d={line}
-            fill="none"
-            stroke="#1591DC"
-            strokeWidth="2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1.1, ease: "easeInOut" }}
-          />
-          {REBALANCES.map((i) => (
-            <circle
-              key={i}
-              cx={pts[i].x}
-              cy={pts[i].y}
-              r="3.5"
-              fill="#fff"
-              stroke="#1591DC"
-              strokeWidth="2"
-            />
-          ))}
-          {hv && (
-            <>
-              <line
-                x1={hv.x}
-                y1={0}
-                x2={hv.x}
-                y2={CHART_H}
-                stroke="#1591DC"
-                strokeOpacity="0.25"
-                strokeWidth="1"
-              />
-              <circle
-                cx={hv.x}
-                cy={hv.y}
-                r="4.5"
-                fill="#1591DC"
-                stroke="#fff"
-                strokeWidth="2"
-              />
-            </>
-          )}
-        </svg>
-        <AnimatePresence>
-          {hv && (
-            <motion.div
-              className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-3 py-2 text-left shadow-lg"
-              style={{
-                left: Math.max(56, Math.min(w - 56, hv.x)),
-                top: hv.y - 12,
-                transformOrigin: "bottom center",
-              }}
-              initial={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
-              animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
-              exit={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
-              transition={{ duration: 0.14, ease: "easeOut" }}
-            >
-              <p className="text-[10px] font-medium text-white/45">
-                Portfolio value
-              </p>
-              <p className="text-sm font-semibold tabular-nums text-white">
-                ${hv.value.toLocaleString("en-US")}
-              </p>
-              <p className="mt-0.5 text-[10px] text-white/50">{hv.date}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {/* x-axis date ticks */}
-        <div className="relative mt-2 h-3.5">
-          {TICKS.map((i) => (
-            <span
-              key={`tick-${i}`}
-              className="absolute -translate-x-1/2 text-[10px] text-[#5B7490]"
-              style={{ left: pts[i].x }}
-            >
-              {dateForIndex(i)}
-            </span>
-          ))}
-        </div>
-        <div className="mt-1 flex justify-center">
-          <span className="flex items-center gap-1.5 text-[10px] text-[#5B7490]">
-            <span className="h-2 w-2 rounded-full border-2 border-[#1591DC] bg-white" />{" "}
-            Agent rebalanced
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const PERIODS = [
   "7 days",
@@ -327,20 +38,9 @@ const MONTHS = [
   "Nov",
   "Dec",
 ];
-const DIM = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 function fmtDate(iso: string) {
   const [, m, d] = iso.split("-").map(Number);
   return `${MONTHS[m - 1]} ${d}`;
-}
-// chart data starts May 3; map a point index to its date label
-function dateForIndex(i: number) {
-  let day = 3 + i;
-  let month = 5;
-  while (day > DIM[month - 1]) {
-    day -= DIM[month - 1];
-    month++;
-  }
-  return `${MONTHS[month - 1]} ${day}`;
 }
 
 function PeriodDropdown({
@@ -765,7 +465,7 @@ function Row({ a, onClick }: { a: Act; onClick: () => void }) {
     a.impactTone === "pos"
       ? "text-green-600"
       : a.impactTone === "neg"
-        ? "text-orange-600"
+        ? "text-red-600"
         : "text-[#94A3B8]";
   return (
     <button
@@ -807,7 +507,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
     act?.impactTone === "pos"
       ? "text-green-600"
       : act?.impactTone === "neg"
-        ? "text-orange-600"
+        ? "text-red-600"
         : "text-[#94A3B8]";
   return (
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
@@ -948,7 +648,7 @@ export default function ActivityPage() {
             <div className="flex items-center gap-2">
               {period === "Custom range" && (
                 <div className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1">
-                  <span className="text-[11px] font-medium text-[#94A3B8]">
+                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
                     From
                   </span>
                   <input
@@ -957,7 +657,7 @@ export default function ActivityPage() {
                     onChange={(e) => setFrom(e.target.value)}
                     className="bg-transparent text-xs text-[#0C1A2B] outline-none [color-scheme:light]"
                   />
-                  <span className="text-[11px] font-medium text-[#94A3B8]">
+                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
                     to
                   </span>
                   <input
@@ -968,16 +668,7 @@ export default function ActivityPage() {
                   />
                 </div>
               )}
-              <PeriodDropdown value={period} onChange={setPeriod} />
-              <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3.5 py-1.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]">
-                <Download className="h-3.5 w-3.5" /> Export
-              </button>
             </div>
-          </div>
-
-          {/* Stats + chart */}
-          <div className="mb-6">
-            <StatsChart period={periodLabel} />
           </div>
 
           {/* Filters */}

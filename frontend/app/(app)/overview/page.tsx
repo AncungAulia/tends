@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { TokenIcon, tokenColor } from "@/components/preview/TokenIcon";
 import { DepositModal, WithdrawModal } from "@/components/preview/MoneyModals";
 import SlidingNumber from "@/components/preview/SlidingNumber";
+import { usePrivy } from "@privy-io/react-auth";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useUserVault } from "@/hooks/useUserVault";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useVaultHoldings } from "@/hooks/useVaultHoldings";
 import { useActivity, type ActivityEntry } from "@/hooks/useActivityLog";
 import { useStrategies } from "@/hooks/useStrategies";
 import { useVaultStore } from "@/hooks/useVaultStore";
+import { apiFetch } from "@/lib/api";
 
 /* ──────────────────────────────────────────────────────────
    Overview page — Tends
@@ -40,7 +43,7 @@ const RANGE_MS: Record<string, number> = {
   "90D": 90 * 86_400_000,
   "1Y": 365 * 86_400_000,
 };
-const RANGE_PTS: Record<string, number> = { "7D": 7, "30D": 30, "90D": 30, "1Y": 52 };
+const RANGE_PTS: Record<string, number> = { "7D": 7, "30D": 30, "90D": 45, "1Y": 52 };
 
 // Smooth series from startValue → endValue with light Gaussian-like variance.
 // Seeded so SSR and client renders produce the same values (no hydration flash).
@@ -138,11 +141,9 @@ function smoothPath(pts: { x: number; y: number }[]) {
 
 function PortfolioChart({
   data,
-  rebalances,
   range,
 }: {
   data: number[];
-  rebalances: number[];
   range: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -197,7 +198,14 @@ function PortfolioChart({
   }
 
   return (
-    <div ref={ref} className="relative min-w-0">
+    <motion.div
+      ref={ref}
+      className="relative min-w-0"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18, ease: "easeInOut" }}
+    >
       <svg
         width="100%"
         height={CHART_H}
@@ -233,17 +241,6 @@ function PortfolioChart({
           animate={{ pathLength: 1 }}
           transition={{ duration: 1.1, ease: "easeInOut" }}
         />
-        {rebalances.map((i) => (
-          <circle
-            key={i}
-            cx={pts[i]?.x ?? 0}
-            cy={pts[i]?.y ?? 0}
-            r="3.5"
-            fill="#fff"
-            stroke="#1591DC"
-            strokeWidth="2"
-          />
-        ))}
         {hv && (
           <>
             <line
@@ -276,7 +273,7 @@ function PortfolioChart({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
@@ -284,6 +281,7 @@ function PortfolioChart({
 
 function PortfolioCard() {
   const { address } = useAccount();
+  const { getAccessToken } = usePrivy();
   const { vaultAddress, initialDeposit } = useUserVault();
   const { totalAssetsUSDC, riskPreference } = usePortfolio(vaultAddress, address);
   const { totalValueUSD } = useVaultHoldings(vaultAddress);
@@ -291,11 +289,29 @@ function PortfolioCard() {
   const { activities } = useActivity();
   const [range, setRange] = useState("30D");
 
+  // Real historical PnL snapshots from backend (hourly, taken by pnl-snapshot job)
+  const { data: pnlData } = useQuery({
+    queryKey: ["pnl", range],
+    queryFn: async () => {
+      const token = await getAccessToken();
+      return apiFetch<{
+        initialDepositUsd: number;
+        points: { t: number; valueUsd: number }[];
+      }>(`/api/users/me/pnl?range=${range.toLowerCase()}`, token);
+    },
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+
   // Prefer oracle-priced total; fall back to on-chain totalAssets
   const currentValue = totalValueUSD > 0 ? totalValueUSD : totalAssetsUSDC;
   const depositedUSD = initialDeposit ? Number(initialDeposit) / 1e6 : 0;
-  // Anchor: if no deposit history, nudge start slightly below current
-  const startValue = depositedUSD > 0 ? depositedUSD : currentValue * 0.97;
+  const startValue = (() => {
+    if (depositedUSD > 0) return depositedUSD;
+    if ((pnlData?.initialDepositUsd ?? 0) > 0) return pnlData!.initialDepositUsd;
+    const first = pnlData?.points?.[0]?.valueUsd;
+    return first && first > 0 ? first : currentValue * 0.97;
+  })();
 
   const pctChange =
     startValue > 0 && currentValue > 0
@@ -307,15 +323,22 @@ function PortfolioCard() {
   const apy = strategies.find((s) => s.id === strategyId)?.blendedApyPct ?? null;
 
   const pts = RANGE_PTS[range] ?? 30;
-  const chartData = useMemo(
-    () => buildChartSeries(startValue, currentValue, pts),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [startValue, currentValue, pts],
-  );
-  const chartRebalances = useMemo(
-    () => buildRebalanceIndices(activities, range, pts),
-    [activities, range, pts],
-  );
+  // Prepend range-proportional flat padding at deposit value so each range
+  // looks visually distinct even when real snapshot history is short.
+  const chartData = useMemo(() => {
+    if (pnlData?.points && pnlData.points.length >= 2) {
+      const real = [...pnlData.points.map((p) => p.valueUsd), currentValue];
+      const rangeMs = RANGE_MS[range] ?? RANGE_MS["30D"];
+      const dataFraction = Math.min(1, (Date.now() - pnlData.points[0]!.t * 1000) / rangeMs);
+      if (dataFraction < 0.85) {
+        const padCount = Math.round(pts * (1 - dataFraction));
+        const padVal = startValue > 0 ? startValue : real[0]!;
+        return [...Array<number>(padCount).fill(padVal), ...real];
+      }
+      return real;
+    }
+    return buildChartSeries(startValue, currentValue, pts);
+  }, [pnlData, currentValue, startValue, pts, range]);
 
   return (
     <motion.div
@@ -369,7 +392,9 @@ function PortfolioCard() {
           </p>
         </div>
         <div className="pl-6">
-          <PortfolioChart data={chartData} rebalances={chartRebalances} range={range} />
+          <AnimatePresence mode="wait">
+            <PortfolioChart key={range} data={chartData} range={range} />
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>
@@ -382,55 +407,97 @@ function Holdings() {
   const vaultAddress = useVaultStore((s) => s.vaultAddress);
   const { holdings, totalValueUSD, isLoading } = useVaultHoldings(vaultAddress);
   const [hover, setHover] = useState<number | null>(null);
+  const [unit, setUnit] = useState<"usd" | "token">("usd");
+  const [page, setPage] = useState(0);
+  const [dir, setDir] = useState(1);
 
-  const shown = holdings
-    .slice(0, 3)
-    .map((h) => ({
-      sym: h.symbol,
-      name: h.symbol,
-      pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 100) : 0,
-      val: h.valueUSD ?? 0,
-    }));
+  const allHoldings = holdings.map((h) => ({
+    sym: h.symbol,
+    pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 100) : 0,
+    val: h.valueUSD ?? 0,
+    qty: h.balanceHuman,
+    qDec: h.decimals === 6 ? 0 : 4,
+  }));
+
+  const PER = 3;
+  const pages = Math.max(1, Math.ceil(allHoldings.length / PER));
+  const rows = allHoldings.slice(page * PER, page * PER + PER);
+
+  function go(next: number) {
+    setDir(next > page ? 1 : -1);
+    setPage(next);
+  }
 
   const centerPct =
     hover === null
       ? 0
-      : shown.slice(0, hover).reduce((s, h) => s + h.pct, 0) + shown[hover].pct / 2;
+      : allHoldings.slice(0, hover).reduce((s, h) => s + h.pct, 0) +
+        (allHoldings[hover]?.pct ?? 0) / 2;
 
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
+      className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
-          Your Holdings
-        </p>
-        <Link
-          href="/plan"
-          aria-label="Open plan"
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]"
-        >
-          <ArrowUpRight className="h-4 w-4" />
-        </Link>
+      {/* header: title + pagination + toggle */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+            Your Holdings
+          </p>
+          <div className="flex items-center justify-center gap-0">
+            <button
+              onClick={() => go(Math.max(0, page - 1))}
+              disabled={page === 0}
+              aria-label="Previous holdings"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => go(Math.min(pages - 1, page + 1))}
+            disabled={page === pages - 1}
+            aria-label="Next holdings"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex shrink-0 gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5 text-[11px] font-medium">
+          {(["usd", "token"] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => setUnit(u)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                unit === u
+                  ? "bg-[#EAF4FC] text-[#1591DC]"
+                  : "text-[#5B7490] hover:text-[#0C1A2B]"
+              }`}
+            >
+              {u === "usd" ? "$" : "Ξ"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
         <div className="h-3.5 animate-pulse rounded-full bg-[#E8EAEC]" />
-      ) : shown.length === 0 ? (
+      ) : allHoldings.length === 0 ? (
         <p className="text-xs text-[#94A3B8]">No holdings yet. Deposit to get started.</p>
       ) : (
         <>
+          {/* segmented allocation bar — all holdings, not just this page */}
           <div className="relative">
             <div className="flex h-3.5">
-              {shown.map((h, i) => (
+              {allHoldings.map((h, i) => (
                 <div
                   key={h.sym}
                   style={{
                     flexGrow: h.pct,
                     background: tokenColor(h.sym),
                     marginLeft: i === 0 ? 0 : -5,
-                    zIndex: shown.length - i,
+                    zIndex: allHoldings.length - i,
                   }}
                   className="relative basis-0 cursor-pointer rounded-[3px]"
                   onMouseEnter={() => setHover(i)}
@@ -448,36 +515,56 @@ function Holdings() {
                   exit={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
                   transition={{ duration: 0.14, ease: "easeOut" }}
                 >
-                  <p className="text-xs font-semibold text-white">{shown[hover].sym}</p>
+                  <p className="text-xs font-semibold text-white">{allHoldings[hover]?.sym}</p>
                   <p className="text-[10px] text-white/55">
-                    {shown[hover].pct}% · ${shown[hover].val.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                    {allHoldings[hover]?.pct}% · ${allHoldings[hover]?.val.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          <div className="mt-3">
-            {shown.map((h, i) => (
-              <div
-                key={h.sym}
-                className={`flex items-center gap-3 py-2.5 ${i < shown.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
+          {/* paged legend */}
+          <div className="relative mt-3 flex-1 overflow-hidden">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={page}
+                initial={{ opacity: 0, x: dir * 28 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: dir * -28 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
               >
-                <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#0C1A2B]">{h.sym}</p>
-                </div>
-                <span className="w-10 text-right text-xs font-medium text-[#5B7490]">
-                  {h.pct}%
-                </span>
-                <div className="w-16 text-right">
-                  <p className="flex items-center justify-end text-sm font-semibold text-[#0C1A2B]">
-                    <span>$</span>
-                    <SlidingNumber number={h.val} />
-                  </p>
-                </div>
-              </div>
-            ))}
+                {rows.map((h, i) => (
+                  <div
+                    key={h.sym}
+                    className={`flex items-center gap-3 py-2.5 ${i < rows.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
+                  >
+                    <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-[#0C1A2B]">{h.sym}</p>
+                    </div>
+                    <span className="w-10 text-right text-xs font-medium text-[#5B7490]">
+                      {h.pct}%
+                    </span>
+                    <div className="w-24 text-right">
+                      {unit === "usd" ? (
+                        <p className="flex items-center justify-end text-sm font-semibold text-[#0C1A2B]">
+                          <span>$</span>
+                          <SlidingNumber number={h.val} />
+                        </p>
+                      ) : (
+                        <p className="flex items-center justify-end gap-1 text-sm font-semibold text-[#0C1A2B]">
+                          <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
+                          <span className="text-[10px] font-medium text-[#94A3B8]">
+                            {h.sym}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </>
       )}
@@ -489,8 +576,8 @@ function Holdings() {
 
 const ACT_TAG: Record<string, string> = {
   Rebalance: "bg-[#EAF4FC] text-[#1591DC]",
-  Deposit:   "bg-green-50 text-green-600",
-  Withdraw:  "bg-orange-50 text-orange-600",
+  Deposit:   "bg-green-50 text-green-700",
+  Withdraw:  "bg-red-50 text-red-600",
   Monitor:   "bg-[#EDF2F7] text-[#5B7490]",
 };
 
@@ -551,8 +638,8 @@ function AgentCard() {
           <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B]">{riskLabel}</p>
         </div>
         <div className="flex-1 rounded-xl bg-[#F7F9FC] px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8]">Status</p>
-          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B]">{state.label}</p>
+          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8]">Next run</p>
+          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B]">—</p>
         </div>
       </div>
 

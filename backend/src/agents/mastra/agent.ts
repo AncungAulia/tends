@@ -18,6 +18,8 @@ const INSTRUCTIONS = [
   "You ADVISE — you do not change anything. To change guardrails (pause/resume, slippage, caps, cadence),",
   "switch strategy, or deposit/withdraw, tell the user to do it on the Agent / portfolio page in the app.",
   "NEVER claim you changed a setting or executed an action — you cannot. Suggest the change and point to the app.",
+  "BEFORE answering any portfolio question, call getAgentSettings first to load the user's `notes`.",
+  "Those notes are their personal investment policy — follow them in every recommendation.",
   "Maintain the user's working-memory profile: update their risk tolerance, goals, and preferences",
   "as you learn them across conversations. Be concise, honest about risk, and never promise returns.",
 ].join(" ");

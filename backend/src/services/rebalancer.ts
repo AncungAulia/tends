@@ -4,11 +4,12 @@ import { publicClient, getAgentWallet, agentAddress, activeChain } from "../chai
 import { addresses, as0x } from "../chain/addresses.js";
 import {
   USER_VAULT_ABI,
+  USER_VAULT_TX_ABI,
   VAULT_FACTORY_ABI,
   PRICE_FEED_ABI,
   ERC20_ABI,
 } from "../chain/abis.js";
-import { TOKENS } from "../chain/tokens.js";
+import { TOKENS, type TokenSymbol } from "../chain/tokens.js";
 import {
   computeSwapInstructions,
   resolveTargetBps,
@@ -23,11 +24,12 @@ import {
   DEFAULT_AGENT_CONFIG,
   type AgentConfigValue,
 } from "./agent-config.js";
+import { prisma } from "../db/client.js";
 
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
   AgentConfigValue,
-  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps"
+  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps" | "maxPerAssetPct"
 >;
 
 const log = childLogger("rebalancer");
@@ -45,9 +47,10 @@ export interface VaultMeta {
   riskPreference: number;
 }
 
-/** Why a vault was skipped (or that it was rebalanced) — surfaced for tests/telemetry. */
+/** Why a vault was skipped (or that it was rebalanced/liquidated) — surfaced for tests/telemetry. */
 export type VaultOutcome =
-  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" | "unsafe" | "stale" }
+  | { action: "skip"; reason: "paused" | "disabled" | "cooldown" | "balanced" | "unsafe" | "stale" | "daily_limit" }
+  | { action: "liquidated"; hash: `0x${string}` }
   | { action: "rebalanced"; hash: `0x${string}`; swaps: number };
 
 // Injectable dependencies (faked in tests).
@@ -74,6 +77,16 @@ export interface RebalancerDeps {
     instructions: SwapInstruction[],
   ) => Promise<`0x${string}`>;
   now: () => bigint;
+  /** Count REBALANCE activities today (UTC midnight) for a vault — daily-limit guard. */
+  countTodayRebalances: (vault: `0x${string}`) => Promise<number>;
+  /** On-chain UserVault.totalAssets() in USDC 6-dec — for stop-loss valuation. */
+  readTotalAssets: (vault: `0x${string}`) => Promise<bigint>;
+  /** Max totalAssets from VaultSnapshot since `since`; null if no snapshots exist. */
+  readMaxRecentSnapshot: (vault: `0x${string}`, since: Date) => Promise<bigint | null>;
+  /** On-chain agentLiquidate: sell all RWA → USDC (stop-loss exit). */
+  sendLiquidate: (vault: `0x${string}`) => Promise<`0x${string}`>;
+  /** On-chain emergencyPause via agent executor. */
+  sendPause: (vault: `0x${string}`, reason: string) => Promise<`0x${string}`>;
 }
 
 /** Read a vault's current token balances + PriceFeed prices, then plan swaps,
@@ -122,8 +135,20 @@ export async function defaultBuildInstructions(
   }
 
   let targetBps = resolveTargetBps(risk as 0 | 1 | 2 | 3, custom);
-  if (guardrails.perTokenCapsBps) {
-    targetBps = clampTargetToCaps(targetBps, guardrails.perTokenCapsBps);
+
+  // Merge maxPerAssetPct (global %) with perTokenCapsBps (per-token): take the minimum per token.
+  const globalCapBps = guardrails.maxPerAssetPct != null ? guardrails.maxPerAssetPct * 100 : null;
+  if (globalCapBps != null || guardrails.perTokenCapsBps) {
+    const effectiveCaps: Partial<Record<TokenSymbol, number>> = {};
+    if (globalCapBps != null) {
+      for (const sym of Object.keys(TOKENS) as TokenSymbol[]) {
+        const perToken = guardrails.perTokenCapsBps?.[sym];
+        effectiveCaps[sym] = perToken !== undefined ? Math.min(perToken, globalCapBps) : globalCapBps;
+      }
+    } else {
+      Object.assign(effectiveCaps, guardrails.perTokenCapsBps);
+    }
+    targetBps = clampTargetToCaps(targetBps, effectiveCaps);
   }
 
   // drift threshold raises the dust floor: only act if drift exceeds X% of portfolio
@@ -225,6 +250,49 @@ export const defaultRebalancerDeps: RebalancerDeps = {
     });
   },
   now: () => BigInt(Math.floor(Date.now() / 1000)),
+  async countTodayRebalances(vault) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    return prisma.agentActivity.count({
+      where: { vaultAddress: vault, action: "REBALANCE", timestamp: { gte: startOfDay } },
+    });
+  },
+  async readTotalAssets(vault) {
+    return publicClient.readContract({
+      address: vault,
+      abi: USER_VAULT_ABI,
+      functionName: "totalAssets",
+    });
+  },
+  async readMaxRecentSnapshot(vault, since) {
+    const row = await prisma.vaultSnapshot.aggregate({
+      where: { vaultAddress: vault, snapshotAt: { gte: since } },
+      _max: { totalAssets: true },
+    });
+    return row._max.totalAssets != null ? BigInt(row._max.totalAssets.toString()) : null;
+  },
+  async sendLiquidate(vault) {
+    const wallet = getAgentWallet();
+    return wallet.writeContract({
+      address: vault,
+      abi: USER_VAULT_ABI,
+      functionName: "agentLiquidate",
+      args: [],
+      chain: activeChain,
+      account: wallet.account!,
+    });
+  },
+  async sendPause(vault, reason) {
+    const wallet = getAgentWallet();
+    return wallet.writeContract({
+      address: vault,
+      abi: USER_VAULT_TX_ABI,
+      functionName: "emergencyPause",
+      args: [reason],
+      chain: activeChain,
+      account: wallet.account!,
+    });
+  },
 };
 
 /**
@@ -268,6 +336,35 @@ export class RebalancerService {
       return { action: "skip", reason: "stale" };
     }
 
+    // Daily rebalance limit: count today's REBALANCE activities.
+    if (config.dailyLimitPerDay != null) {
+      const todayCount = await this.deps.countTodayRebalances(vault);
+      if (todayCount >= config.dailyLimitPerDay) {
+        log.info({ vault, todayCount, limit: config.dailyLimitPerDay }, "daily rebalance limit reached, skip");
+        return { action: "skip", reason: "daily_limit" };
+      }
+    }
+
+    // Stop-loss: compare current portfolio value to 7-day rolling peak.
+    if (config.stopLossEnabled && config.stopLossPct != null) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [currentAssets, peakAssets] = await Promise.all([
+        this.deps.readTotalAssets(vault),
+        this.deps.readMaxRecentSnapshot(vault, sevenDaysAgo),
+      ]);
+      if (peakAssets != null && peakAssets > 0n && currentAssets < peakAssets) {
+        const dropBps = ((peakAssets - currentAssets) * 10_000n) / peakAssets;
+        if (dropBps >= BigInt(config.stopLossPct * 100)) {
+          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered — liquidating");
+          const hash = await this.deps.sendLiquidate(vault);
+          await this.deps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch((e) =>
+            log.error({ vault, err: e }, "stop-loss pause failed"),
+          );
+          return { action: "liquidated", hash };
+        }
+      }
+    }
+
     const instructions = await this.deps.buildInstructions(
       vault,
       meta.riskPreference,
@@ -301,6 +398,25 @@ export class RebalancerService {
     if (!(await this.deps.arePricesFresh())) {
       log.warn({ vault }, "manual rebalance: price feeds stale, skip");
       return { action: "skip", reason: "stale" };
+    }
+    // Stop-loss: also enforce on manual runs — don't rebalance into a losing position.
+    if (config.stopLossEnabled && config.stopLossPct != null) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [currentAssets, peakAssets] = await Promise.all([
+        this.deps.readTotalAssets(vault),
+        this.deps.readMaxRecentSnapshot(vault, sevenDaysAgo),
+      ]);
+      if (peakAssets != null && peakAssets > 0n && currentAssets < peakAssets) {
+        const dropBps = ((peakAssets - currentAssets) * 10_000n) / peakAssets;
+        if (dropBps >= BigInt(config.stopLossPct * 100)) {
+          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered on manual run — liquidating");
+          const hash = await this.deps.sendLiquidate(vault);
+          await this.deps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch((e) =>
+            log.error({ vault, err: e }, "stop-loss pause failed"),
+          );
+          return { action: "liquidated", hash };
+        }
+      }
     }
     const instructions = await this.deps.buildInstructions(vault, meta.riskPreference, config);
     if (instructions.length === 0) return { action: "skip", reason: "balanced" };
