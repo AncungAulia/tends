@@ -79,6 +79,10 @@ const configBody = z.object({
   maxSlippageBps: z.number().int().min(0).max(5_000).optional(),
   perTokenCapsBps: z.record(z.string(), z.number().int().min(0).max(10_000)).nullable().optional(),
   notes: z.string().max(1_000).nullable().optional(),
+  maxPerAssetPct: z.number().int().min(1).max(100).nullable().optional(),
+  dailyLimitPerDay: z.number().int().min(1).max(100).nullable().optional(),
+  stopLossEnabled: z.boolean().optional(),
+  stopLossPct: z.number().int().min(1).max(100).nullable().optional(),
 });
 
 /**

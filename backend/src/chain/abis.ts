@@ -85,6 +85,14 @@ export const USER_VAULT_TX_ABI = [
     inputs: [{ name: "reason", type: "string" }],
     outputs: [],
   },
+  {
+    // onlyAgent — called by backend before returning withdraw tx
+    name: "agentLiquidate",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
 ] as const;
 
 export const VAULT_FACTORY_TX_ABI = [
@@ -264,6 +272,14 @@ export const USER_VAULT_ABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [SWAP_INSTRUCTION],
+    outputs: [],
+  },
+  {
+    // onlyAgent — called by backend before returning withdraw tx
+    name: "agentLiquidate",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
     outputs: [],
   },
   {

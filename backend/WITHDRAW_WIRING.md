@@ -47,7 +47,7 @@ Mantlescan        : https://sepolia.mantlescan.xyz/address/0xbb06c7f1a4f6c85472e
 
 ---
 
-## Step 2: Tambahkan ABI ke backend
+## Step 2: Tambahkan ABI ke backend ✅ SUDAH SELESAI
 
 Di `backend/src/chain/abis.ts`, tambahkan ke `USER_VAULT_ABI`:
 
@@ -76,9 +76,9 @@ Dan tambahkan ke `USER_VAULT_TX_ABI` juga (untuk encoding tx):
 
 ---
 
-## Step 3: Wire `/prepare-withdraw` di backend
+## Step 3: Wire `/prepare-withdraw` di backend ✅ SUDAH SELESAI
 
-Di `backend/src/api/routes/tx.ts`, ganti handler `prepare-withdraw`:
+Di `backend/src/api/routes/tx.ts`, handler `prepare-withdraw` sudah diganti:
 
 ```typescript
 r.post("/prepare-withdraw", async (c) => {
@@ -99,10 +99,9 @@ r.post("/prepare-withdraw", async (c) => {
     abi: USER_VAULT_TX_ABI,
     functionName: "agentLiquidate",
     args: [],
+    chain: activeChain,
+    account: agent.account!,
   });
-
-  // Tunggu sampai confirmed
-  const { publicClient } = await import("../../chain/index.js");
   await publicClient.waitForTransactionReceipt({ hash: liquidateTxHash });
 
   // ── 3. Baca USDC balance SETELAH liquidasi ────────────────
@@ -115,23 +114,20 @@ r.post("/prepare-withdraw", async (c) => {
     args: [vaultAddr],
   }) as bigint;
 
-  const usdcDecimals = 6;
-  const usdcBalanceHuman = Number(usdcBalance) / 10 ** usdcDecimals;
+  const usdcBalanceHuman = Number(usdcBalance) / 10 ** 6;
 
-  // Clamp: jangan minta lebih dari yang tersedia
-  const safeAmount = Math.min(amount, usdcBalanceHuman * 0.999); // 0.1% buffer
+  // Clamp: jangan minta lebih dari yang tersedia (0.1% buffer untuk slippage)
+  const safeAmount = Math.min(amount, usdcBalanceHuman * 0.999);
 
   // ── 4. Return withdraw tx untuk user sign ─────────────────
   return c.json({ tx: tx.prepareWithdraw(vaultAddr, ownerAddr, safeAmount) });
 });
 ```
 
-### Import yang dibutuhkan
-
-Tambahkan di atas file `tx.ts`:
+### Import yang ditambahkan di atas file `tx.ts`
 
 ```typescript
-import { getAgentWallet, publicClient } from "../../chain/index.js";
+import { getAgentWallet, publicClient, activeChain } from "../../chain/index.js";
 import { USER_VAULT_TX_ABI, ERC20_ABI } from "../../chain/abis.js";
 import { TOKENS } from "../../chain/tokens.js";
 import { as0x } from "../../chain/addresses.js";
@@ -139,7 +135,7 @@ import { as0x } from "../../chain/addresses.js";
 
 ---
 
-## Step 4: Validasi response shape
+## Step 4: Validasi response shape ✅ SUDAH SELESAI
 
 Response dari `/prepare-withdraw` tetap sama — frontend tidak perlu berubah:
 

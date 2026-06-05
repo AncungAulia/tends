@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { decodeFunctionData } from "viem";
-import { makeTxRouter } from "./tx.js";
+import { makeTxRouter, type TxDeps } from "./tx.js";
 import { makeAuthMiddleware } from "../auth.js";
 import { USER_VAULT_TX_ABI } from "../../chain/abis.js";
 
@@ -12,16 +12,22 @@ const decode = (s: Step) => decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: s
 const VAULT = "0x00000000000000000000000000000000000000aa";
 const ACCOUNT = "0x00000000000000000000000000000000000000bb";
 
-function app() {
+// Stub: agentLiquidate + USDC balance read — 200 USDC available, no real RPC
+const MOCK_USDC_BALANCE = 200_000_000n; // 200 USDC (6 dec)
+const stubDeps: TxDeps = {
+  agentLiquidateAndBalance: async () => MOCK_USDC_BALANCE,
+};
+
+function app(deps?: TxDeps) {
   const auth = makeAuthMiddleware(async (t) => {
     if (t === "good") return { privyId: "did:privy:1" };
     throw new Error("bad");
   });
-  return new Hono().route("/api/users/me", makeTxRouter(auth));
+  return new Hono().route("/api/users/me", makeTxRouter(auth, deps));
 }
 
-const post = (path: string, body?: unknown, token = "good") =>
-  app().request(`/api/users/me${path}`, {
+const post = (path: string, body?: unknown, token = "good", deps?: TxDeps) =>
+  app(deps).request(`/api/users/me${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -75,10 +81,24 @@ test("POST /prepare-deposit-permit: encodes depositWithPermit from a signature",
   );
 });
 
-test("POST /prepare-withdraw returns one tx", async () => {
-  const res = await post("/prepare-withdraw", { vault: VAULT, account: ACCOUNT, amount: 5 });
+test("POST /prepare-withdraw: agentLiquidate → read balance → encode withdraw tx", async () => {
+  // 200 USDC available; amount 5 < 200 → no clamp
+  const res = await post("/prepare-withdraw", { vault: VAULT, account: ACCOUNT, amount: 5 }, "good", stubDeps);
   assert.equal(res.status, 200);
-  assert.ok((await res.json() as { tx: unknown }).tx);
+  const body = await res.json() as { tx: Step };
+  assert.ok(body.tx, "response must have a tx field");
+  assert.equal(decode(body.tx).functionName, "withdraw");
+});
+
+test("POST /prepare-withdraw: amount clamped when larger than USDC balance", async () => {
+  // 200 USDC available; requesting 999 → clamped to ~199.8
+  const res = await post("/prepare-withdraw", { vault: VAULT, account: ACCOUNT, amount: 999 }, "good", stubDeps);
+  assert.equal(res.status, 200);
+  const body = await res.json() as { tx: Step };
+  assert.equal(decode(body.tx).functionName, "withdraw");
+  // encoded assets (6 dec) must be ≤ 200_000_000 (200 USDC)
+  const [assets] = decode(body.tx).args as [bigint, ...unknown[]];
+  assert.ok(assets <= 200_000_000n, `clamped assets ${assets} should be ≤ 200 USDC`);
 });
 
 test("POST /prepare-switch: preset → single setRiskLevel(level)", async () => {

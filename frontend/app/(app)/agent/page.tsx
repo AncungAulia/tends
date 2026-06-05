@@ -13,9 +13,16 @@ import {
   Search,
   ArrowRight,
 } from "lucide-react";
+import { useAccount } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
+import { useQuery } from "@tanstack/react-query";
 import { tokenColor } from "@/components/preview/TokenIcon";
 import SlidingNumber from "@/components/preview/SlidingNumber";
 import { AgentChat } from "@/components/preview/AgentChat";
+import { useVaultStore } from "@/hooks/useVaultStore";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { useActivity, type ActivityEntry } from "@/hooks/useActivityLog";
+import { apiFetch } from "@/lib/api";
 
 /* ──────────────────────────────────────────────────────────
    Agent page mock — Tends
@@ -562,10 +569,12 @@ function AgentLog({
   running,
   onComplete,
   checkEvery,
+  activities,
 }: {
   running: boolean;
   onComplete: () => void;
   checkEvery: string;
+  activities: ActivityEntry[];
 }) {
   const fSecs = freqSecs(checkEvery);
   const fMins = Math.round(fSecs / 60);
@@ -673,6 +682,39 @@ function AgentLog({
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
+
+  // Build feed from real activity log when data is available
+  useEffect(() => {
+    if (activities.length === 0 || running) return;
+    const now = Date.now();
+    const recent = activities.filter(
+      (a) => a.action === "REBALANCE" || a.action === "DEPOSIT" || a.action === "WITHDRAW",
+    ).slice(0, 5);
+    if (recent.length === 0) return;
+
+    let localId = 200;
+    const entries: LogEntry[] = [
+      { id: localId++, kind: "idle" as const, mins: 0, live: true },
+    ];
+    recent.forEach((a, i) => {
+      const mins = Math.max(1, Math.floor((now - a.timestamp.getTime()) / 60000));
+      const kind = a.action === "REBALANCE" ? ("rebalance" as const) : ("monitor" as const);
+      entries.push({
+        id: localId++,
+        kind,
+        mins,
+        steps: kind === "rebalance" ? REBALANCE_STEPS : MONITOR_VARIANTS[i % MONITOR_VARIANTS.length],
+      });
+      if (i < recent.length - 1) {
+        const nextA = recent[i + 1]!;
+        const nextMins = Math.max(1, Math.floor((now - nextA.timestamp.getTime()) / 60000));
+        entries.push({ id: localId++, kind: "idle" as const, mins: Math.floor((mins + nextMins) / 2) });
+      }
+    });
+    idRef.current = localId + 50;
+    setFeed(entries.slice(0, WINDOW));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities]);
 
   return (
     <div className="overflow-hidden rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white">
@@ -927,21 +969,41 @@ function OperatingCard({
 
 function ControlTab({
   on,
-  setOn,
+  onPauseToggle,
+  onRunNow,
   running,
   setRunning,
+  onRunComplete,
   countdown,
   config,
   onEditGuardrails,
+  rebalanceCount,
+  estApyPct,
+  lastRunTs,
+  activities,
 }: {
   on: boolean;
-  setOn: (f: (v: boolean) => boolean) => void;
+  onPauseToggle: () => void;
+  onRunNow: () => void;
   running: boolean;
   setRunning: (v: boolean) => void;
+  onRunComplete: () => void;
   countdown: number;
   config: AgentConfig;
   onEditGuardrails: () => void;
+  rebalanceCount: number;
+  estApyPct: number | null;
+  lastRunTs: number | null;
+  activities: ActivityEntry[];
 }) {
+  const lastRunStr = (() => {
+    if (!lastRunTs) return "—";
+    const diffSecs = Math.floor(Date.now() / 1000) - lastRunTs;
+    const diffMins = Math.floor(diffSecs / 60);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    return `${Math.floor(diffMins / 60)}h ago`;
+  })();
   return (
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -968,7 +1030,7 @@ function ControlTab({
 
             <div className="mt-4 flex w-[80%] max-w-xs items-center gap-2">
               <button
-                onClick={() => setRunning(true)}
+                onClick={onRunNow}
                 disabled={!on || running}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1591DC] px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
@@ -980,7 +1042,7 @@ function ControlTab({
                 {running ? "Running..." : "Run now"}
               </button>
               <button
-                onClick={() => setOn((v) => !v)}
+                onClick={onPauseToggle}
                 disabled={running}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#E8EAEC] bg-white px-4 py-2.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B] disabled:opacity-40"
               >
@@ -991,22 +1053,26 @@ function ControlTab({
             <div className="mt-auto grid w-full max-w-sm grid-cols-3 gap-3 border-t border-[#E8EAEC] pt-5 text-center">
               <div>
                 <p className="flex justify-center text-lg font-semibold text-[#0C1A2B]">
-                  <SlidingNumber number={47} />
+                  <SlidingNumber number={rebalanceCount} />
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
                   Rebalances
                 </p>
               </div>
               <div>
-                <p className="flex items-center justify-center text-lg font-semibold text-green-600">
-                  +<SlidingNumber number={8.4} decimalPlaces={1} />%
-                </p>
+                {estApyPct !== null ? (
+                  <p className="flex items-center justify-center text-lg font-semibold text-green-600">
+                    +<SlidingNumber number={estApyPct} decimalPlaces={1} />%
+                  </p>
+                ) : (
+                  <p className="text-lg font-semibold text-[#94A3B8]">—</p>
+                )}
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
                   Est. APY
                 </p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-[#0C1A2B]">2h ago</p>
+                <p className="text-lg font-semibold text-[#0C1A2B]">{lastRunStr}</p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-[#5B7490]">
                   Last run
                 </p>
@@ -1034,8 +1100,9 @@ function ControlTab({
         </SectionLabel>
         <AgentLog
           running={running}
-          onComplete={() => setRunning(false)}
+          onComplete={() => { setRunning(false); onRunComplete(); }}
           checkEvery={config.checkEvery}
+          activities={activities}
         />
       </div>
     </div>
@@ -1192,21 +1259,177 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
+// ─── Backend config types & mapping helpers ──────────────────
+
+interface BackendAgentConfig {
+  autoRebalanceEnabled: boolean;
+  cadenceSec: number | null;
+  driftThresholdBps: number | null;
+  maxSlippageBps: number;
+  perTokenCapsBps: Record<string, number> | null;
+  notes: string | null;
+  maxPerAssetPct: number | null;
+  dailyLimitPerDay: number | null;
+  stopLossEnabled: boolean;
+  stopLossPct: number | null;
+}
+
+const CADENCE_SECS: Record<string, number> = {
+  "1h": 3600, "2h": 7200, "4h": 14400, "12h": 43200, "24h": 86400,
+};
+const SECS_TO_PRESET: Record<number, string> = Object.fromEntries(
+  Object.entries(CADENCE_SECS).map(([k, v]) => [v, k]),
+);
+
+function backendToConfig(b: BackendAgentConfig, risk: RiskKey): AgentConfig {
+  return {
+    risk,
+    checkEvery: b.cadenceSec ? (SECS_TO_PRESET[b.cadenceSec] ?? "4h") : "4h",
+    maxPerAsset: b.maxPerAssetPct ?? 50,
+    dailyLimit: b.dailyLimitPerDay ?? 3,
+    minDrift: b.driftThresholdBps != null ? b.driftThresholdBps / 100 : 5,
+    stopLoss: { on: b.stopLossEnabled, value: b.stopLossPct ?? 10 },
+    notes: b.notes ?? DEFAULT_CONFIG.notes,
+  };
+}
+
+function configToBackendPatch(c: AgentConfig): Partial<BackendAgentConfig> {
+  return {
+    cadenceSec: CADENCE_SECS[c.checkEvery] ?? null,
+    driftThresholdBps: c.minDrift > 0 ? Math.round(c.minDrift * 100) : null,
+    notes: c.notes || null,
+    maxPerAssetPct: c.maxPerAsset,
+    dailyLimitPerDay: c.dailyLimit,
+    stopLossEnabled: c.stopLoss.on,
+    stopLossPct: c.stopLoss.on ? c.stopLoss.value : null,
+  };
+}
+
+const MIN_REBALANCE_SECS = 3600; // SC: minRebalanceInterval = 1 hour
+const RISK_NUM_TO_KEY: Record<number, RiskKey> = { 0: "Low", 1: "Medium", 2: "High" };
+
 export default function AgentPage() {
+  // ── On-chain + backend data ───────────────────────────────
+  const { address } = useAccount();
+  const { getAccessToken } = usePrivy();
+  const vaultAddress = useVaultStore((s) => s.vaultAddress);
+  const { paused, lastRebalanceTime, riskPreference, refetch: refetchPortfolio } = usePortfolio(vaultAddress, address);
+  const { activities, refetch: refetchActivities } = useActivity();
+
+  const { data: strategiesData } = useQuery({
+    queryKey: ["strategies"],
+    queryFn: () =>
+      apiFetch<{ strategies: Array<{ id: string; blendedApyPct: number | null }> }>(
+        "/api/strategies",
+        null,
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: agentConfigData } = useQuery({
+    queryKey: ["agent-config", vaultAddress],
+    queryFn: async () => {
+      const token = await getAccessToken();
+      return apiFetch<BackendAgentConfig>("/api/users/me/agent-config", token);
+    },
+    enabled: !!vaultAddress,
+    staleTime: 30_000,
+  });
+
+  const lastRunTs = lastRebalanceTime ? Number(lastRebalanceTime) : null;
+  const rebalanceCount = activities.filter((a) => a.action === "REBALANCE").length;
+  const realRisk: RiskKey = riskPreference !== undefined
+    ? (RISK_NUM_TO_KEY[riskPreference] ?? "Medium")
+    : DEFAULT_CONFIG.risk;
+  const stratIdMap = ["LOW", "MEDIUM", "HIGH", "CUSTOM"] as const;
+  const stratId = stratIdMap[riskPreference ?? 1] ?? "MEDIUM";
+  const estApyPct =
+    strategiesData?.strategies?.find((s) => s.id === stratId)?.blendedApyPct ?? null;
+
+  // ── Local UI state ────────────────────────────────────────
   const [tab, setTab] = useState<Tab>("control");
   const [on, setOn] = useState(true);
   const [running, setRunning] = useState(false);
-  const [countdown, setCountdown] = useState(18 * 60);
+  const [countdown, setCountdown] = useState(MIN_REBALANCE_SECS);
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
+
+  // Refs for syncing
+  const agentConfigLoadedRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const configSavedRef = useRef(false);
+
+  // Sync agentConfig from backend (once, on first load)
+  useEffect(() => {
+    if (!agentConfigData || agentConfigLoadedRef.current) return;
+    agentConfigLoadedRef.current = true;
+    setOn(agentConfigData.autoRebalanceEnabled);
+    setConfig(backendToConfig(agentConfigData, realRisk));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentConfigData, realRisk]);
+
+  useEffect(() => {
+    if (lastRunTs === null) return;
+    setCountdown(Math.max(0, lastRunTs + MIN_REBALANCE_SECS - Math.floor(Date.now() / 1000)));
+  }, [lastRunTs]);
+  useEffect(() => {
+    if (riskPreference !== undefined) setConfig((c) => ({ ...c, risk: realRisk }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskPreference]);
+
+  // Auto-save config changes to backend (debounced)
+  useEffect(() => {
+    if (!configSavedRef.current) { configSavedRef.current = true; return; }
+    if (!vaultAddress) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        await apiFetch("/api/users/me/agent-config", token, {
+          method: "POST",
+          body: JSON.stringify(configToBackendPatch(config)),
+        });
+      } catch { /* non-blocking */ }
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
 
   useEffect(() => {
     if (!on || running) return;
     const id = setInterval(
-      () => setCountdown((s) => (s <= 1 ? 18 * 60 : s - 1)),
+      () => setCountdown((s) => (s <= 1 ? MIN_REBALANCE_SECS : s - 1)),
       1000,
     );
     return () => clearInterval(id);
   }, [on, running]);
+
+  // ── Backend action handlers ───────────────────────────────
+  const handlePauseToggle = async () => {
+    const newOn = !on;
+    setOn(newOn); // optimistic
+    try {
+      const token = await getAccessToken();
+      if (!token) { setOn(!newOn); return; }
+      await apiFetch(`/api/users/me/agent/${newOn ? "resume" : "pause"}`, token, { method: "PATCH" });
+    } catch {
+      setOn(!newOn); // revert on error
+    }
+  };
+
+  const handleRunNow = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    setRunning(true);
+    try {
+      await apiFetch("/api/users/me/agent/run-now", token, { method: "POST" });
+    } catch { /* let animation run regardless */ }
+  };
+
+  const handleRunComplete = () => {
+    setRunning(false);
+    void refetchPortfolio();
+    void refetchActivities();
+  };
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -1228,12 +1451,18 @@ export default function AgentPage() {
         {tab === "control" && (
           <ControlTab
             on={on}
-            setOn={setOn}
+            onPauseToggle={handlePauseToggle}
+            onRunNow={handleRunNow}
             running={running}
             setRunning={setRunning}
+            onRunComplete={handleRunComplete}
             countdown={countdown}
             config={config}
             onEditGuardrails={() => setTab("guardrails")}
+            rebalanceCount={rebalanceCount}
+            estApyPct={estApyPct}
+            lastRunTs={lastRunTs}
+            activities={activities}
           />
         )}
         {tab === "chat" && <ChatTab />}

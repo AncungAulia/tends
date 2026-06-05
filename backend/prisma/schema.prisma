@@ -120,6 +120,10 @@ model AgentConfig {
   maxSlippageBps       Int      @default(100) // swap slippage tolerance
   perTokenCapsBps      Json? // { "sUSDe": 4000, ... } hard cap per token in bps (null = none)
   notes                String? // free-text the chat agent reads for personalization
+  maxPerAssetPct       Int?     // global max allocation per token (%, null = default 50)
+  dailyLimitPerDay     Int?     // max rebalances per day (null = no limit)
+  stopLossEnabled      Boolean  @default(false)
+  stopLossPct          Int?     // e.g. 10 = exit if -10%; null when disabled
   updatedAt            DateTime @updatedAt
 }
 

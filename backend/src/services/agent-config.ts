@@ -11,6 +11,10 @@ export interface AgentConfigValue {
   maxSlippageBps: number;
   perTokenCapsBps: Partial<Record<TokenSymbol, number>> | null;
   notes: string | null;
+  maxPerAssetPct: number | null;
+  dailyLimitPerDay: number | null;
+  stopLossEnabled: boolean;
+  stopLossPct: number | null;
 }
 
 /** A partial patch the user submits (every field optional). */
@@ -23,6 +27,10 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfigValue, "vaultAddress"> = {
   maxSlippageBps: 100,
   perTokenCapsBps: null,
   notes: null,
+  maxPerAssetPct: null,
+  dailyLimitPerDay: null,
+  stopLossEnabled: false,
+  stopLossPct: null,
 };
 
 const intIn = (v: unknown, lo: number, hi: number, name: string): number => {
@@ -59,6 +67,14 @@ export function validateAgentConfig(input: AgentConfigPatch): AgentConfigPatch {
       throw new Error("notes must be a string ≤ 1000 chars or null");
     out.notes = input.notes;
   }
+  if (input.maxPerAssetPct !== undefined)
+    out.maxPerAssetPct = input.maxPerAssetPct === null ? null : intIn(input.maxPerAssetPct, 1, 100, "maxPerAssetPct");
+  if (input.dailyLimitPerDay !== undefined)
+    out.dailyLimitPerDay = input.dailyLimitPerDay === null ? null : intIn(input.dailyLimitPerDay, 1, 100, "dailyLimitPerDay");
+  if (input.stopLossEnabled !== undefined)
+    out.stopLossEnabled = Boolean(input.stopLossEnabled);
+  if (input.stopLossPct !== undefined)
+    out.stopLossPct = input.stopLossPct === null ? null : intIn(input.stopLossPct, 1, 100, "stopLossPct");
   return out;
 }
 
@@ -78,6 +94,10 @@ export async function getAgentConfig(vaultAddress: string): Promise<AgentConfigV
     maxSlippageBps: row.maxSlippageBps,
     perTokenCapsBps: (row.perTokenCapsBps as AgentConfigValue["perTokenCapsBps"]) ?? null,
     notes: row.notes,
+    maxPerAssetPct: row.maxPerAssetPct,
+    dailyLimitPerDay: row.dailyLimitPerDay,
+    stopLossEnabled: row.stopLossEnabled,
+    stopLossPct: row.stopLossPct,
   };
 }
 
@@ -98,6 +118,10 @@ export async function upsertAgentConfig(
       maxSlippageBps: c.maxSlippageBps ?? DEFAULT_AGENT_CONFIG.maxSlippageBps,
       perTokenCapsBps: caps === undefined ? Prisma.DbNull : caps,
       notes: c.notes ?? null,
+      maxPerAssetPct: c.maxPerAssetPct ?? null,
+      dailyLimitPerDay: c.dailyLimitPerDay ?? null,
+      stopLossEnabled: c.stopLossEnabled ?? false,
+      stopLossPct: c.stopLossPct ?? null,
     },
     update: {
       ...(c.autoRebalanceEnabled !== undefined && { autoRebalanceEnabled: c.autoRebalanceEnabled }),
@@ -106,6 +130,10 @@ export async function upsertAgentConfig(
       ...(c.maxSlippageBps !== undefined && { maxSlippageBps: c.maxSlippageBps }),
       ...(caps !== undefined && { perTokenCapsBps: caps }),
       ...(c.notes !== undefined && { notes: c.notes }),
+      ...(c.maxPerAssetPct !== undefined && { maxPerAssetPct: c.maxPerAssetPct }),
+      ...(c.dailyLimitPerDay !== undefined && { dailyLimitPerDay: c.dailyLimitPerDay }),
+      ...(c.stopLossEnabled !== undefined && { stopLossEnabled: c.stopLossEnabled }),
+      ...(c.stopLossPct !== undefined && { stopLossPct: c.stopLossPct }),
     },
   });
   return getAgentConfig(vaultAddress);
