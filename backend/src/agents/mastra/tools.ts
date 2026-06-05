@@ -4,6 +4,7 @@ import { listStrategies, riskLevelFromId } from "../../strategies.js";
 import { projectForRisk } from "../../services/projection.js";
 import { readHoldings } from "../../services/holdings.js";
 import { getAgentConfig, upsertAgentConfig } from "../../services/agent-config.js";
+import { enforceGuardrails } from "./workflows/enforce-guardrails.js";
 import { prismaApyReader } from "../../api/routes/apy.js";
 import { prisma } from "../../db/client.js";
 import { as0x } from "../../chain/addresses.js";
@@ -154,6 +155,9 @@ const setAgentGuardrailsTool = createTool({
     if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
     try {
       const updated = await upsertAgentConfig(vault, patch);
+      // enforce the new guardrails (rebalance if a cap is now violated) — async,
+      // same as the POST /agent-config endpoint, so agent- and UI-driven changes match
+      void enforceGuardrails(vault).catch(() => {});
       return { ok: true, settings: updated };
     } catch (e) {
       return { error: (e as Error).message };
