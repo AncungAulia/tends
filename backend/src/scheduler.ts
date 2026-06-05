@@ -4,6 +4,7 @@ import { relayerService } from "./services/relayer.js";
 import { rebalancerService } from "./services/rebalancer.js";
 import { priceMonitorService } from "./services/price-monitor.js";
 import { apyService } from "./services/apy.js";
+import { pnlService } from "./services/pnl.js";
 
 const log = childLogger("scheduler");
 
@@ -65,6 +66,12 @@ export function buildJobs(): ScheduledJob[] {
       enabled: env.APY_SCRAPER_ENABLED,
       intervalMs: env.APY_SCRAPER_INTERVAL_SEC * 1000,
       run: () => apyService.run(),
+    },
+    {
+      name: "pnl-snapshot",
+      enabled: env.PNL_SNAPSHOT_ENABLED,
+      intervalMs: env.PNL_SNAPSHOT_INTERVAL_SEC * 1000,
+      run: () => pnlService.run(),
     },
   ];
 }

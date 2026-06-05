@@ -102,6 +102,12 @@ export const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   APY_SCRAPER_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
+  // PnL snapshotter: records each vault's totalAssets() over time (FE PnL chart).
+  PNL_SNAPSHOT_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  PNL_SNAPSHOT_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
   // Ondo USDY oracle lives on Mantle MAINNET, so the relayer needs a mainnet RPC.
   MANTLE_MAINNET_RPC: z.string().url().default("https://rpc.mantle.xyz"),
   USDY_ORACLE_ADDRESS: z
@@ -113,6 +119,12 @@ export const envSchema = z.object({
   HERMES_API_KEY: z.string().default("change-me-local-dev"),
   HERMES_MODEL: z.string().default("hermes-agent"),
   OPENROUTER_KEY: z.string().default(""),
+  OPENROUTER_API_KEY: z.string().default(""),
+  // Reliable model for the ACTION agent (gpt-4o via GitHub Models) — calls tools
+  // properly, unlike Hermes which hallucinates write-tool success.
+  GITHUB_TOKEN: z.string().default(""), // PAT with models:read
+  ACTION_AGENT_BASE_URL: z.string().url().default("https://models.github.ai/inference"),
+  ACTION_AGENT_MODEL: z.string().default("openai/gpt-4o"),
   LLM_MODEL: z.string().default("anthropic/claude-sonnet-4.6"),
 
   // ── Privy / pricing / mcp ─────────────────────────────────────────────────

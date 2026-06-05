@@ -86,6 +86,7 @@ test("buildJobs: exposes the scheduled jobs gated by env", () => {
     "rebalancer",
     "price-monitor",
     "apy-scraper",
+    "pnl-snapshot",
   ]);
   assert.ok(jobs.every((j) => typeof j.enabled === "boolean" && j.intervalMs > 0));
 });

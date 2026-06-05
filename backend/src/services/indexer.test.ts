@@ -191,10 +191,22 @@ test("onDeposit: a failing rebalance trigger does not break indexing", async () 
   assert.equal(positions.length, 1); // position still recorded despite the trigger failing
 });
 
-test("onWithdraw reduces shares", async () => {
+test("onWithdraw reduces shares, then triggers a rebalance", async () => {
   const { repo, positions } = fakeRepo();
-  await new IndexerService(repo).onWithdraw(VAULT, USER, 500_000n, 499n);
+  const triggered: string[] = [];
+  const svc = new IndexerService(repo, () => {}, async (v) => void triggered.push(v));
+  await svc.onWithdraw(VAULT, USER, 500_000n, 499n);
   assert.deepEqual(positions, [{ vault: VAULT, shares: 499n, op: "sub" }]);
+  assert.deepEqual(triggered, [VAULT]); // remainder rebalanced after withdrawal
+});
+
+test("onWithdraw: a failing rebalance trigger does not break indexing", async () => {
+  const { repo, positions } = fakeRepo();
+  const svc = new IndexerService(repo, () => {}, async () => {
+    throw new Error("rebalance blew up");
+  });
+  await assert.doesNotReject(() => svc.onWithdraw(VAULT, USER, 1n, 1n));
+  assert.equal(positions.length, 1);
 });
 
 test("onRiskPreferenceUpdated persists the mapped risk update", async () => {

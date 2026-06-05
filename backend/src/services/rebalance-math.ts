@@ -84,6 +84,53 @@ export function resolveTargetBps(
 }
 
 /**
+ * Pure guardrail: clamp each token's target to its cap (bps), redistributing the
+ * removed weight to under-cap tokens proportional to their headroom. Any residual
+ * that can't fit (all caps saturated) is dropped → effectively raises USDC's implicit
+ * weight, which is the safe outcome. Tokens absent from `caps` are uncapped.
+ */
+export function clampTargetToCaps(
+  target: Map<TokenSymbol, number>,
+  caps: Partial<Record<TokenSymbol, number>>,
+): Map<TokenSymbol, number> {
+  const result = new Map(target);
+  let residual = 0;
+  for (const [token, bps] of result) {
+    const cap = caps[token];
+    if (cap !== undefined && bps > cap) {
+      residual += bps - cap;
+      result.set(token, cap);
+    }
+  }
+  // Redistribute the excess 1 bps at a time into whichever token has the most
+  // headroom. Exact (total conserved), never exceeds a cap; any excess that can't
+  // fit (all caps saturated) is simply dropped → raises USDC's implicit weight.
+  const headroomOf = (token: TokenSymbol): number => {
+    const cap = caps[token];
+    return cap === undefined ? 10_000 - (result.get(token) ?? 0) : cap - (result.get(token) ?? 0);
+  };
+  while (residual > 0) {
+    let best: TokenSymbol | null = null;
+    let bestRoom = 0;
+    for (const token of result.keys()) {
+      const room = headroomOf(token);
+      if (room > bestRoom) {
+        bestRoom = room;
+        best = token;
+      }
+    }
+    if (best === null) break; // no headroom left → residual falls through to USDC
+    result.set(best, (result.get(best) ?? 0) + 1);
+    residual--;
+  }
+  return result;
+}
+
+/** Min-swap USD floor from a drift threshold (bps of portfolio): skip churn below it. */
+export const driftFloorWad = (driftThresholdBps: number, totalValueWad: bigint): bigint =>
+  (BigInt(driftThresholdBps) * totalValueWad) / BPS;
+
+/**
  * Pure rebalance planner. Routes everything through USDC (the vault's base asset
  * and unit of account): overweight RWA tokens are sold to USDC, then idle USDC is
  * spent buying underweight tokens. USDC itself has an implicit 0% target.
@@ -143,21 +190,24 @@ export function computeSwapInstructions(
     }
   }
 
-  // Safety guard: total USDC consumed by buy legs must not exceed what is actually
-  // available after sells execute. Uses sell minAmountOut (post-slippage floor) so
-  // the vault never tries to spend USDC it hasn't received yet.
-  const usdcAvailableForBuys =
-    usdc.balance +
-    sells.reduce((sum, s) => sum + s.minAmountOut, 0n);
-  const usdcNeededForBuys = buys.reduce((sum, b) => sum + b.amountIn, 0n);
+  // Budget buys against the USDC the vault is GUARANTEED to hold after the sells:
+  // its current USDC + Σ(sell minAmountOut). The contract executes each buy with its
+  // full amountIn, so if Σbuys exceeds that floor the last buy reverts on insufficient
+  // USDC (sells realize ≥ minAmountOut, never the full estimate). Scale buys down
+  // proportionally so Σbuys ≤ guaranteed — under-buying converges over cycles, a revert
+  // never does.
+  const guaranteedUsdc = usdc.balance + sells.reduce((s, x) => s + x.minAmountOut, 0n);
+  const desiredBuyUsdc = buys.reduce((s, x) => s + x.amountIn, 0n);
+  const cappedBuys =
+    desiredBuyUsdc > guaranteedUsdc && desiredBuyUsdc > 0n
+      ? buys
+          .map((b) => ({
+            ...b,
+            amountIn: (b.amountIn * guaranteedUsdc) / desiredBuyUsdc,
+            minAmountOut: (b.minAmountOut * guaranteedUsdc) / desiredBuyUsdc,
+          }))
+          .filter((b) => b.amountIn > 0n)
+      : buys;
 
-  if (usdcNeededForBuys > usdcAvailableForBuys && usdcNeededForBuys > 0n) {
-    const scale = (usdcAvailableForBuys * BPS) / usdcNeededForBuys;
-    for (const b of buys) {
-      b.amountIn = (b.amountIn * scale) / BPS;
-      b.minAmountOut = (b.minAmountOut * scale) / BPS;
-    }
-  }
-
-  return [...sells, ...buys];
+  return [...sells, ...cappedBuys];
 }

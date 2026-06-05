@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import { RequestContext } from "@mastra/core/request-context";
+import type { Agent } from "@mastra/core/agent";
 import { tendsAgent } from "../../agents/mastra/agent.js";
+import { actionAgent } from "../../agents/mastra/action-agent.js";
+import type { AgentRequestContext } from "../../agents/mastra/tools.js";
 import { childLogger } from "../../lib/logger.js";
 import { requireAuth, type AuthVars } from "../auth.js";
 import { prismaUserResolver, type UserResolver } from "./chat.js";
@@ -10,12 +14,13 @@ import { prismaUserResolver, type UserResolver } from "./chat.js";
 const log = childLogger("chat-v2");
 
 /**
- * POST /api/chat-v2 — PoC chat over the Mastra agent (Hermes model + Supabase
- * memory), running PARALLEL to the Hermes-MCP /api/chat. Conversation history +
- * the per-user "grow with user" working memory are persisted by Mastra Memory; no
- * manual ChatMessage write here.
+ * Mastra chat over SSE (Supabase "grow with user" memory + portfolio tools). The
+ * `agent` is injected so the same route serves the Hermes read-agent (/api/chat)
+ * and the gpt-4o action-agent (/api/chat-v2). Wallet is bound from the Privy session
+ * via RequestContext — never the message.
  */
 export function makeChatV2Router(
+  agent: Agent,
   auth: MiddlewareHandler<AuthVars>,
   resolveUser: UserResolver = prismaUserResolver,
 ): Hono<AuthVars> {
@@ -37,17 +42,26 @@ export function makeChatV2Router(
     }
 
     // resource = the user (wallet → memory grows with user across sessions);
-    // thread = a single conversation. Wallet grounding is injected per message so
-    // the agent knows which address to pass to readUserPosition.
+    // thread = a single conversation.
     const resource = walletAddress ?? privyId;
     const thread = parsed.data.thread ?? `chat-${resource}`;
+
+    // SECURITY: the wallet the tools act on comes from the authenticated Privy
+    // session via RequestContext — NOT from the message — so a prompt-injected
+    // message can't make the agent read or mutate another user's account.
+    const requestContext = new RequestContext<AgentRequestContext>();
+    requestContext.set("walletAddress", walletAddress);
+
     const grounded = walletAddress
-      ? `(My wallet is ${walletAddress}${vaultAddress ? `, vault ${vaultAddress}` : ", no vault deployed yet"}.)\n\n${parsed.data.message}`
+      ? `(I'm signed in${vaultAddress ? " with a deployed vault" : " but have no vault yet"}.)\n\n${parsed.data.message}`
       : parsed.data.message;
 
     return streamSSE(c, async (s) => {
       try {
-        const stream = await tendsAgent.stream(grounded, { memory: { resource, thread } });
+        const stream = await agent.stream(grounded, {
+          memory: { resource, thread },
+          requestContext,
+        });
         for await (const chunk of stream.textStream) {
           await s.writeSSE({ event: "text", data: chunk });
         }
@@ -61,4 +75,7 @@ export function makeChatV2Router(
   return r;
 }
 
-export const chatV2Router = makeChatV2Router(requireAuth);
+/** /api/chat — Hermes read+advisory agent (persona). */
+export const chatV2Router = makeChatV2Router(tendsAgent, requireAuth);
+/** /api/chat-v2 — gpt-4o action agent (reliably reads AND executes guardrail changes). */
+export const actionChatRouter = makeChatV2Router(actionAgent, requireAuth);

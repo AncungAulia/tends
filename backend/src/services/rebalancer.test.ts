@@ -6,6 +6,13 @@ import {
   type VaultMeta,
 } from "./rebalancer.js";
 import type { SwapInstruction } from "./rebalance-math.js";
+import { DEFAULT_AGENT_CONFIG, type AgentConfigValue } from "./agent-config.js";
+
+const cfg = (o: Partial<AgentConfigValue> = {}): AgentConfigValue => ({
+  vaultAddress: "0x0",
+  ...DEFAULT_AGENT_CONFIG,
+  ...o,
+});
 
 const V1 = "0x0000000000000000000000000000000000000001" as const;
 const V2 = "0x0000000000000000000000000000000000000002" as const;
@@ -29,7 +36,10 @@ function makeDeps(over: Partial<RebalancerDeps> = {}) {
   const deps: RebalancerDeps = {
     listVaults: async () => [V1],
     readVaultMeta: async () => meta(),
+    arePricesFresh: async () => true,
+    readAgentConfig: async () => cfg(),
     buildInstructions: async () => [SWAP],
+    simulateRebalance: async () => true,
     sendRebalance: async (vault, instr) => {
       calls.sendRebalance.push({ vault, instr });
       return "0xhash";
@@ -44,6 +54,46 @@ test("processVault: paused → skip, no tx sent", async () => {
   const { deps, calls } = makeDeps({ readVaultMeta: async () => meta({ paused: true }) });
   const out = await new RebalancerService(deps).processVault(V1);
   assert.deepEqual(out, { action: "skip", reason: "paused" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: auto-rebalance disabled by user → skip, no tx", async () => {
+  const { deps, calls } = makeDeps({ readAgentConfig: async () => cfg({ autoRebalanceEnabled: false }) });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "disabled" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: off-chain cadence not elapsed → skip", async () => {
+  const { deps, calls } = makeDeps({
+    readVaultMeta: async () => meta({ lastRebalanceTime: 900n, minRebalanceInterval: 0n }),
+    readAgentConfig: async () => cfg({ cadenceSec: 200 }), // 1000 < 900+200
+    now: () => 1000n,
+  });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "cooldown" });
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: stale price feeds → skip 'stale', never builds/sends (no getPrice revert)", async () => {
+  let built = false;
+  const { deps, calls } = makeDeps({
+    arePricesFresh: async () => false,
+    buildInstructions: async () => {
+      built = true;
+      return [SWAP];
+    },
+  });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "stale" });
+  assert.equal(built, false); // gated before buildInstructions (which would hit getPrice)
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("processVault: simulation says it would revert → skip 'unsafe', no tx sent", async () => {
+  const { deps, calls } = makeDeps({ simulateRebalance: async () => false });
+  const out = await new RebalancerService(deps).processVault(V1);
+  assert.deepEqual(out, { action: "skip", reason: "unsafe" });
   assert.equal(calls.sendRebalance.length, 0);
 });
 

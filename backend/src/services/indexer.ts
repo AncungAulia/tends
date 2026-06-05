@@ -277,6 +277,10 @@ export class IndexerService {
     await this.repo.subFromPosition(vault, shares);
     this.broadcast({ type: "withdraw", vault, owner });
     log.info({ vault, owner }, "withdraw indexed");
+    // rebalance the remainder back to target (best-effort — never breaks indexing)
+    await this.triggerRebalance(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "withdraw-triggered rebalance failed"),
+    );
   }
 
   async onRiskPreferenceUpdated(

@@ -89,6 +89,7 @@ test("GET /api/users/me/position: 401 without/with bad token, 200 with good", as
       return { vault: null };
     },
     getActivity: async () => ({ activities: [] }),
+    getPnl: async () => ({ vault: null, initialDepositUsd: 0, points: [] }),
   };
   const app = usersApp(reader);
 
@@ -108,6 +109,7 @@ test("GET /api/users/me/position: serializes Prisma BigInt fields (no 500)", asy
   const reader: UserReader = {
     getPosition: async () => ({ vault: { address: "0xabc", deployedBlock: 12345n } }),
     getActivity: async () => ({ activities: [{ id: 99n, blockNumber: null }] }),
+    getPnl: async () => ({ vault: "0xabc", initialDepositUsd: 100, points: [] }),
   };
   const app = usersApp(reader);
   const pos = await app.request("/api/users/me/position", { headers: { authorization: "Bearer good" } });

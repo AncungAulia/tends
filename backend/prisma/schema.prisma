@@ -20,6 +20,7 @@ model User {
   privyId       String?  @unique
   createdAt     DateTime @default(now())
   lastActiveAt  DateTime @updatedAt
+  preferences   Json? // client UI prefs (theme, etc.) — cross-device sync
 
   vault        Vault?
   chatMessages ChatMessage[]
@@ -106,4 +107,31 @@ model IndexerState {
   key       String   @id // e.g. "factory" or "vault:0x..."
   lastBlock BigInt
   updatedAt DateTime @updatedAt
+}
+
+/// Per-user agent guardrails / settings (the FE "Agent" page). One row per vault.
+/// The autonomous rebalancer reads these before acting; the chat agent reads `notes`
+/// (+ guardrails) for personalized, guardrail-aware advice.
+model AgentConfig {
+  vaultAddress         String   @id
+  autoRebalanceEnabled Boolean  @default(true) // off-chain pause toggle for the auto-agent
+  cadenceSec           Int? // off-chain min seconds between rebalances (null = use on-chain only)
+  driftThresholdBps    Int? // only rebalance if drift exceeds this % of portfolio (null = dust floor)
+  maxSlippageBps       Int      @default(100) // swap slippage tolerance
+  perTokenCapsBps      Json? // { "sUSDe": 4000, ... } hard cap per token in bps (null = none)
+  notes                String? // free-text the chat agent reads for personalization
+  updatedAt            DateTime @updatedAt
+}
+
+/// Per-vault value-over-time — powers the FE PnL chart. Stores UserVault.totalAssets()
+/// (USDC base units, 6-dec) on a schedule; PnL = totalAssets − Vault.initialDeposit.
+/// Same valuation basis the dashboard uses for the current value, so the chart and the
+/// live PnL number stay consistent.
+model VaultSnapshot {
+  vaultAddress String
+  totalAssets  Decimal  @db.Decimal(78, 0) // raw UserVault.totalAssets()
+  snapshotAt   DateTime @default(now())
+
+  @@id([vaultAddress, snapshotAt])
+  @@index([vaultAddress, snapshotAt])
 }
