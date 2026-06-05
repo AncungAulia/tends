@@ -24,29 +24,6 @@ import { AgentChat } from "@/components/preview/AgentChat";
 
 // ─── Shared helpers ─────────────────────────────────────────
 
-function Toggle({
-  on,
-  onClick,
-  sm,
-}: {
-  on: boolean;
-  onClick: () => void;
-  sm?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative shrink-0 rounded-full transition-colors ${sm ? "h-6 w-11" : "h-7 w-12"} ${on ? "bg-[#1591DC]" : "bg-[#E8EAEC]"}`}
-    >
-      <span
-        className={`absolute left-0.5 top-0.5 rounded-full bg-white shadow-sm transition-transform ${sm ? "h-5 w-5" : "h-6 w-6"} ${
-          on ? "translate-x-5" : "translate-x-0"
-        }`}
-      />
-    </button>
-  );
-}
-
 function SectionLabel({
   children,
   right,
@@ -127,7 +104,7 @@ type AgentConfig = {
   maxPerAsset: number;
   dailyLimit: number;
   minDrift: number;
-  stopLoss: { on: boolean; value: number };
+  stopLoss: number; // 0 = off
   notes: string;
 };
 
@@ -170,7 +147,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   maxPerAsset: 50,
   dailyLimit: 3,
   minDrift: 5,
-  stopLoss: { on: true, value: 10 },
+  stopLoss: 0,
   notes:
     "Prefer stable yield on weekends. Don't touch my cmETH position unless volatility spikes above 20%. Lean conservative near month-end.",
 };
@@ -812,12 +789,12 @@ function OperatingCard({
     FREQ_PRESETS.find((f) => f.value === config.checkEvery)?.label ??
     config.checkEvery;
   const rows = [
-    { k: "Check frequency", v: freqLabel },
+    { k: "Running frequency", v: freqLabel },
     { k: "Max cap per asset", v: `${config.maxPerAsset}%` },
     { k: "Daily rebalances", v: `1 of ${config.dailyLimit} used` },
     {
       k: "Stop-loss",
-      v: config.stopLoss.on ? `Armed at -${config.stopLoss.value}%` : "Off",
+      v: config.stopLoss > 0 ? `Armed at -${config.stopLoss}%` : "Off",
     },
   ];
   const heading =
@@ -915,7 +892,7 @@ function OperatingCard({
 
         {/* User's note */}
         <div className="mt-5 border-t border-[#E8EAEC] pt-4">
-          <p className={`mb-1.5 ${heading}`}>User&apos;s note</p>
+          <p className={`mb-1.5 ${heading}`}>Personal Preference</p>
           <p className="line-clamp-3 text-xs leading-relaxed text-[#5B7490]">
             {config.notes}
           </p>
@@ -1060,7 +1037,6 @@ function GuardrailsTab({
   config: AgentConfig;
   setConfig: (f: (c: AgentConfig) => AgentConfig) => void;
 }) {
-  const [advanced, setAdvanced] = useState(false);
   const set = (patch: Partial<AgentConfig>) =>
     setConfig((c) => ({ ...c, ...patch }));
   const num = (v: string) =>
@@ -1073,8 +1049,8 @@ function GuardrailsTab({
         <SectionLabel right={<></>}>Limits</SectionLabel>
         <div className="divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5">
           <GuardrailRow
-            label="Check frequency"
-            hint="How often the agent reviews the market"
+            label="Running frequency"
+            hint="How often the agent runs"
           >
             <Dropdown
               value={config.checkEvery}
@@ -1108,25 +1084,8 @@ function GuardrailsTab({
 
       {/* Advanced */}
       <div>
-        <SectionLabel
-          right={
-            <div className="flex items-center gap-2">
-              {!advanced && (
-                <span className="text-[0.625rem] text-[#5B7490]">
-                  Toggle to change
-                </span>
-              )}
-              <Toggle sm on={advanced} onClick={() => setAdvanced((v) => !v)} />
-            </div>
-          }
-        >
-          Advanced
-        </SectionLabel>
-        <div
-          className={`divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5 ${
-            advanced ? "" : "pointer-events-none select-none opacity-50"
-          }`}
-        >
+        <SectionLabel>Advanced</SectionLabel>
+        <div className="divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5">
           <GuardrailRow
             label="Min drift to act"
             hint="Only rebalance if off target by this much"
@@ -1139,35 +1098,20 @@ function GuardrailsTab({
           </GuardrailRow>
           <GuardrailRow
             label="Stop-loss"
-            hint="Exit an asset if it drops this much"
+            hint="Exit an asset if it drops this much (0 = off)"
           >
-            <div className="flex items-center gap-2">
-              {config.stopLoss.on && (
-                <NumInput
-                  value={config.stopLoss.value}
-                  suffix="%"
-                  onChange={(v) =>
-                    set({ stopLoss: { ...config.stopLoss, value: num(v) } })
-                  }
-                />
-              )}
-              <Toggle
-                sm
-                on={config.stopLoss.on}
-                onClick={() =>
-                  set({
-                    stopLoss: { ...config.stopLoss, on: !config.stopLoss.on },
-                  })
-                }
-              />
-            </div>
+            <NumInput
+              value={config.stopLoss}
+              suffix="%"
+              onChange={(v) => set({ stopLoss: num(v) })}
+            />
           </GuardrailRow>
         </div>
       </div>
 
       {/* Agent notes */}
       <div>
-        <SectionLabel right={<></>}>Personal Preferences</SectionLabel>
+        <SectionLabel right={<></>}>Personal Preference</SectionLabel>
         <textarea
           rows={4}
           value={config.notes}
