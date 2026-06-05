@@ -1308,6 +1308,11 @@ function configToBackendPatch(c: AgentConfig): Partial<BackendAgentConfig> {
 const MIN_REBALANCE_SECS = 3600; // SC: minRebalanceInterval = 1 hour
 const RISK_NUM_TO_KEY: Record<number, RiskKey> = { 0: "Low", 1: "Medium", 2: "High" };
 
+// Module-level: persists across component unmount/remount within the same tab session.
+// Stores the unix-second timestamp of when the NEXT scheduled check is due.
+// 0 = uninitialized (first load).
+let _agentNextRunTs = 0;
+
 export default function AgentPage() {
   // ── On-chain + backend data ───────────────────────────────
   const { address } = useAccount();
@@ -1367,10 +1372,17 @@ export default function AgentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentConfigData, realRisk]);
 
+  // On mount (and when cadence changes): restore countdown from module-level target,
+  // or start a fresh cycle if this is the first load or the target has already passed.
   useEffect(() => {
-    if (lastRunTs === null) return;
-    setCountdown(Math.max(0, lastRunTs + MIN_REBALANCE_SECS - Math.floor(Date.now() / 1000)));
-  }, [lastRunTs]);
+    const cadenceSecs = CADENCE_SECS[config.checkEvery] ?? MIN_REBALANCE_SECS;
+    const now = Math.floor(Date.now() / 1000);
+    if (_agentNextRunTs <= now) {
+      _agentNextRunTs = now + cadenceSecs;
+    }
+    setCountdown(_agentNextRunTs - now);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.checkEvery]);
   useEffect(() => {
     if (riskPreference !== undefined) setConfig((c) => ({ ...c, risk: realRisk }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1396,12 +1408,20 @@ export default function AgentPage() {
 
   useEffect(() => {
     if (!on || running) return;
-    const id = setInterval(
-      () => setCountdown((s) => (s <= 1 ? MIN_REBALANCE_SECS : s - 1)),
-      1000,
-    );
+    const id = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = _agentNextRunTs - now;
+      if (remaining <= 0) {
+        const cadenceSecs = CADENCE_SECS[config.checkEvery] ?? MIN_REBALANCE_SECS;
+        _agentNextRunTs = now + cadenceSecs;
+        setCountdown(cadenceSecs);
+      } else {
+        setCountdown(remaining);
+      }
+    }, 1000);
     return () => clearInterval(id);
-  }, [on, running]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, running, config.checkEvery]);
 
   // ── Backend action handlers ───────────────────────────────
   const handlePauseToggle = async () => {
@@ -1426,6 +1446,9 @@ export default function AgentPage() {
   };
 
   const handleRunComplete = () => {
+    const cadenceSecs = CADENCE_SECS[config.checkEvery] ?? MIN_REBALANCE_SECS;
+    _agentNextRunTs = Math.floor(Date.now() / 1000) + cadenceSecs;
+    setCountdown(cadenceSecs);
     setRunning(false);
     void refetchPortfolio();
     void refetchActivities();

@@ -10,11 +10,15 @@ const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid address");
 export type UpsertUser = (privyId: string, walletAddress: string) => Promise<void>;
 
 export const prismaUpsertUser: UpsertUser = async (privyId, walletAddress) => {
-  await prisma.user.upsert({
-    where: { walletAddress },
-    create: { walletAddress, privyId },
-    update: { privyId },
-  });
+  await prisma.$transaction([
+    // A Privy account can only belong to one wallet — clear it from any other record first.
+    prisma.user.updateMany({ where: { privyId, NOT: { walletAddress } }, data: { privyId: null } }),
+    prisma.user.upsert({
+      where: { walletAddress },
+      create: { walletAddress, privyId },
+      update: { privyId },
+    }),
+  ]);
 };
 
 /** POST /api/auth/verify — verify the session (via auth middleware) + upsert the user. */
