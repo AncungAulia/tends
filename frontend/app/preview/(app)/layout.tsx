@@ -10,7 +10,7 @@ export default function PreviewAppLayout({ children }: { children: React.ReactNo
     <div className="flex min-h-screen bg-[#F9FBFC] text-[#0C1A2B]">
       <PreviewSidebar />
       <main className="flex-1">
-        <GlobalHeader bgClass="bg-[#F9FBFC]" borderClass="border-b-[1.5px] border-[#E8EAEC]" />
+        {/* <GlobalHeader bgClass="bg-[#F9FBFC]" borderClass="border-b-[1.5px] border-[#E8EAEC]" /> */}
         {children}
       </main>
     </div>
