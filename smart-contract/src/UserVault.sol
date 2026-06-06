@@ -316,5 +316,19 @@ contract UserVault is
         emit EmergencyUnpaused(msg.sender);
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    /// @notice Add tokens to the vault's tradeable whitelist.
+    function addAllowedTokens(address[] calldata tokens) external {
+        require(msg.sender == owner() || msg.sender == agentExecutor, "Not authorized");
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address t = tokens[i];
+            if (!isAllowedToken[t]) {
+                allowedTokens.push(t);
+                isAllowedToken[t] = true;
+            }
+        }
+    }
+
+    function _authorizeUpgrade(address) internal override {
+        require(msg.sender == owner() || msg.sender == agentExecutor, "Not authorized");
+    }
 }

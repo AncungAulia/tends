@@ -199,22 +199,35 @@ export const STRATEGY: Record<
   "LOW" | "MEDIUM" | "HIGH",
   { token: TokenSymbol; bps: number }[]
 > = {
-  // Only tokens registered as isAllowedToken in deployed vaults:
-  // mUSD, USDY, mETH, cmETH, sUSDe, WMNT  (+ USDC as the underlying asset)
   LOW: [
-    { token: "mUSD",  bps: 9000 },
+    { token: "mUSD",  bps: 7000 },
     { token: "USDY",  bps: 1000 },
+    { token: "GILTS", bps: 1000 },
+    { token: "XAU",   bps:  500 },
+    { token: "EUR",   bps:  500 },
   ],
   MEDIUM: [
-    { token: "mUSD",  bps: 4000 },
-    { token: "mETH",  bps: 3000 },
-    { token: "cmETH", bps: 3000 },
+    { token: "mUSD",   bps: 3000 },
+    { token: "mETH",   bps: 2000 },
+    { token: "cmETH",  bps: 1000 },
+    { token: "USA500", bps: 1500 },
+    { token: "AAPL",   bps:  500 },
+    { token: "MSFT",   bps:  500 },
+    { token: "XAU",    bps:  500 },
+    { token: "EUR",    bps:  500 },
+    { token: "GILTS",  bps:  500 },
   ],
   HIGH: [
-    { token: "cmETH", bps: 4000 },
-    { token: "sUSDe", bps: 3000 },
-    { token: "mETH",  bps: 2000 },
-    { token: "WMNT",  bps: 1000 },
+    { token: "cmETH",  bps: 2500 },
+    { token: "mETH",   bps: 1500 },
+    { token: "USA100", bps: 1500 },
+    { token: "NVDA",   bps: 1000 },
+    { token: "sUSDe",  bps: 1000 },
+    { token: "TSLA",   bps:  500 },
+    { token: "AAPL",   bps:  500 },
+    { token: "WMNT",   bps:  500 },
+    { token: "XAU",    bps:  500 },
+    { token: "mUSD",   bps:  500 },
   ],
 };
 

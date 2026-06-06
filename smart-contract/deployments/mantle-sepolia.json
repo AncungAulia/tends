@@ -31,7 +31,8 @@
     "PriceFeed":        "0x020744cC10fEaD789dE205de76A2769B9A4945DE",
     "AgentActivityLog": "0x56CeD9fD5E49C1Aba1371D7aDe383DD16da76484",
     "StrategyRouter":   "0xD68968cf68E9930a689e0fC9d648a898050a548A",
-    "VaultFactory":     "0x30c92fFadAd24Ca079227A92A33b78683D36Fde6"
+    "VaultFactory":     "0x71B5CEF19C49ea82e5EcFb4e125b5c136B01eFe1",
+    "UserVault":        "0xeC387124Fd17BbEbEDe6a17313410d0297dE1911"
   },
 
   "rwa": {

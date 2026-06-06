@@ -112,6 +112,21 @@ contract VaultFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         emit ImplementationUpdated(old, newImpl);
     }
 
+    /// @notice Append tokens to the factory's list (affects future vault deployments).
+    function addAllowedTokens(address[] calldata tokens) external onlyOwner {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            allowedTokens.push(tokens[i]);
+        }
+    }
+
+    /// @notice Push new tokens to all existing vaults. Skips vaults on old impl (no-op on revert).
+    function batchAddTokensToVaults(address[] calldata tokens) external {
+        require(msg.sender == owner() || msg.sender == agentExecutor, "Not authorized");
+        for (uint256 i = 0; i < allVaults.length; i++) {
+            try UserVault(allVaults[i]).addAllowedTokens(tokens) {} catch {}
+        }
+    }
+
     function totalVaults() external view returns (uint256) {
         return allVaults.length;
     }

@@ -193,6 +193,13 @@ export const VAULT_FACTORY_ABI = [
     outputs: [{ type: "uint256" }],
   },
   {
+    name: "batchAddTokensToVaults",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokens", type: "address[]" }],
+    outputs: [],
+  },
+  {
     name: "VaultDeployed",
     type: "event",
     inputs: [
@@ -212,6 +219,23 @@ const SWAP_INSTRUCTION = {
     { name: "minAmountOut", type: "uint256" },
   ],
 } as const;
+
+export const USER_VAULT_SETUP_ABI = [
+  {
+    name: "addAllowedTokens",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokens", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    name: "isAllowedToken",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
 
 export const USER_VAULT_ABI = [
   {
