@@ -56,13 +56,58 @@ export const envSchema = z.object({
     .default("0x26f9178b4082b68D8cC55874D377f9829Fc8C22d"),
 
   // ── Token addresses (mocks on testnet) ────────────────────────────────────
-  USDC_ADDR: addr(),
-  MUSD_ADDR: addr(),
-  USDY_ADDR: addr(),
-  METH_ADDR: addr(),
+  // Crypto / stable
+  USDC_ADDR:  addr(),
+  MUSD_ADDR:  addr(),
+  USDY_ADDR:  addr(),
+  METH_ADDR:  addr(),
   CMETH_ADDR: addr(),
   SUSDE_ADDR: addr(),
-  WMNT_ADDR: addr(),
+  WMNT_ADDR:  addr(),
+  // Stable funds (money-market / T-bill NAV ≈ $1)
+  BENJI_ADDR: addr(),
+  BUIDL_ADDR: addr(),
+  VBILL_ADDR: addr(),
+  // Bonds / credit
+  CETES_ADDR:   addr(),
+  GILTS_ADDR:   addr(),
+  KTB_ADDR:     addr(),
+  TESOURO_ADDR: addr(),
+  ACRED_ADDR:   addr(),
+  ONDO_ADDR:    addr(),
+  // Gold & precious metals
+  XAU_ADDR:  addr(),
+  XAUT_ADDR: addr(),
+  XAG_ADDR:  addr(),
+  XPT_ADDR:  addr(),
+  // Commodities
+  WTI_ADDR:     addr(),
+  XCU_ADDR:     addr(),
+  URANIUM_ADDR: addr(),
+  // Equity indices
+  USA500_ADDR:    addr(),
+  USA100_ADDR:    addr(),
+  KOSPI200_ADDR:  addr(),
+  NIKKEI225_ADDR: addr(),
+  // Stocks
+  AAPL_ADDR:  addr(),
+  AMZN_ADDR:  addr(),
+  GOOGL_ADDR: addr(),
+  META_ADDR:  addr(),
+  MSFT_ADDR:  addr(),
+  NVDA_ADDR:  addr(),
+  PLTR_ADDR:  addr(),
+  TSLA_ADDR:  addr(),
+  // FX Major
+  EUR_ADDR: addr(),
+  GBP_ADDR: addr(),
+  SGD_ADDR: addr(),
+  // FX EM
+  BRL_ADDR: addr(),
+  IDR_ADDR: addr(),
+  JPY_ADDR: addr(),
+  KRW_ADDR: addr(),
+  TRY_ADDR: addr(),
 
   // ── Price relayer (handed off to backend — RELAYER-HANDOFF.md) ────────────
   // Pushes RedStone + Ondo USDY prices into MockOracle. Signed by AGENT_EXECUTOR
