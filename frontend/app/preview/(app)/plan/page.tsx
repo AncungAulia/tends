@@ -39,7 +39,7 @@ const STRATEGIES: Strat[] = [
     apy: 5.1,
     vol: 0.03,
     risk: "Low",
-    riskCls: "bg-green-50 text-green-700 border-green-200",
+    riskCls: "bg-pos-soft text-pos border-green-200",
     desc: "Built to keep your capital steady.",
     hold: "No minimum",
     drop: "under 1%",
@@ -54,7 +54,7 @@ const STRATEGIES: Strat[] = [
     apy: 8.4,
     vol: 0.14,
     risk: "Medium",
-    riskCls: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    riskCls: "bg-warn-soft text-warn border-yellow-200",
     desc: "Balanced growth, without the full market swing.",
     hold: "3+ months",
     drop: "around 5%",
@@ -70,7 +70,7 @@ const STRATEGIES: Strat[] = [
     apy: 12.3,
     vol: 0.28,
     risk: "High",
-    riskCls: "bg-red-50 text-red-600 border-red-200",
+    riskCls: "bg-neg-soft text-neg border-red-200",
     desc: "Chases the most upside, rides the swings.",
     hold: "1+ year",
     drop: "around 12%",
@@ -87,7 +87,7 @@ const STRATEGIES: Strat[] = [
     apy: null,
     vol: 0.14,
     risk: "Custom",
-    riskCls: "bg-[#EAF4FC] text-[#1591DC] border-[#1591DC]/20",
+    riskCls: "bg-brand-soft text-brand border-brand/20",
     desc: "Your own mix, held on target by the agent.",
     hold: "—",
     drop: "—",
@@ -311,7 +311,7 @@ function GrowthChart({
             y1={capY}
             x2={w - 8}
             y2={capY}
-            stroke="#94A3B8"
+            className="stroke-faint"
             strokeOpacity="0.45"
             strokeWidth="1"
             strokeDasharray="3 3"
@@ -360,7 +360,7 @@ function GrowthChart({
                 y1={0}
                 x2={hv.x}
                 y2={CH}
-                stroke="#5B7490"
+                className="stroke-dim"
                 strokeOpacity="0.25"
                 strokeWidth="1"
               />
@@ -381,7 +381,7 @@ function GrowthChart({
         <AnimatePresence>
           {hv && (
             <motion.div
-              className="pointer-events-none absolute whitespace-nowrap rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-left shadow-lg"
+              className="pointer-events-none absolute whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
               style={{
                 left: Math.max(46, Math.min(w - 46, hv.x)),
                 top: 0,
@@ -410,7 +410,7 @@ function GrowthChart({
           )}
         </AnimatePresence>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[0.625rem] text-[#94A3B8]">
+      <div className="mt-2 flex items-center gap-1.5 text-[0.625rem] text-faint">
         <span>
           {impliedPct !== null
             ? `Projected approximately at ${impliedPct}%/year`
@@ -420,11 +420,11 @@ function GrowthChart({
         <span className="group relative inline-flex">
           <button
             aria-label="About this projection"
-            className="flex h-3 w-3 items-center justify-center rounded-full border border-[#CBD5E1] text-[0.5rem] font-semibold leading-none text-[#94A3B8] transition-colors hover:border-[#5B7490] hover:text-[#5B7490]"
+            className="flex h-3 w-3 items-center justify-center rounded-full border border-edge2 text-[0.5rem] font-semibold leading-none text-faint transition-colors hover:border-dim hover:text-dim"
           >
             i
           </button>
-          <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-[0.625rem] leading-snug text-white/80 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <span className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 rounded-lg bg-tip px-2.5 py-1.5 text-[0.625rem] leading-snug text-white/80 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             Estimate from current yields and typical volatility. Actual results
             will vary.
           </span>
@@ -459,11 +459,11 @@ function DurationDropdown({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3.5 py-1.5 text-xs font-medium text-[#0C1A2B] transition-colors hover:border-[#5B7490]"
+        className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-3.5 py-1.5 text-xs font-medium text-ink transition-colors hover:border-dim"
       >
         {value.label}
         <ChevronDown
-          className={`h-3.5 w-3.5 text-[#5B7490] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 text-dim transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
       <AnimatePresence>
@@ -474,7 +474,7 @@ function DurationDropdown({
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-[calc(100%+6px)] z-20 w-36 rounded-xl border-[1.25px] border-[#E8EAEC] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8"
+            className="absolute right-0 top-[calc(100%+6px)] z-20 w-36 rounded-xl border-[1.25px] border-edge bg-card p-1 shadow-lg shadow-[#0C1A2B]/8"
           >
             {DURATIONS.map((d) => (
               <button
@@ -483,10 +483,10 @@ function DurationDropdown({
                   onChange(d);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-[#F7F9FC] ${
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-panel ${
                   d.label === value.label
-                    ? "font-semibold text-[#1591DC]"
-                    : "text-[#5B7490]"
+                    ? "font-semibold text-brand"
+                    : "text-dim"
                 }`}
               >
                 {d.label}
@@ -556,35 +556,48 @@ export default function PlanPreview() {
     ? alloc.slice(0, allocHover!).reduce((s, a) => s + a.pct, 0) + ah.pct / 2
     : 0;
 
+  // primary action: switch to this strategy. When it's already the active plan
+  // (or custom weights are incomplete) the button stays visible but disabled, so
+  // the layout never shifts and the state reads clearly.
+  const primaryDisabled = isCustom ? !customValid : isCurrent;
+  const primaryLabel = isCustom
+    ? "Set custom mix"
+    : isCurrent
+      ? "Current plan"
+      : `Switch to ${strat.id}`;
+
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
+    <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="hidden md:block">
           <h1 className="text-3xl font-semibold tracking-[-0.03em]">Plan</h1>
-          <p className="mt-1 text-sm text-[#5B7490]">
+          <p className="mt-1 text-sm text-dim">
             Compare strategies and project forward.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2 text-sm font-medium text-[#5B7490] transition-colors hover:text-[#0C1A2B]">
+        {/* desktop: actions stay top-right (mobile shows them under the card) */}
+        <div className="hidden shrink-0 items-center gap-2.5 md:flex">
+          <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink">
             <MessageSquare className="h-4 w-4" /> Ask Agent
           </button>
-          {!isCurrent && (
-            <button className="rounded-full bg-[#1591DC] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90">
-              {isCustom ? "Set custom mix" : `Switch to ${strat.id}`}
-            </button>
-          )}
+          <button
+            disabled={primaryDisabled}
+            className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {primaryLabel}
+          </button>
         </div>
       </div>
 
       <div className="mt-6 grid items-stretch gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        {/* ─── LEFT: strategy ─── */}
-        <div className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+        {/* ─── LEFT: strategy + apply ─── */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-1 flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5">
           {/* role header */}
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
             Strategy
           </p>
-          <p className="mb-4 mt-0.5 text-xs text-[#5B7490]">
+          <p className="mb-4 mt-0.5 text-xs text-dim">
             Pick one to preview its mix and projection.
           </p>
 
@@ -596,12 +609,12 @@ export default function PlanPreview() {
                 <button
                   key={s.id}
                   onClick={() => setSelectedId(s.id)}
-                  className={`relative flex-1 border-[1.25px] border-[#E8EAEC] px-2 py-2 text-xs font-medium transition-colors ${
+                  className={`relative flex-1 border-[1.25px] border-edge px-2 py-2 text-xs font-medium transition-colors ${
                     i === 0 ? "rounded-l-lg" : "ml-[-1.25px]"
                   } ${i === STRATEGIES.length - 1 ? "rounded-r-lg" : ""} ${
                     active
-                      ? "z-10 border-[#1591DC] bg-[#EAF4FC] font-semibold text-[#1591DC]"
-                      : "bg-white text-[#5B7490] hover:bg-[#F7F9FC]"
+                      ? "z-10 border-brand bg-brand-soft font-semibold text-brand"
+                      : "bg-card text-dim hover:bg-panel"
                   }`}
                 >
                   {s.id}
@@ -613,25 +626,25 @@ export default function PlanPreview() {
           {/* header */}
           <div className="mt-5 flex items-start justify-between">
             <div>
-              <h2 className="text-base font-semibold tracking-tight text-[#0C1A2B]">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 {isCustom ? "Custom" : `${strat.id} Risk`}
               </h2>
               <p className="mt-1.5 flex items-baseline gap-1.5">
-                <span className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+                <span className="text-3xl font-semibold tracking-[-0.03em] text-ink">
                   {isCustom
                     ? `${apy.toFixed(1)}%`
                     : strat.apy != null
                       ? `${strat.apy}%`
                       : "—"}
                 </span>
-                <span className="text-[0.625rem] tracking-wider text-[#94A3B8]">
+                <span className="text-[0.625rem] tracking-wider text-faint">
                   estimated APY
                 </span>
               </p>
             </div>
             {isCurrent && (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-[#5B7490]">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="flex items-center gap-1.5 text-xs font-medium text-dim">
+                <span className="h-1.5 w-1.5 rounded-full bg-pos-soft0" />
                 Current
               </span>
             )}
@@ -640,7 +653,7 @@ export default function PlanPreview() {
           {isCustom ? (
             /* custom: user sets the mix across risk levels */
             <div className="mt-4 flex flex-1 flex-col">
-              <p className="mb-1 text-xs text-[#5B7490]">
+              <p className="mb-1 text-xs text-dim">
                 How much in each risk?
               </p>
               <div className="flex flex-1 flex-col justify-center">
@@ -650,14 +663,14 @@ export default function PlanPreview() {
                     className="flex items-center justify-between py-2"
                   >
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-[#0C1A2B]">
+                      <span className="text-sm font-medium text-ink">
                         {lvl} Risk
                       </span>
-                      {/* <span className="text-[0.625rem] text-[#94A3B8]">
+                      {/* <span className="text-[0.625rem] text-faint">
                             {LVL_HINT[lvl]}
                           </span> */}
                     </div>
-                    <div className="flex items-center gap-1 rounded-lg border-[1.25px] border-[#E8EAEC] bg-white px-2.5 py-1.5 transition-all focus-within:border-[#1591DC] focus-within:ring-2 focus-within:ring-[#1591DC]/15">
+                    <div className="flex items-center gap-1 rounded-lg border-[1.25px] border-edge bg-card px-2.5 py-1.5 transition-all focus-within:border-brand focus-within:ring-2 focus-within:ring-[#1591DC]/15">
                       <input
                         value={customW[lvl]}
                         onChange={(e) =>
@@ -670,37 +683,37 @@ export default function PlanPreview() {
                           }))
                         }
                         inputMode="numeric"
-                        className="w-8 bg-transparent text-right text-sm font-semibold text-[#0C1A2B] outline-none"
+                        className="w-8 bg-transparent text-right text-sm font-semibold text-ink outline-none"
                       />
-                      <span className="text-xs text-[#5B7490]">%</span>
+                      <span className="text-xs text-dim">%</span>
                     </div>
                   </div>
                 ))}
               </div>
               {/* receipt-style total: divider line + sum */}
-              <div className="mt-3 border-t-[1.25px] border-[#E8EAEC] pt-3">
+              <div className="mt-3 border-t-[1.25px] border-edge pt-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-[#0C1A2B]">
+                  <span className="text-sm font-semibold text-ink">
                     Total
                   </span>
                   <span className="flex items-center gap-1 text-sm font-semibold">
                     <span
                       className={
-                        customValid ? "text-[#0C1A2B]" : "text-[#EF4444]"
+                        customValid ? "text-ink" : "text-neg"
                       }
                     >
                       {customTotal}%
                     </span>
                     {customValid && (
                       <Check
-                        className="h-3.5 w-3.5 text-green-600"
+                        className="h-3.5 w-3.5 text-pos"
                         strokeWidth={2.5}
                       />
                     )}
                   </span>
                 </div>
                 {!customValid && (
-                  <p className="mt-1 text-right text-[0.625rem] text-[#EF4444]">
+                  <p className="mt-1 text-right text-[0.625rem] text-neg">
                     Must equal 100%
                   </p>
                 )}
@@ -709,31 +722,31 @@ export default function PlanPreview() {
           ) : (
             <>
               {/* description */}
-              <p className="mt-4 text-sm leading-relaxed text-[#5B7490]">
+              <p className="mt-4 text-sm leading-relaxed text-dim">
                 {strat.desc}
               </p>
 
               {/* characteristics — grows to fill so columns match height without a void */}
-              <div className="mt-5 flex flex-1 flex-col justify-around overflow-hidden rounded-xl bg-[#F7F9FC] py-1">
+              <div className="mt-5 flex flex-1 flex-col justify-around overflow-hidden rounded-xl bg-panel py-1">
                 <div className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-xs text-[#5B7490]">Time to keep</span>
-                  <span className="text-xs font-semibold text-[#0C1A2B]">
+                  <span className="text-xs text-dim">Time to keep</span>
+                  <span className="text-xs font-semibold text-ink">
                     {strat.hold}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-xs text-[#5B7490]">
+                  <span className="text-xs text-dim">
                     Possible worst drop
                   </span>
-                  <span className="text-xs font-semibold text-[#0C1A2B]">
+                  <span className="text-xs font-semibold text-ink">
                     {strat.drop}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-xs text-[#5B7490]">
+                  <span className="text-xs text-dim">
                     Best suited for
                   </span>
-                  <span className="text-xs font-semibold text-[#0C1A2B]">
+                  <span className="text-xs font-semibold text-ink">
                     {strat.bestFor}
                   </span>
                 </div>
@@ -742,11 +755,11 @@ export default function PlanPreview() {
           )}
 
           {/* Avoid — composition constraint, lives with the strategy */}
-          <div className="mt-5 border-t border-[#E8EAEC] pt-4">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+          <div className="mt-5 border-t border-edge pt-4">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
               Avoid
             </p>
-            <p className="mb-3 mt-0.5 text-xs text-[#5B7490]">
+            <p className="mb-3 mt-0.5 text-xs text-dim">
               Assets the agent will never hold. Your mix adjusts around them.
             </p>
             <ExclusionField
@@ -763,15 +776,29 @@ export default function PlanPreview() {
               )}
             />
           </div>
+          </div>
+
+          {/* apply / ask — mobile only; desktop keeps them in the header */}
+          <div className="flex gap-2.5 md:hidden">
+            <button className="flex flex-1 items-center justify-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-4 py-2.5 text-sm font-medium text-dim transition-colors hover:text-ink">
+              <MessageSquare className="h-4 w-4" /> Ask Agent
+            </button>
+            <button
+              disabled={primaryDisabled}
+              className="flex-1 rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {primaryLabel}
+            </button>
+          </div>
         </div>
 
         {/* ─── RIGHT: projection ─── */}
-        <div className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+        <div className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5">
           {/* role header */}
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
             Projection
           </p>
-          <p className="mb-4 mt-0.5 text-xs text-[#5B7490]">
+          <p className="mb-4 mt-0.5 text-xs text-dim">
             {isCustom
               ? "See what your mix could do with your money."
               : `See what ${strat.id} could do with your money.`}
@@ -780,26 +807,26 @@ export default function PlanPreview() {
           {/* inputs */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <label className="text-[0.625rem] uppercase tracking-wider text-[#94A3B8]">
+              <label className="text-[0.625rem] uppercase tracking-wider text-faint">
                 Capital
               </label>
-              <div className="mt-1 flex items-center gap-1 rounded-lg border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1.5 transition-all focus-within:border-[#1591DC] focus-within:ring-2 focus-within:ring-[#1591DC]/15">
-                <span className="text-sm text-[#5B7490]">$</span>
+              <div className="mt-1 flex items-center gap-1 rounded-lg border-[1.25px] border-edge bg-card px-3 py-1.5 transition-all focus-within:border-brand focus-within:ring-2 focus-within:ring-[#1591DC]/15">
+                <span className="text-sm text-dim">$</span>
                 <input
                   value={capital ? capital.toLocaleString("en-US") : ""}
                   onChange={(e) =>
                     setCapital(Number(e.target.value.replace(/\D/g, "")) || 0)
                   }
                   inputMode="numeric"
-                  className="w-24 bg-transparent text-sm font-semibold text-[#0C1A2B] outline-none"
+                  className="w-24 bg-transparent text-sm font-semibold text-ink outline-none"
                 />
               </div>
-              <p className="mt-1 text-[0.625rem] text-[#94A3B8]">
+              <p className="mt-1 text-[0.625rem] text-faint">
                 From your balance
               </p>
             </div>
             <div>
-              <label className="text-[0.625rem] uppercase tracking-wider text-[#94A3B8]">
+              <label className="text-[0.625rem] uppercase tracking-wider text-faint">
                 Duration
               </label>
               <div className="mt-1">
@@ -809,11 +836,11 @@ export default function PlanPreview() {
           </div>
 
           {isCustom && !customValid ? (
-            <div className="mt-6 rounded-xl bg-[#F7F9FC] py-12 text-center">
-              <p className="text-sm font-medium text-[#0C1A2B]">
+            <div className="mt-6 rounded-xl bg-panel py-12 text-center">
+              <p className="text-sm font-medium text-ink">
                 Weights must total 100%
               </p>
-              <p className="mt-1 text-xs text-[#5B7490]">
+              <p className="mt-1 text-xs text-dim">
                 You&apos;re at {customTotal}%. Adjust the mix on the left.
               </p>
             </div>
@@ -821,11 +848,11 @@ export default function PlanPreview() {
             <>
               {/* allocation — what it buys */}
               <div className="mt-6">
-                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
                   Allocation
                 </p>
                 <div className="relative">
-                  <div className="flex h-3.5">
+                  <div className="flex h-6 md:h-3.5">
                     {alloc.map((a, i) => (
                       <div
                         key={a.sym}
@@ -844,7 +871,7 @@ export default function PlanPreview() {
                   <AnimatePresence>
                     {ah && (
                       <motion.div
-                        className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-left shadow-lg"
+                        className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
                         style={{
                           left: `${allocCenter}%`,
                           transformOrigin: "bottom center",
@@ -864,7 +891,35 @@ export default function PlanPreview() {
                     )}
                   </AnimatePresence>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                {/* mobile: one card per allocation */}
+                <div className="mt-4 flex flex-col gap-2 md:hidden">
+                  {alloc.map((a) => (
+                    <div
+                      key={a.sym}
+                      className="flex items-center gap-2.5 rounded-xl border border-edge bg-panel px-3 py-2.5"
+                    >
+                      <TokenIcon
+                        sym={a.sym}
+                        color={tokenColor(a.sym)}
+                        size={26}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-tight text-ink">
+                          {a.sym}
+                        </p>
+                        <p className="text-[0.625rem] text-faint">
+                          {fmtUSD((capital * a.pct) / 100)}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-ink">
+                        {a.pct}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* desktop: original inline legend */}
+                <div className="mt-3 hidden flex-wrap gap-x-5 gap-y-2 md:flex">
                   {alloc.map((a) => (
                     <div key={a.sym} className="flex items-center gap-2">
                       <TokenIcon
@@ -872,10 +927,10 @@ export default function PlanPreview() {
                         color={tokenColor(a.sym)}
                         size={22}
                       />
-                      <span className="text-sm font-semibold text-[#0C1A2B]">
+                      <span className="text-sm font-semibold text-ink">
                         {a.sym}
                       </span>
-                      <span className="text-xs text-[#5B7490]">{a.pct}%</span>
+                      <span className="text-xs text-dim">{a.pct}%</span>
                     </div>
                   ))}
                 </div>
@@ -883,21 +938,21 @@ export default function PlanPreview() {
 
               {/* growth — principal vs projected earnings (Likely) */}
               <div className="mt-6">
-                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+                <p className="mb-2.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
                   Growth
                 </p>
                 <div className="flex items-end justify-between">
-                  <span className="text-xs text-[#5B7490]">
+                  <span className="text-xs text-dim">
                     {fmtUSD(capital)}
                   </span>
-                  <span className="text-xs font-medium text-[#1591DC]">
+                  <span className="text-xs font-medium text-brand">
                     +{fmtUSD(Math.max(0, base - capital))} earned
                   </span>
                 </div>
                 <div className="mt-2 flex h-3.5">
                   <div
                     style={{ flexGrow: capital, zIndex: 2 }}
-                    className="relative basis-0 rounded-[3px] bg-[#CFE3F4] transition-[flex-grow] duration-500 ease-out"
+                    className="relative basis-0 rounded-[3px] bg-brand-soft transition-[flex-grow] duration-500 ease-out"
                   />
                   <div
                     style={{
@@ -905,7 +960,7 @@ export default function PlanPreview() {
                       marginLeft: -5,
                       zIndex: 1,
                     }}
-                    className="relative basis-0 rounded-[3px] bg-[#1591DC] transition-[flex-grow] duration-500 ease-out"
+                    className="relative basis-0 rounded-[3px] bg-brand transition-[flex-grow] duration-500 ease-out"
                   />
                 </div>
               </div>
@@ -914,14 +969,14 @@ export default function PlanPreview() {
               <div className="mt-6 flex-1" />
 
               {/* lead line + scenarios */}
-              <p className="text-xs text-[#5B7490]">
+              <p className="text-xs text-dim">
                 In {duration.label}, your{" "}
-                <span className="font-medium text-[#0C1A2B]">
+                <span className="font-medium text-ink">
                   {fmtUSD(capital)}
                 </span>{" "}
                 could be worth
               </p>
-              <div className="mt-2 grid grid-cols-3 gap-3">
+              <div className="mt-2 grid grid-cols-3 gap-2 md:gap-3">
                 {[
                   { label: "Likely", val: base },
                   { label: "Best", val: best },
@@ -933,30 +988,34 @@ export default function PlanPreview() {
                   return (
                     <div
                       key={c.label}
-                      className="rounded-xl bg-[#F7F9FC] p-3.5"
+                      className="rounded-xl bg-panel p-2.5 md:p-3.5"
                     >
-                      <p className="text-[0.625rem] uppercase tracking-wider text-[#5B7490]">
+                      <p className="text-[0.625rem] uppercase tracking-wider text-dim">
                         {c.label}
                       </p>
-                      <p className="mt-1 flex items-center text-xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+                      <p className="mt-1 flex items-center text-base font-semibold tracking-[-0.03em] text-ink md:text-xl">
                         <span>$</span>
                         <SlidingNumber number={Math.round(c.val)} />
                       </p>
-                      <p
-                        className={`mt-0.5 text-xs font-medium ${up ? "text-green-600" : "text-[#EF4444]"}`}
+                      <div
+                        className={`mt-0.5 flex flex-col text-[0.625rem] font-medium md:flex-row md:items-center md:text-xs ${up ? "text-pos" : "text-neg"}`}
                       >
-                        {up ? "+" : "-"}
-                        <span>$</span>
-                        <SlidingNumber
-                          className="inline-flex"
-                          number={Math.round(Math.abs(g))}
-                        />
-                        <span className="mx-1.5 font-normal text-[#94A3B8]">
+                        <span className="flex items-center">
+                          {up ? "+" : "-"}
+                          <span>$</span>
+                          <SlidingNumber
+                            className="inline-flex"
+                            number={Math.round(Math.abs(g))}
+                          />
+                        </span>
+                        <span className="mx-1.5 hidden font-normal text-faint md:inline">
                           |
                         </span>
-                        {up ? "+" : "-"}
-                        {Math.abs(gp).toFixed(1)}%
-                      </p>
+                        <span>
+                          {up ? "+" : "-"}
+                          {Math.abs(gp).toFixed(1)}%
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -968,15 +1027,15 @@ export default function PlanPreview() {
 
       {/* ─── chart — full-width row below, matches Overview chart card ─── */}
       {(!isCustom || customValid) && (
-        <div className="mt-5 rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+        <div className="mt-5 rounded-2xl border-[1.25px] border-edge bg-card p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-[#5B7490]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
                 Projected growth
               </p>
-              <p className="mt-1 text-xs text-[#5B7490]">
+              <p className="mt-1 text-xs text-dim">
                 {strat.id} strategy · next{" "}
-                <span className="font-medium text-[#0C1A2B]">
+                <span className="font-medium text-ink">
                   {duration.label}
                 </span>
               </p>
@@ -1007,7 +1066,7 @@ export default function PlanPreview() {
                     className={`rounded-full border-[1.25px] px-3 py-1 text-[0.6875rem] font-medium capitalize transition-colors ${
                       active
                         ? ""
-                        : "border-[#E8EAEC] text-[#5B7490] hover:text-[#0C1A2B]"
+                        : "border-edge text-dim hover:text-ink"
                     }`}
                   >
                     {m}
