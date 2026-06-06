@@ -38,12 +38,16 @@ export const STRATEGY_SYSTEM_PROMPT = [
   "RULES:",
   "1. Return ONLY valid JSON — no prose, no markdown fences.",
   "2. allocation values are whole integers (percentages). They must sum to EXACTLY 100.",
-  "3. Each category's total must stay within the given [min%, max%] bounds.",
-  "4. No single token may exceed its per-token cap.",
-  "5. STABLE category must always be ≥ 5% (needed for swap liquidity).",
-  "6. Within a category, prefer higher-APY tokens.",
-  "7. Only allocate to tokens EXACTLY as listed in AVAILABLE TOKENS — symbols are CASE-SENSITIVE (e.g. 'cmETH' not 'CMETH').",
-  "8. 'reasoning' must be 1–2 sentences explaining the key decision.",
+  "3. MANDATORY: every category whose min% > 0 MUST receive at least that percentage.",
+  "   The STRATEGY BOUNDS section shows min%/max% for each category — the min is a HARD FLOOR.",
+  "4. Each category's total must also stay AT OR BELOW its max%.",
+  "5. No single token may exceed its per-token cap.",
+  "6. STABLE category must always be ≥ 5% (needed for swap liquidity).",
+  "7. Within a category, prefer higher-APY tokens.",
+  "8. Only allocate to tokens EXACTLY as listed — symbols are CASE-SENSITIVE (e.g. 'cmETH' not 'CMETH').",
+  "9. 'reasoning' must be 1–2 sentences explaining the key decision.",
+  "",
+  "STRATEGY: look at MANDATORY MINIMUMS in the prompt first, satisfy those, then distribute the rest.",
   "",
   'Response format: { "reasoning": "...", "allocation": { "TOKEN": <integer>, ... } }',
 ].join("\n");
@@ -76,16 +80,32 @@ export function buildStrategyPrompt(input: StrategyPromptInput): string {
   }
   lines.push("");
 
-  // ── Strategy bounds + available tokens per category ─────────────────────────
-  lines.push(`STRATEGY BOUNDS [${riskLevel}]`);
-  lines.push("Format per row: CATEGORY  min%/max%  →  TOKEN($price/APY%) ...");
-  lines.push("");
-
   const CATEGORY_ORDER: TokenCategory[] = [
     "STABLE", "BOND", "GOLD", "COMMODITY",
     "INDEX", "STOCK", "CRYPTO_LST", "CRYPTO",
     "FX_MAJOR", "FX_EM",
   ];
+
+  // ── Mandatory minimums ───────────────────────────────────────────────────────
+  const mandatoryCategories = CATEGORY_ORDER.filter(
+    (cat) => CATEGORY_BOUNDS[cat][riskLevel].minBps > 0,
+  );
+
+  if (mandatoryCategories.length > 0) {
+    lines.push("MANDATORY MINIMUMS (hard floors — violation causes a retry)");
+    for (const cat of mandatoryCategories) {
+      const minPct = CATEGORY_BOUNDS[cat][riskLevel].minBps / 100;
+      const liveToks = TOKENS_BY_CATEGORY[cat].filter((t) => (prices[t.symbol] ?? 0) > 0);
+      const examples = liveToks.slice(0, 3).map((t) => t.symbol).join(", ");
+      lines.push(`  ${cat.padEnd(12)} ≥ ${minPct}%   (tokens: ${examples})`);
+    }
+    lines.push("");
+  }
+
+  // ── Strategy bounds + available tokens per category ─────────────────────────
+  lines.push(`STRATEGY BOUNDS [${riskLevel}]`);
+  lines.push("Format per row: CATEGORY  min%/max%  →  TOKEN($price/APY%) ...");
+  lines.push("");
 
   for (const cat of CATEGORY_ORDER) {
     const bounds = CATEGORY_BOUNDS[cat][riskLevel];
