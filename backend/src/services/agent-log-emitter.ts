@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { prisma } from "../db/client.js";
 
 export type LogStatus = "running" | "done" | "skip" | "error";
 
@@ -28,6 +29,23 @@ class AgentLogEmitter extends EventEmitter {
       ...entry,
     };
     this.emit("entry", full);
+
+    // Persist final-status entries to DB for historical display.
+    // "running" events are SSE-only (intermediate state, not worth storing).
+    if (full.status !== "running") {
+      prisma.agentLog.create({
+        data: {
+          id: full.id,
+          vaultAddress: full.vaultAddress,
+          workflow: full.workflow,
+          step: full.step,
+          status: full.status,
+          message: full.message,
+          data: full.data ? (full.data as object) : undefined,
+          ts: new Date(full.ts),
+        },
+      }).catch(() => {});
+    }
   }
 }
 

@@ -54,9 +54,9 @@ export const prismaAgentDeps: AgentDeps = {
   runNow: (vault) => rebalancerService.runNow(vault),
   runHermes: (vault) => runHermesRebalance(vault),
   agentLog: (vault, limit) =>
-    prisma.agentActivity.findMany({
+    prisma.agentLog.findMany({
       where: { vaultAddress: vault },
-      orderBy: { timestamp: "desc" },
+      orderBy: { ts: "desc" },
       take: limit,
     }),
   holdings: (vault) => readHoldings(vault),
@@ -172,9 +172,14 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
           data: JSON.stringify({ vaultAddress: vaultLower, ts: new Date().toISOString() }),
         });
 
-        // Keep alive: ping every 25s (prevents proxy/Fly.io 60s idle timeout)
+        // Keep alive: ping every 25s (prevents proxy/Fly.io 60s idle timeout).
+        // Using unreffed timer so Node.js can exit cleanly in tests when the
+        // reader is cancelled without waiting the full 25s.
         while (true) {
-          await stream.sleep(25_000);
+          await new Promise<void>((res) => {
+            const t = setTimeout(res, 25_000);
+            if (typeof t !== "number") t.unref?.();
+          });
           await stream.writeSSE({ event: "ping", data: new Date().toISOString() });
         }
       } finally {

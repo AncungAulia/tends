@@ -127,6 +127,22 @@ model AgentConfig {
   updatedAt            DateTime @updatedAt
 }
 
+/// Per-step workflow log — emitted by agentLogEmitter during Hermes runs.
+/// Persists each step's final outcome (done/skip/error) for historical display.
+/// Live "running" status events are SSE-only (not stored here).
+model AgentLog {
+  id           String   @id @default(uuid())
+  vaultAddress String
+  workflow     String   // e.g. "hermes-rebalancer"
+  step         String   // e.g. "scan-vault", "signal-market", "decide-allocation", "exec-rebalance"
+  status       String   // "done" | "skip" | "error"
+  message      String
+  data         Json?
+  ts           DateTime @default(now())
+
+  @@index([vaultAddress, ts])
+}
+
 /// Per-vault value-over-time — powers the FE PnL chart. Stores UserVault.totalAssets()
 /// (USDC base units, 6-dec) on a schedule; PnL = totalAssets − Vault.initialDeposit.
 /// Same valuation basis the dashboard uses for the current value, so the chart and the
