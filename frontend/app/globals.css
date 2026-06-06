@@ -54,6 +54,26 @@
   --color-blue-primary: #1591dc;
   --color-blue-light: #4bb8fa;
   --color-blue-pale: #eaf4fc;
+
+  /* Semantic theme tokens → utilities (bg-app, text-ink, border-edge, …).
+     Values are `var(--x)` so they flip with `.dark` (see :root / .dark below). */
+  --color-app: var(--app);
+  --color-card: var(--card);
+  --color-panel: var(--panel);
+  --color-edge: var(--edge);
+  --color-edge2: var(--edge2);
+  --color-ink: var(--ink);
+  --color-dim: var(--dim);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-tip: var(--tip);
+  --color-pos: var(--pos);
+  --color-pos-soft: var(--pos-soft);
+  --color-neg: var(--neg);
+  --color-neg-soft: var(--neg-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
 }
 
 /* NOTE: do NOT add an unlayered universal margin/padding reset here.
@@ -65,10 +85,51 @@
 :root {
   --page-bg: #ffffff;
   --page-text: #0c1a2b;
+
+  /* ── Semantic preview palette (light) ──────────────────────────────
+     These flip under `.dark`. Components reference them via the matching
+     Tailwind utilities (bg-app / bg-card / text-ink / border-edge / …),
+     so theming is one source of truth instead of hex scattered everywhere. */
+  --app: #f9fbfc; /* page canvas */
+  --card: #ffffff; /* raised card */
+  --panel: #f7f9fc; /* inner subtle panel */
+  --edge: #e8eaec; /* default border */
+  --edge2: #cbd5e1; /* stronger border (hover) */
+  --ink: #0c1a2b; /* primary text */
+  --dim: #5b7490; /* secondary text */
+  --faint: #94a3b8; /* tertiary text / icons */
+  --brand: #1591dc; /* accent */
+  --brand-soft: #eaf4fc; /* accent-tinted bg (active/selected) */
+  --tip: #0c1a2b; /* tooltip / dark bubble — stays dark in both themes */
+  --pos: #16a34a;
+  --pos-soft: #f0fdf4;
+  --neg: #dc2626;
+  --neg-soft: #fef2f2;
+  --warn: #a16207;
+  --warn-soft: #fefce8;
 }
 .dark {
-  --page-bg: #0c1a2b;
-  --page-text: #ffffff;
+  --page-bg: #0d0e11;
+  --page-text: #e7ecf1;
+
+  /* ── Charcoal dark ── */
+  --app: #0d0e11; /* near-black canvas */
+  --card: #16181d; /* card sits ABOVE the canvas (raised, lighter) */
+  --panel: #1c1f25;
+  --edge: #282b33;
+  --edge2: #3a3e47;
+  --ink: #e7ecf1; /* soft white, not pure #fff (less glare) */
+  --dim: #9aa6b2;
+  --faint: #6c7681;
+  --brand: #2a9de4; /* lifted slightly so it reads on dark */
+  --brand-soft: #14242e;
+  --tip: #232730;
+  --pos: #34d399;
+  --pos-soft: rgba(52, 211, 153, 0.13);
+  --neg: #f87171;
+  --neg-soft: rgba(248, 113, 113, 0.13);
+  --warn: #fbbf24;
+  --warn-soft: rgba(250, 204, 21, 0.13);
 }
 
 html {
@@ -147,12 +208,16 @@ body {
 }
 
 /* Page enter (route transition) — re-fires on each navigation via template.tsx.
-   CSS keyframe (not a persistent transform) so it leaves no containing block
-   behind, keeping sticky/fixed descendants (sidebar, chat composer, modals) intact. */
+   The translateY makes .page-enter a containing block for position:fixed
+   descendants WHILE it runs, so when it ends those children (Activity's drawer,
+   the money modals) reflow back to the viewport — which used to flash the fixed
+   bottom nav. The bottom nav now rides its own compositing layer (transform-gpu
+   + will-change in BottomNav), so it stays put through that reflow and the
+   slide-up can stay. */
 @keyframes pageEnter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -166,6 +231,32 @@ body {
   .page-enter {
     animation: none;
   }
+}
+
+/* When a text field is focused on mobile, the bottom nav slides away (see
+   BottomNav). Its clearance padding under <main> would then be dead space
+   between the chat composer and the keyboard, so collapse it. Specificity
+   (body.kb-open main) beats Tailwind's pb-[...] utility, no !important needed. */
+body.kb-open main {
+  padding-bottom: 0;
+}
+
+/* Lock the document while typing so the sticky chat composer can never unstick
+   and expose empty space below the keyboard. The chat container already sizes
+   itself to the visible viewport, so there is nothing legitimate to scroll —
+   this just kills any leftover rounding/rubber-band scroll. Class is toggled on
+   both <html> and <body> by BottomNav. */
+.kb-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* hide scrollbar but keep scrolling (chat messages on mobile) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Subtle clip-line reveal for page titles (landing signature, kept brief) */
