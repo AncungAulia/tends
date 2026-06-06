@@ -12,6 +12,7 @@ import {
   buildStrategyPrompt,
   STRATEGY_SYSTEM_PROMPT,
   validateAllocation,
+  repairAllocation,
   type HoldingItem,
 } from "../../../services/strategy-prompt.js";
 import {
@@ -370,15 +371,16 @@ const decideStep = createStep({
     let attempts = 0;
     let lastErrors = "";
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       attempts = attempt;
 
       const prompt = lastErrors
-        ? `${userPrompt}\n\n⚠️ Previous attempt failed validation:\n${lastErrors}\nFix these issues and return corrected JSON only.`
+        ? `${userPrompt}\n\n⚠️ Previous attempt failed validation:\n${lastErrors}\nFix ONLY these issues. Keep all other values. Sum MUST equal exactly 100. Return corrected JSON only.`
         : userPrompt;
 
       if (attempt > 1) {
-        emitDecide("running", `Attempt ${attempt}/3 — fixing validation errors...`);
+        emitDecide("running", `Attempt ${attempt}/${MAX_ATTEMPTS} — fixing validation errors...`);
       }
 
       try {
@@ -392,13 +394,21 @@ const decideStep = createStep({
         allocation = parsed.allocation ?? {};
         reasoning = parsed.reasoning ?? "";
 
-        const validation = validateAllocation(
+        // Auto-repair minor arithmetic/cap errors before validation
+        const repaired = repairAllocation(
           allocation,
           prices as Partial<Record<TokenSymbol, number>>,
           riskLevel,
         );
 
+        const validation = validateAllocation(
+          repaired,
+          prices as Partial<Record<TokenSymbol, number>>,
+          riskLevel,
+        );
+
         if (validation.valid) {
+          allocation = repaired;
           log.info({ vault, attempts, tokens: Object.keys(allocation).length }, "[decide] Hermes allocation validated ✓");
           break;
         }

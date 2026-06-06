@@ -147,13 +147,16 @@ export function buildStrategyPrompt(input: StrategyPromptInput): string {
   lines.push("");
 
   // ── Per-token caps ───────────────────────────────────────────────────────────
-  lines.push("PER-TOKEN CAPS");
+  // Show effective cap = min(per-token cap, category max) so LLM sees the binding constraint.
+  lines.push("PER-TOKEN CAPS (per individual token — category total must ALSO stay within HARD CONSTRAINTS above)");
   const capParts: string[] = [];
   for (const [cat, byRisk] of Object.entries(PER_TOKEN_CAP_BPS) as [
     TokenCategory,
     Record<"LOW" | "MEDIUM" | "HIGH", number>,
   ][]) {
-    const capPct = byRisk[riskLevel] / 100;
+    const catMaxBps = CATEGORY_BOUNDS[cat][riskLevel].maxBps;
+    const effectiveBps = Math.min(byRisk[riskLevel], catMaxBps);
+    const capPct = effectiveBps / 100;
     capParts.push(`${cat} max ${capPct}%`);
   }
   lines.push(capParts.join(" | "));
@@ -240,4 +243,126 @@ export function validateAllocation(
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+// ── Allocation repairer ───────────────────────────────────────────────────────
+
+/**
+ * Best-effort repair of an LLM allocation before validation.
+ * Handles: category ceiling violations (proportional scale-down),
+ * per-token cap violations (hard cap), sum ≠ 100 (adjust via STABLE buffer),
+ * and category floor deficits (fill from largest STABLE token).
+ * Returns repaired allocation; caller must still run validateAllocation.
+ */
+export function repairAllocation(
+  raw: Record<string, number>,
+  prices: Partial<Record<TokenSymbol, number>>,
+  riskLevel: "LOW" | "MEDIUM" | "HIGH",
+): Record<string, number> {
+  // Build token→category lookup
+  const tokenCat = new Map<string, TokenCategory>();
+  for (const [cat, tokens] of Object.entries(TOKENS_BY_CATEGORY) as [TokenCategory, { symbol: TokenSymbol }[]][]) {
+    for (const t of tokens) tokenCat.set(t.symbol, cat);
+  }
+
+  // 1. Remove zero / no-live-price entries
+  const alloc: Record<string, number> = {};
+  for (const [sym, pct] of Object.entries(raw)) {
+    if (pct > 0 && (prices[sym as TokenSymbol] ?? 0) > 0) {
+      alloc[sym] = pct;
+    }
+  }
+
+  // 2. Cap each token to effective cap = min(per-token cap, category max)
+  for (const [sym, pct] of Object.entries(alloc)) {
+    const cat = tokenCat.get(sym);
+    if (!cat) continue;
+    const catMaxPct = CATEGORY_BOUNDS[cat][riskLevel].maxBps / 100;
+    const rawTokenCap = PER_TOKEN_CAP_BPS[cat]?.[riskLevel];
+    const tokenCapPct = rawTokenCap != null ? rawTokenCap / 100 : catMaxPct;
+    const effectiveCap = Math.min(catMaxPct, tokenCapPct);
+    if (pct > effectiveCap) alloc[sym] = effectiveCap;
+  }
+
+  // 3. Cap each category to its max (proportional scale-down within category)
+  for (const cat of Object.keys(CATEGORY_BOUNDS) as TokenCategory[]) {
+    const maxPct = CATEGORY_BOUNDS[cat][riskLevel].maxBps / 100;
+    if (maxPct >= 100) continue;
+    const catSyms = Object.keys(alloc).filter((s) => tokenCat.get(s) === cat);
+    const catTotal = catSyms.reduce((s, k) => s + alloc[k]!, 0);
+    if (catTotal > maxPct && catTotal > 0) {
+      const scale = maxPct / catTotal;
+      for (const sym of catSyms) {
+        alloc[sym] = Math.floor(alloc[sym]! * scale);
+      }
+    }
+  }
+
+  // 4. Normalise sum to 100 — find a token whose category has room for ±diff
+  const getCatTotal = (cat: TokenCategory) =>
+    Object.keys(alloc).filter((s) => tokenCat.get(s) === cat).reduce((s, k) => s + (alloc[k] ?? 0), 0);
+
+  const adjustSum = () => {
+    const diff = 100 - Object.values(alloc).reduce((s, v) => s + v, 0);
+    if (diff === 0) return;
+
+    const sorted = Object.entries(alloc).sort(([, a], [, b]) => b - a);
+    for (const [sym] of sorted) {
+      const cat = tokenCat.get(sym);
+      if (!cat) continue;
+      const catMax = CATEGORY_BOUNDS[cat][riskLevel].maxBps / 100;
+      const catMin = CATEGORY_BOUNDS[cat][riskLevel].minBps / 100;
+      const newCatTotal = getCatTotal(cat) + diff;
+      const newTokenVal = (alloc[sym] ?? 0) + diff;
+      if (newTokenVal >= 0 && newCatTotal >= catMin && newCatTotal <= catMax) {
+        alloc[sym] = newTokenVal;
+        return;
+      }
+    }
+    // No perfect slot — clamp to largest token as last resort
+    const [largest] = sorted;
+    if (largest) alloc[largest[0]] = Math.max(0, (alloc[largest[0]] ?? 0) + diff);
+  };
+
+  adjustSum();
+
+  // 5. Fill category floors (take from largest STABLE token, then any token)
+  for (const cat of Object.keys(CATEGORY_BOUNDS) as TokenCategory[]) {
+    const minPct = CATEGORY_BOUNDS[cat][riskLevel].minBps / 100;
+    if (minPct === 0) continue;
+    const catSyms = Object.keys(alloc).filter((s) => tokenCat.get(s) === cat);
+    const catTotal = catSyms.reduce((s, k) => s + alloc[k]!, 0);
+    if (catTotal >= minPct) continue;
+
+    const deficit = minPct - catTotal;
+    const liveToks = TOKENS_BY_CATEGORY[cat].filter((t) => (prices[t.symbol] ?? 0) > 0);
+    if (liveToks.length === 0) continue;
+
+    const firstTok = liveToks[0];
+    if (!firstTok) continue;
+    const target = firstTok.symbol;
+    alloc[target] = (alloc[target] ?? 0) + deficit;
+
+    // Take deficit from STABLE first, then any non-target token
+    let rem = deficit;
+    const donors = Object.entries(alloc)
+      .filter(([s]) => s !== target)
+      .sort(([sa, a], [sb, b]) => {
+        const pa = tokenCat.get(sa) === "STABLE" ? 1 : 0;
+        const pb = tokenCat.get(sb) === "STABLE" ? 1 : 0;
+        return pb - pa || b - a;
+      });
+
+    for (const [sym] of donors) {
+      const take = Math.min(alloc[sym]!, rem);
+      alloc[sym] = alloc[sym]! - take;
+      rem -= take;
+      if (rem <= 0) break;
+    }
+  }
+
+  // Final sum correction (rounding dust)
+  adjustSum();
+
+  return Object.fromEntries(Object.entries(alloc).filter(([, v]) => v > 0));
 }
