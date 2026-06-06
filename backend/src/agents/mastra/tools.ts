@@ -5,6 +5,7 @@ import { projectForRisk } from "../../services/projection.js";
 import { readHoldings } from "../../services/holdings.js";
 import { getAgentConfig, upsertAgentConfig } from "../../services/agent-config.js";
 import { enforceGuardrails } from "./workflows/enforce-guardrails.js";
+import { runHermesRebalance } from "./workflows/rebalancer-workflow.js";
 import { prismaApyReader } from "../../api/routes/apy.js";
 import { prisma } from "../../db/client.js";
 import { as0x } from "../../chain/addresses.js";
@@ -176,10 +177,36 @@ export const tendsReadTools = {
   getRecentActivity: getRecentActivityTool,
 };
 
-/** Mutating tools — only give these to a model that RELIABLY calls tools (NOT Hermes,
- *  which hallucinates write-tool success). See the action-agent (reliable model). */
+// ── CFO action: trigger Hermes-driven rebalance ──────────────────────────────
+
+const triggerRebalanceTool = createTool({
+  id: "triggerRebalance",
+  description:
+    "Run an LLM-driven rebalance for the signed-in user's vault RIGHT NOW. " +
+    "Hermes analyses current prices, APY, holdings, strategy bounds, and the user's investment policy " +
+    "to decide the optimal allocation, then executes it on-chain. " +
+    "Returns outcome (rebalanced/skip/liquidated), reasoning (why Hermes chose this allocation), " +
+    "allocation (the decided token percentages), and attempts (LLM validation rounds). " +
+    "Only call this when the user explicitly requests an immediate rebalance.",
+  inputSchema: z.object({}),
+  outputSchema: z.any(),
+  execute: async (_input, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { error: "no wallet linked to this session" };
+    const vault = await vaultOf(wallet);
+    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    try {
+      return await runHermesRebalance(vault);
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+});
+
+/** Mutating tools — guardrail updates + Hermes-driven rebalance execution. */
 export const tendsActionTools = {
   setAgentGuardrails: setAgentGuardrailsTool,
+  triggerRebalance: triggerRebalanceTool,
 };
 
 /** Default toolset for the chat agent (Hermes) = reads only. */

@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { tendsAgent } from "../agents/mastra/agent.js";
 import { enforceGuardrailsWorkflow } from "../agents/mastra/workflows/enforce-guardrails.js";
 import { onDepositWorkflow, onWithdrawWorkflow } from "../agents/mastra/workflows/balance-change.js";
+import { hermesRebalancerWorkflow } from "../agents/mastra/workflows/rebalancer-workflow.js";
 
 /**
  * Mastra instance — ONLY for local Studio (`pnpm studio` → http://localhost:4111).
@@ -19,7 +20,7 @@ const connectionString = env.DIRECT_URL || env.DATABASE_URL;
 
 export const mastra = new Mastra({
   agents: { tendsAgent },
-  workflows: { enforceGuardrailsWorkflow, onDepositWorkflow, onWithdrawWorkflow },
+  workflows: { enforceGuardrailsWorkflow, onDepositWorkflow, onWithdrawWorkflow, hermesRebalancerWorkflow },
   // Pin Studio to 4111 so it doesn't grab the app's PORT (3001 from .env).
   server: { port: 4111 },
   // Storage powers Studio's Observability tab (traces + logs). On Supabase,
