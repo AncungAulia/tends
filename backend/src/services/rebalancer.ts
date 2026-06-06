@@ -25,6 +25,7 @@ import {
   type AgentConfigValue,
 } from "./agent-config.js";
 import { prisma } from "../db/client.js";
+import { agentLogEmitter } from "./agent-log-emitter.js";
 
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
@@ -372,15 +373,19 @@ export class RebalancerService {
     );
     if (instructions.length === 0) {
       log.info({ vault }, "already balanced, skip");
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "skip", message: "Portfolio already at target — no swaps needed" });
       return { action: "skip", reason: "balanced" };
     }
     if (!(await this.deps.simulateRebalance(vault, instructions))) {
       log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip — no gas spent");
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Swap simulation failed — aborting" });
       return { action: "skip", reason: "unsafe" };
     }
 
+    agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "running", message: `Executing ${instructions.length} swap(s)...` });
     const hash = await this.deps.sendRebalance(vault, instructions);
     log.info({ vault, hash, swaps: instructions.length }, "rebalanced");
+    agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "done", message: `Rebalanced: ${instructions.length} swap(s) executed`, data: { hash, swaps: instructions.length } });
     return { action: "rebalanced", hash, swaps: instructions.length };
   }
 
