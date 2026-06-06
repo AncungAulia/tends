@@ -199,42 +199,22 @@ export const STRATEGY: Record<
   "LOW" | "MEDIUM" | "HIGH",
   { token: TokenSymbol; bps: number }[]
 > = {
+  // Only tokens registered as isAllowedToken in deployed vaults:
+  // mUSD, USDY, mETH, cmETH, sUSDe, WMNT  (+ USDC as the underlying asset)
   LOW: [
-    { token: "mUSD",    bps: 6000 },
-    { token: "sUSDe",   bps: 1000 },
-    { token: "USDY",    bps: 1000 },
-    { token: "VBILL",   bps:  500 },
-    { token: "CETES",   bps:  500 },
-    { token: "GILTS",   bps:  500 },
-    { token: "TESOURO", bps:  500 },
+    { token: "mUSD",  bps: 9000 },
+    { token: "USDY",  bps: 1000 },
   ],
   MEDIUM: [
-    { token: "mUSD",    bps: 2500 },
-    { token: "sUSDe",   bps: 1000 },
-    { token: "CETES",   bps: 1000 },
-    { token: "GILTS",   bps:  500 },
-    { token: "XAU",     bps:  500 },
-    { token: "USA500",  bps: 1000 },
-    { token: "AAPL",    bps:  500 },
-    { token: "MSFT",    bps:  500 },
-    { token: "mETH",    bps: 1000 },
-    { token: "cmETH",   bps:  500 },
-    { token: "WMNT",    bps:  500 },
-    { token: "EUR",     bps:  500 },
+    { token: "mUSD",  bps: 4000 },
+    { token: "mETH",  bps: 3000 },
+    { token: "cmETH", bps: 3000 },
   ],
   HIGH: [
-    { token: "sUSDe",   bps: 1200 },
-    { token: "CETES",   bps:  500 },
-    { token: "XAG",     bps:  500 },
-    { token: "WTI",     bps:  500 },
-    { token: "USA500",  bps: 1500 },
-    { token: "NVDA",    bps:  800 },
-    { token: "TSLA",    bps:  800 },
-    { token: "META",    bps:  600 },
-    { token: "MSFT",    bps:  600 },
-    { token: "mETH",    bps: 1200 },
-    { token: "cmETH",   bps: 1100 },
-    { token: "WMNT",    bps:  700 },
+    { token: "cmETH", bps: 4000 },
+    { token: "sUSDe", bps: 3000 },
+    { token: "mETH",  bps: 2000 },
+    { token: "WMNT",  bps: 1000 },
   ],
 };
 
