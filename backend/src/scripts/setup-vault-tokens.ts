@@ -7,15 +7,24 @@
  *   npx tsx src/scripts/setup-vault-tokens.ts
  */
 
+import { privateKeyToAccount } from "viem/accounts";
+import { createWalletClient, http } from "viem";
+import { mantleSepoliaTestnet } from "viem/chains";
 import { TOKENS } from "../chain/tokens.js";
 import { VAULT_FACTORY_ABI } from "../chain/abis.js";
 import { addresses } from "../chain/addresses.js";
-import { publicClient, getAgentWallet, activeChain, agentAddress } from "../chain/index.js";
+import { publicClient } from "../chain/index.js";
+import { env } from "../config/env.js";
+import { as0x } from "../chain/addresses.js";
 
 async function main() {
-  const wallet = getAgentWallet();
-  const account = agentAddress();
-  if (!account) throw new Error("PRIVATE_KEY_AGENT_EXECUTOR not set");
+  if (!env.PRIVATE_KEY_AGENT_EXECUTOR) throw new Error("PRIVATE_KEY_AGENT_EXECUTOR not set");
+  const account = privateKeyToAccount(as0x(env.PRIVATE_KEY_AGENT_EXECUTOR));
+  const wallet = createWalletClient({
+    account,
+    chain: mantleSepoliaTestnet,
+    transport: http(env.MANTLE_RPC_URL),
+  });
 
   // All tradeable token addresses (everything except USDC which is the vault asset)
   // Filter out empty addresses in case some env vars are not set locally
@@ -24,7 +33,7 @@ async function main() {
     .map((t) => t.address as `0x${string}`);
 
   console.log(`Registering ${tokenAddresses.length} tokens into all vaults...`);
-  console.log("Caller (agentExecutor):", account);
+  console.log("Caller (agentExecutor):", account.address);
   console.log("VaultFactory:", addresses.vaultFactory);
 
   const totalVaults = await publicClient.readContract({
@@ -40,8 +49,6 @@ async function main() {
     abi: VAULT_FACTORY_ABI,
     functionName: "batchAddTokensToVaults",
     args: [tokenAddresses],
-    chain: activeChain,
-    account,
   });
 
   console.log("Tx submitted:", hash);
