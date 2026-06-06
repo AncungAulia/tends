@@ -47,13 +47,13 @@ export default function ExclusionField({
 
   return (
     <div>
-      {title && <p className="text-sm font-medium text-[#0C1A2B]">{title}</p>}
-      {desc && <p className="text-xs text-[#5B7490]">{desc}</p>}
+      {title && <p className="text-sm font-medium text-ink">{title}</p>}
+      {desc && <p className="text-xs text-dim">{desc}</p>}
       <div className={`flex flex-wrap items-center gap-1.5 ${title || desc ? "mt-3" : ""}`}>
         {selected.map((v) => (
           <span
             key={v}
-            className="flex items-center gap-1.5 rounded-md bg-red-50 py-1 pl-1.5 pr-2 text-xs font-medium text-red-600"
+            className="flex items-center gap-1.5 rounded-md bg-neg-soft py-1 pl-1.5 pr-2 text-xs font-medium text-neg"
           >
             {renderIcon(v, optCat.get(v))}
             {v}
@@ -66,7 +66,7 @@ export default function ExclusionField({
         <div ref={ref} className="relative">
           <button
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-1 rounded-md border border-dashed border-[#E8EAEC] px-2 py-1 text-xs text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]"
+            className="flex items-center gap-1 rounded-md border border-dashed border-edge px-2 py-1 text-xs text-dim transition-colors hover:border-dim hover:text-ink"
           >
             <Plus className="h-3 w-3" />
             Add
@@ -79,23 +79,23 @@ export default function ExclusionField({
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ duration: 0.12, ease: "easeOut" }}
                 style={{ transformOrigin: "top left" }}
-                className="absolute left-0 top-[calc(100%+6px)] z-30 w-60 overflow-hidden rounded-xl border border-[#E8EAEC] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8"
+                className="absolute left-0 top-[calc(100%+6px)] z-30 w-60 overflow-hidden rounded-xl border border-edge bg-card p-1 shadow-lg shadow-[#0C1A2B]/8"
               >
                 {searchable && (
-                  <div className="flex items-center gap-2 border-b border-[#F0F4F8] px-2.5 py-2">
-                    <Search className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
+                  <div className="flex items-center gap-2 border-b border-edge px-2.5 py-2">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-faint" />
                     <input
                       autoFocus
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                       placeholder={searchHint}
-                      className="w-full bg-transparent text-xs text-[#0C1A2B] outline-none placeholder:text-[#94A3B8]"
+                      className="w-full bg-transparent text-xs text-ink outline-none placeholder:text-faint"
                     />
                   </div>
                 )}
                 <div className="max-h-56 overflow-y-auto py-1">
                   {filtered.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-[#94A3B8]">No matches</p>
+                    <p className="px-3 py-2 text-xs text-faint">No matches</p>
                   )}
                   {filtered.map((o) => {
                     const on = selected.includes(o.value);
@@ -104,7 +104,7 @@ export default function ExclusionField({
                         key={o.value}
                         onClick={() => toggle(o.value)}
                         className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
-                          on ? "bg-[#EAF4FC] text-[#1591DC]" : "text-[#0C1A2B] hover:bg-[#F7F9FC]"
+                          on ? "bg-brand-soft text-brand" : "text-ink hover:bg-panel"
                         }`}
                       >
                         {renderIcon(o.value, o.cat)}

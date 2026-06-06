@@ -13,7 +13,7 @@ import {
   Search,
   ArrowRight,
 } from "lucide-react";
-import { tokenColor } from "@/components/preview/TokenIcon";
+import { TokenIcon, tokenColor } from "@/components/preview/TokenIcon";
 import SlidingNumber from "@/components/preview/SlidingNumber";
 import { AgentChat } from "@/components/preview/AgentChat";
 
@@ -33,7 +33,7 @@ function SectionLabel({
 }) {
   return (
     <div className="mb-2 flex items-center justify-between">
-      <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+      <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-dim">
         {children}
       </p>
       {right}
@@ -53,8 +53,8 @@ function GuardrailRow({
   return (
     <div className="flex items-center justify-between gap-4 py-3.5">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[#0C1A2B]">{label}</p>
-        {hint && <p className="text-xs text-[#5B7490]">{hint}</p>}
+        <p className="text-sm font-medium text-ink">{label}</p>
+        {hint && <p className="text-xs text-dim">{hint}</p>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -71,9 +71,9 @@ function NumInput({
   onChange?: (v: string) => void;
 }) {
   const cls =
-    "w-10 bg-transparent text-right text-sm font-semibold text-[#0C1A2B] outline-none";
+    "w-10 bg-transparent text-right text-sm font-semibold text-ink outline-none";
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-[#E8EAEC] bg-white px-3 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5">
       {onChange ? (
         <input
           value={String(value)}
@@ -83,7 +83,7 @@ function NumInput({
       ) : (
         <input defaultValue={String(value)} className={cls} />
       )}
-      {suffix && <span className="text-xs text-[#5B7490]">{suffix}</span>}
+      {suffix && <span className="text-xs text-dim">{suffix}</span>}
     </div>
   );
 }
@@ -109,7 +109,7 @@ type AgentConfig = {
 };
 
 const RISK_COPY: Record<RiskKey, { dot: string; desc: string }> = {
-  Low: { dot: "bg-green-500", desc: "Protects first, grows slowly" },
+  Low: { dot: "bg-pos-soft0", desc: "Protects first, grows slowly" },
   Medium: { dot: "bg-yellow-400", desc: "Balances growth and safety" },
   High: { dot: "bg-orange-500", desc: "Chases yield, rides the swings" },
 };
@@ -183,11 +183,11 @@ function Dropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg border border-[#E8EAEC] bg-white px-3 py-1.5 text-sm font-medium text-[#0C1A2B] transition-colors hover:border-[#CBD5E1]"
+        className="flex items-center gap-2 rounded-lg border border-edge bg-card px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-edge2"
       >
         {current?.label ?? value}
         <ChevronDown
-          className={`h-3.5 w-3.5 text-[#94A3B8] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 text-faint transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
       <AnimatePresence>
@@ -200,7 +200,7 @@ function Dropdown({
             style={{
               transformOrigin: align === "right" ? "top right" : "top left",
             }}
-            className={`absolute z-30 mt-1.5 ${minW} overflow-hidden rounded-xl border border-[#E8EAEC] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8 ${
+            className={`absolute z-30 mt-1.5 ${minW} overflow-hidden rounded-xl border border-edge bg-card p-1 shadow-lg shadow-[#0C1A2B]/8 ${
               align === "right" ? "right-0" : "left-0"
             }`}
           >
@@ -213,8 +213,8 @@ function Dropdown({
                 }}
                 className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-left text-sm transition-colors ${
                   o.value === value
-                    ? "bg-[#EAF4FC] font-medium text-[#1591DC]"
-                    : "text-[#0C1A2B] hover:bg-[#F7F9FC]"
+                    ? "bg-brand-soft font-medium text-brand"
+                    : "text-ink hover:bg-panel"
                 }`}
               >
                 {o.label}
@@ -244,24 +244,24 @@ function UnderlineTabs({
   runningTab?: string;
 }) {
   return (
-    <div className="mb-6 mt-5 flex gap-6">
+    <div className="mb-6 mt-5 flex md:gap-6">
       {tabs.map((t) => {
         const on = active === t.id;
         return (
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className={`relative flex items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors ${
+            className={`relative flex flex-1 items-center justify-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors md:flex-none md:justify-start ${
               on
-                ? "border-[#1591DC] text-[#1591DC]"
-                : "border-transparent text-[#5B7490] hover:text-[#0C1A2B]"
+                ? "border-brand text-brand"
+                : "border-transparent text-dim hover:text-ink"
             }`}
           >
             {t.label}
             {runningTab === t.id && (
               <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1591DC] opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#1591DC]" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand" />
               </span>
             )}
           </button>
@@ -324,7 +324,7 @@ function AgentDial({ state }: { state: "on" | "off" | "running" }) {
           cy="80"
           r="70"
           fill="none"
-          stroke="#E3EAF2"
+          className="stroke-edge"
           strokeWidth="2.5"
         />
         <g ref={arcRef}>
@@ -370,10 +370,10 @@ type LogEntry = {
   steps?: Step[]; // runs only
 };
 
-const G = "bg-[#EDF2F7] text-[#5B7490]"; // muted, monitors (heartbeat)
-const B1 = "bg-[#EAF4FC] text-[#1591DC]"; // action, primary blue
-const B2 = "bg-[#EAF4FC] text-[#2C5EAD]"; // signal
-const GR = "bg-green-50 text-green-700"; // done (rebalanced)
+const G = "bg-panel text-dim"; // muted, monitors (heartbeat)
+const B1 = "bg-brand-soft text-brand"; // action, primary blue
+const B2 = "bg-brand-soft text-brand"; // signal
+const GR = "bg-pos-soft text-pos"; // done (rebalanced)
 
 // a real rebalance run streams these live, then settles into the feed
 const REBALANCE_STEPS: Step[] = [
@@ -390,7 +390,7 @@ const REBALANCE_STEPS: Step[] = [
     msg: (
       <>
         cmETH is swinging more than usual lately{" "}
-        <span className="font-medium text-[#0C1A2B]">(+12.4%)</span>
+        <span className="font-medium text-ink">(+12.4%)</span>
       </>
     ),
     detail:
@@ -402,7 +402,7 @@ const REBALANCE_STEPS: Step[] = [
     msg: (
       <>
         sUSDe is paying a better yield right now{" "}
-        <span className="font-medium text-[#0C1A2B]">(4.2%)</span>
+        <span className="font-medium text-ink">(4.2%)</span>
       </>
     ),
     detail:
@@ -420,7 +420,7 @@ const REBALANCE_STEPS: Step[] = [
     tagCls: B1,
     msg: (
       <>
-        Decided to move <span className="font-medium text-[#0C1A2B]">15%</span>{" "}
+        Decided to move <span className="font-medium text-ink">15%</span>{" "}
         from cmETH into sUSDe
       </>
     ),
@@ -440,7 +440,7 @@ const REBALANCE_STEPS: Step[] = [
     msg: (
       <>
         Rebalanced your portfolio, est. APY up{" "}
-        <span className="text-green-600">+0.3%</span>
+        <span className="text-pos">+0.3%</span>
       </>
     ),
     detail:
@@ -652,7 +652,7 @@ function AgentLog({
   }, [running]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white">
+    <div className="overflow-hidden rounded-2xl border-[1.25px] border-edge bg-card">
       <div className="px-3 py-2">
         {feed.map((entry) => {
           // idle marker — live = current waiting (ticking); past = a finished gap
@@ -664,18 +664,18 @@ function AgentLog({
                   className="flex items-center gap-3 rounded-lg px-2 py-2"
                 >
                   <span className="w-[4.5rem] shrink-0">
-                    <span className="flex w-full justify-center rounded-md bg-[#EDF2F7] py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] text-[#5B7490]">
+                    <span className="flex w-full justify-center rounded-md bg-panel py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.05em] text-dim">
                       Idle
                     </span>
                   </span>
-                  <span className="flex flex-1 items-center gap-2 text-xs text-[#5B7490]">
+                  <span className="flex flex-1 items-center gap-2 text-xs text-dim">
                     <span className="relative flex h-2 w-2 shrink-0">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1591DC] opacity-50" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#1591DC]" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
                     </span>
                     Watching your portfolio
                   </span>
-                  <span className="shrink-0 text-[0.625rem] tabular-nums text-[#94A3B8]">
+                  <span className="shrink-0 text-[0.625rem] tabular-nums text-faint">
                     next check in {clock(secs)}
                   </span>
                 </div>
@@ -686,11 +686,11 @@ function AgentLog({
                 key={entry.id}
                 className="flex items-center gap-2 px-2 py-1.5"
               >
-                <span className="h-px flex-1 bg-[#F0F3F6]" />
-                <span className="shrink-0 text-[0.625rem] text-[#C5D0DC]">
+                <span className="h-px flex-1 bg-panel" />
+                <span className="shrink-0 text-[0.625rem] text-faint">
                   idled {dur(entry.mins)}
                 </span>
-                <span className="h-px flex-1 bg-[#F0F3F6]" />
+                <span className="h-px flex-1 bg-panel" />
               </div>
             );
           }
@@ -711,7 +711,7 @@ function AgentLog({
                   <div key={key} style={{ animation: "fadeIn .3s ease" }}>
                     <button
                       onClick={() => setOpenKey(isOpen ? "" : key)}
-                      className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[#F7F9FC]"
+                      className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-panel"
                     >
                       <span className="w-[4.5rem] shrink-0">
                         <span
@@ -721,20 +721,20 @@ function AgentLog({
                         </span>
                       </span>
                       <span
-                        className={`flex-1 text-xs ${entry.kind === "rebalance" ? "text-[#0C1A2B]" : "text-[#5B7490]"}`}
+                        className={`flex-1 text-xs ${entry.kind === "rebalance" ? "text-ink" : "text-dim"}`}
                       >
                         {s.msg}
                         {isCursor && (
-                          <span className="ml-1 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse rounded-[1px] bg-[#1591DC]" />
+                          <span className="ml-1 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse rounded-[1px] bg-brand" />
                         )}
                       </span>
                       {di === 0 && (
-                        <span className="shrink-0 text-[0.625rem] text-[#C5D0DC]">
+                        <span className="shrink-0 text-[0.625rem] text-faint">
                           {ago(entry.mins)}
                         </span>
                       )}
                       <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-[#C5D0DC] transition-all group-hover:text-[#5B7490] ${isOpen ? "rotate-180 text-[#5B7490]" : ""}`}
+                        className={`h-3.5 w-3.5 shrink-0 text-faint transition-all group-hover:text-dim ${isOpen ? "rotate-180 text-dim" : ""}`}
                       />
                     </button>
                     <AnimatePresence initial={false}>
@@ -750,7 +750,7 @@ function AgentLog({
                           }}
                           className="overflow-hidden"
                         >
-                          <div className="my-1 ml-[5rem] mr-2 border-l-2 border-[#1591DC]/25 pl-3 text-xs leading-relaxed text-[#5B7490]">
+                          <div className="my-1 ml-[5rem] mr-2 border-l-2 border-brand/25 pl-3 text-xs leading-relaxed text-dim">
                             {s.detail}
                           </div>
                         </motion.div>
@@ -798,13 +798,13 @@ function OperatingCard({
     },
   ];
   const heading =
-    "text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]";
+    "text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-faint";
   const link =
-    "flex items-center gap-1 text-[0.6875rem] font-medium text-[#1591DC] transition-opacity hover:opacity-70";
+    "flex items-center gap-1 text-[0.6875rem] font-medium text-brand transition-opacity hover:opacity-70";
   return (
     <div className="flex flex-col">
       <SectionLabel>Agent Rules</SectionLabel>
-      <div className="flex flex-1 flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+      <div className="flex flex-1 flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5">
         {/* Risk level → set in Plan */}
         <div className="mb-2.5 flex items-center justify-between">
           <p className={heading}>Risk level</p>
@@ -813,20 +813,20 @@ function OperatingCard({
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#0C1A2B]">
+          <span className="text-sm font-semibold text-ink">
             {config.risk} risk
           </span>
         </div>
-        <p className="mt-0.5 text-xs text-[#5B7490]">{risk.desc}</p>
+        <p className="mt-0.5 text-xs text-dim">{risk.desc}</p>
 
         {/* Target mix — the basket this risk aims for (mirror of Plan), so the
             cockpit shows not just the rules but what they actually hold. */}
         <div className="mt-3">
-          <p className="mb-1.5 text-[0.625rem] text-[#94A3B8]">
+          <p className="mb-1.5 text-[0.625rem] text-faint">
             Agent targets this mix
           </p>
           <div className="relative">
-            <div className="flex h-2.5">
+            <div className="flex h-6 md:h-2.5">
               {mix.map((m, i) => (
                 <div
                   key={m.sym}
@@ -845,7 +845,7 @@ function OperatingCard({
             <AnimatePresence>
               {mh && (
                 <motion.div
-                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-left shadow-lg"
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
                   style={{ left: `${mhCenter}%`, transformOrigin: "bottom center" }}
                   initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
                   animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
@@ -858,11 +858,29 @@ function OperatingCard({
               )}
             </AnimatePresence>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {/* mobile: icon list */}
+          <div className="mt-3 md:hidden">
+            {mix.map((m, i) => (
+              <div
+                key={m.sym}
+                className={`flex items-center gap-2.5 py-2 ${i < mix.length - 1 ? "border-b border-edge" : ""}`}
+              >
+                <TokenIcon sym={m.sym} color={tokenColor(m.sym)} size={24} />
+                <span className="flex-1 text-sm font-semibold text-ink">
+                  {m.sym}
+                </span>
+                <span className="text-sm font-medium text-dim">
+                  {m.pct}%
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* desktop: original dot + text */}
+          <div className="mt-2 hidden flex-wrap gap-x-3 gap-y-1 md:flex">
             {mix.map((m) => (
               <span
                 key={m.sym}
-                className="flex items-center gap-1 text-[0.625rem] text-[#5B7490]"
+                className="flex items-center gap-1 text-[0.625rem] text-dim"
               >
                 <span
                   className="h-1.5 w-1.5 rounded-full"
@@ -875,7 +893,7 @@ function OperatingCard({
         </div>
 
         {/* Guardrails → edit in the Guardrails tab */}
-        <div className="mb-2.5 mt-5 flex items-center justify-between border-t border-[#E8EAEC] pt-4">
+        <div className="mb-2.5 mt-5 flex items-center justify-between border-t border-edge pt-4">
           <p className={heading}>Guardrails</p>
           <button onClick={onEdit} className={link}>
             Edit
@@ -884,16 +902,16 @@ function OperatingCard({
         <div className="space-y-2.5">
           {rows.map((r) => (
             <div key={r.k} className="flex items-center justify-between gap-3">
-              <span className="text-xs text-[#5B7490]">{r.k}</span>
-              <span className="text-xs font-medium text-[#0C1A2B]">{r.v}</span>
+              <span className="text-xs text-dim">{r.k}</span>
+              <span className="text-xs font-medium text-ink">{r.v}</span>
             </div>
           ))}
         </div>
 
         {/* User's note */}
-        <div className="mt-5 border-t border-[#E8EAEC] pt-4">
+        <div className="mt-5 border-t border-edge pt-4">
           <p className={`mb-1.5 ${heading}`}>Personal Preference</p>
-          <p className="line-clamp-3 text-xs leading-relaxed text-[#5B7490]">
+          <p className="line-clamp-3 text-xs leading-relaxed text-dim">
             {config.notes}
           </p>
         </div>
@@ -924,17 +942,17 @@ function ControlTab({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex flex-col">
           <SectionLabel>Agent controls</SectionLabel>
-          <div className="flex flex-1 flex-col items-center rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-6">
+          <div className="flex flex-1 flex-col items-center rounded-2xl border-[1.25px] border-edge bg-card p-6">
             <div className="mt-2">
               <AgentDial state={running ? "running" : on ? "on" : "off"} />
             </div>
-            <p className="mt-1 text-xs text-[#5B7490]">
+            <p className="mt-1 text-xs text-dim">
               {running ? (
                 "executing rebalance"
               ) : on ? (
                 <>
                   next run in{" "}
-                  <span className="font-semibold tabular-nums text-[#0C1A2B]">
+                  <span className="font-semibold tabular-nums text-ink">
                     {fmtCountdown(countdown)}
                   </span>
                 </>
@@ -943,48 +961,50 @@ function ControlTab({
               )}
             </p>
 
-            <div className="mt-4 flex w-[80%] max-w-xs items-center gap-2">
+            <div className="mt-5 flex w-full max-w-xs items-center gap-2.5 md:mt-4 md:w-[80%] md:gap-2">
               <button
                 onClick={() => setRunning(true)}
                 disabled={!on || running}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1591DC] px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 md:py-2.5 md:text-xs"
               >
                 {running ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin md:h-3.5 md:w-3.5" />
                 ) : (
-                  <Play className="h-3.5 w-3.5" />
+                  <Play className="h-4 w-4 md:h-3.5 md:w-3.5" />
                 )}
                 {running ? "Running..." : "Run now"}
               </button>
               <button
                 onClick={() => setOn((v) => !v)}
                 disabled={running}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#E8EAEC] bg-white px-4 py-2.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B] disabled:opacity-40"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-edge bg-card px-4 py-3 text-sm font-medium text-dim transition-colors hover:border-dim hover:text-ink disabled:opacity-40 md:py-2.5 md:text-xs"
               >
                 {on ? "Pause" : "Resume"}
               </button>
             </div>
 
-            <div className="mt-auto grid w-full max-w-sm grid-cols-3 gap-3 border-t border-[#E8EAEC] pt-5 text-center">
+            <div className="mt-auto grid w-full max-w-sm grid-cols-3 items-center gap-3 pt-5 text-center md:items-stretch md:border-t md:border-edge">
               <div>
-                <p className="flex justify-center text-lg font-semibold text-[#0C1A2B]">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink md:h-auto md:items-stretch">
                   <SlidingNumber number={47} />
                 </p>
-                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-dim">
                   Rebalances
                 </p>
               </div>
               <div>
-                <p className="flex items-center justify-center text-lg font-semibold text-green-600">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-pos md:h-auto">
                   +<SlidingNumber number={8.4} decimalPlaces={1} />%
                 </p>
-                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-dim">
                   Est. APY
                 </p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-[#0C1A2B]">2h ago</p>
-                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink md:block md:h-auto">
+                  2h ago
+                </p>
+                <p className="text-[0.625rem] uppercase tracking-[0.08em] text-dim">
                   Last run
                 </p>
               </div>
@@ -1001,7 +1021,7 @@ function ControlTab({
           right={
             <Link
               href="/preview/activity"
-              className="text-[0.6875rem] font-medium text-[#1591DC] transition-opacity hover:opacity-70"
+              className="text-[0.6875rem] font-medium text-brand transition-opacity hover:opacity-70"
             >
               See all records
             </Link>
@@ -1047,7 +1067,7 @@ function GuardrailsTab({
       {/* Limits */}
       <div>
         <SectionLabel right={<></>}>Limits</SectionLabel>
-        <div className="divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5">
+        <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
           <GuardrailRow
             label="Running frequency"
             hint="How often the agent runs"
@@ -1085,7 +1105,7 @@ function GuardrailsTab({
       {/* Advanced */}
       <div>
         <SectionLabel>Advanced</SectionLabel>
-        <div className="divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5">
+        <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
           <GuardrailRow
             label="Min drift to act"
             hint="Only rebalance if off target by this much"
@@ -1116,9 +1136,9 @@ function GuardrailsTab({
           rows={4}
           value={config.notes}
           onChange={(e) => set({ notes: e.target.value })}
-          className="w-full resize-none rounded-xl border border-[#E8EAEC] bg-white p-4 text-sm leading-relaxed text-[#0C1A2B] outline-none focus:border-[#1591DC] focus:ring-1 focus:ring-[#1591DC]/20"
+          className="w-full resize-none rounded-xl border border-edge bg-card p-4 text-sm leading-relaxed text-ink outline-none focus:border-brand focus:ring-1 focus:ring-[#1591DC]/20"
         />
-        <p className="mt-1.5 text-xs text-[#5B7490]">
+        <p className="mt-1.5 text-xs text-dim">
           Write instructions in plain language. The agent reads this before
           deciding any action.
         </p>
@@ -1153,13 +1173,15 @@ export default function AgentPreview() {
   }, [on, running]);
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
-        Agent
-      </h1>
-      <p className="mt-1 text-sm text-[#5B7490]">
-        Run the agent and set how it works.
-      </p>
+    <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
+      <div className="hidden md:block">
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
+          Agent
+        </h1>
+        <p className="mt-1 text-sm text-dim">
+          Run the agent and set how it works.
+        </p>
+      </div>
 
       <UnderlineTabs
         tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}

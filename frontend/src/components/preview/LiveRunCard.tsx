@@ -32,11 +32,11 @@ function PriceChips() {
       {prices.map((p) => (
         <div
           key={p.sym}
-          className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5"
+          className="flex items-center gap-2 rounded-lg bg-card px-3 py-1.5"
         >
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-xs font-semibold text-[#0C1A2B]">{p.sym}</span>
-          <span className="text-xs text-[#5B7490]">{p.price}</span>
+          <span className="text-xs font-semibold text-ink">{p.sym}</span>
+          <span className="text-xs text-dim">{p.price}</span>
         </div>
       ))}
     </div>
@@ -61,23 +61,23 @@ function SignalCards() {
   return (
     <div className="space-y-2">
       {signals.map((s) => (
-        <div key={s.title} className="flex items-center gap-3 rounded-lg bg-white p-3">
+        <div key={s.title} className="flex items-center gap-3 rounded-lg bg-card p-3">
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
               s.tone === "warn"
-                ? "bg-amber-50 text-amber-600"
-                : "bg-green-50 text-green-600"
+                ? "bg-warn-soft text-warn"
+                : "bg-pos-soft text-pos"
             }`}
           >
             {s.tone === "warn" ? "↑" : "%"}
           </div>
           <div className="flex-1">
-            <p className="text-xs font-semibold text-[#0C1A2B]">{s.title}</p>
-            <p className="text-[0.6875rem] text-[#5B7490]">{s.detail}</p>
+            <p className="text-xs font-semibold text-ink">{s.title}</p>
+            <p className="text-[0.6875rem] text-dim">{s.detail}</p>
           </div>
           <span
             className={`text-xs font-semibold ${
-              s.tone === "warn" ? "text-amber-600" : "text-green-600"
+              s.tone === "warn" ? "text-warn" : "text-pos"
             }`}
           >
             {s.value}
@@ -97,12 +97,12 @@ function GuardrailChecks() {
   return (
     <div className="space-y-1.5">
       {checks.map((c) => (
-        <div key={c.label} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[0.625rem] text-green-600">
+        <div key={c.label} className="flex items-center gap-2 rounded-lg bg-card px-3 py-2">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[0.625rem] text-pos">
             ✓
           </span>
-          <span className="text-xs text-[#0C1A2B]">{c.label}</span>
-          <span className="ml-auto text-[0.625rem] font-medium text-green-600">passed</span>
+          <span className="text-xs text-ink">{c.label}</span>
+          <span className="ml-auto text-[0.625rem] font-medium text-pos">passed</span>
         </div>
       ))}
     </div>
@@ -111,37 +111,37 @@ function GuardrailChecks() {
 
 function DecisionCard() {
   return (
-    <div className="rounded-lg bg-white p-3">
+    <div className="rounded-lg bg-card p-3">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 rounded-md bg-[#F7F9FC] px-2.5 py-1">
+        <div className="flex items-center gap-1.5 rounded-md bg-panel px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-[#2C5EAD]" />
-          <span className="text-[0.6875rem] font-medium text-[#0C1A2B]">cmETH 40%</span>
+          <span className="text-[0.6875rem] font-medium text-ink">cmETH 40%</span>
         </div>
-        <span className="text-[#5B7490]">→</span>
-        <div className="flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1">
+        <span className="text-dim">→</span>
+        <div className="flex items-center gap-1.5 rounded-md bg-neg-soft px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-          <span className="text-[0.6875rem] font-medium text-red-600">cmETH 30%</span>
+          <span className="text-[0.6875rem] font-medium text-neg">cmETH 30%</span>
         </div>
-        <span className="mx-1 text-[#DDE8F2]">·</span>
-        <div className="flex items-center gap-1.5 rounded-md bg-[#F7F9FC] px-2.5 py-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#1591DC]" />
-          <span className="text-[0.6875rem] font-medium text-[#0C1A2B]">sUSDe 35%</span>
+        <span className="mx-1 text-faint">·</span>
+        <div className="flex items-center gap-1.5 rounded-md bg-panel px-2.5 py-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+          <span className="text-[0.6875rem] font-medium text-ink">sUSDe 35%</span>
         </div>
-        <span className="text-[#5B7490]">→</span>
-        <div className="flex items-center gap-1.5 rounded-md bg-green-50 px-2.5 py-1">
+        <span className="text-dim">→</span>
+        <div className="flex items-center gap-1.5 rounded-md bg-pos-soft px-2.5 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-          <span className="text-[0.6875rem] font-medium text-green-600">sUSDe 45%</span>
+          <span className="text-[0.6875rem] font-medium text-pos">sUSDe 45%</span>
         </div>
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[0.625rem] uppercase tracking-[0.08em] text-[#5B7490]">
+          <span className="text-[0.625rem] uppercase tracking-[0.08em] text-dim">
             Confidence
           </span>
-          <span className="text-[0.6875rem] font-semibold text-[#1591DC]">87%</span>
+          <span className="text-[0.6875rem] font-semibold text-brand">87%</span>
         </div>
-        <div className="h-1.5 w-full rounded-[2px] bg-[#F7F9FC]">
-          <div className="h-1.5 rounded-[2px] bg-[#1591DC]" style={{ width: "87%" }} />
+        <div className="h-1.5 w-full rounded-[2px] bg-panel">
+          <div className="h-1.5 rounded-[2px] bg-brand" style={{ width: "87%" }} />
         </div>
       </div>
     </div>
@@ -150,18 +150,18 @@ function DecisionCard() {
 
 function ExecCard() {
   return (
-    <div className="rounded-lg bg-white p-3">
+    <div className="rounded-lg bg-card p-3">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF4FC] text-[#1591DC]">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
           ⇄
         </div>
         <div className="flex-1">
-          <p className="text-xs font-semibold text-[#0C1A2B]">
+          <p className="text-xs font-semibold text-ink">
             Swap cmETH → sUSDe
           </p>
-          <p className="text-[0.6875rem] text-[#5B7490]">Amount: $1,857.00</p>
+          <p className="text-[0.6875rem] text-dim">Amount: $1,857.00</p>
         </div>
-        <a className="text-[0.6875rem] font-medium text-[#1591DC] hover:opacity-70">
+        <a className="text-[0.6875rem] font-medium text-brand hover:opacity-70">
           0x8c1b...3f9e ↗
         </a>
       </div>
@@ -171,17 +171,17 @@ function ExecCard() {
 
 function SummaryCard() {
   return (
-    <div className="rounded-lg bg-green-50 p-3">
+    <div className="rounded-lg bg-pos-soft p-3">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-green-700">
+          <p className="text-xs font-semibold text-pos">
             Portfolio rebalanced
           </p>
-          <p className="text-[0.6875rem] text-green-600/70">
+          <p className="text-[0.6875rem] text-pos/70">
             2 swaps executed · est. APY +0.3%/yr
           </p>
         </div>
-        <button className="rounded-lg bg-white px-3 py-1.5 text-[0.6875rem] font-medium text-[#1591DC]">
+        <button className="rounded-lg bg-card px-3 py-1.5 text-[0.6875rem] font-medium text-brand">
           View reasoning
         </button>
       </div>
@@ -201,12 +201,12 @@ const STEPS: Step[] = [
 ];
 
 const TAG_COLORS: Record<string, string> = {
-  SCAN: "bg-[#F7F9FC] text-[#5B7490]",
-  SIGNAL: "bg-amber-50 text-amber-600",
-  ANALYZE: "bg-[#EAF4FC] text-[#1591DC]",
+  SCAN: "bg-panel text-dim",
+  SIGNAL: "bg-warn-soft text-warn",
+  ANALYZE: "bg-brand-soft text-brand",
   DECIDE: "bg-indigo-50 text-indigo-600",
   EXEC: "bg-purple-50 text-purple-600",
-  DONE: "bg-green-50 text-green-700",
+  DONE: "bg-pos-soft text-pos",
 };
 
 // ─── Status icon ────────────────────────────────────────────
@@ -214,22 +214,22 @@ const TAG_COLORS: Record<string, string> = {
 function StatusIcon({ status }: { status: StepStatus }) {
   if (status === "done") {
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[0.6875rem] text-green-600">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[0.6875rem] text-pos">
         ✓
       </div>
     );
   }
   if (status === "active") {
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EAF4FC]">
-        <svg className="h-3 w-3 animate-spin text-[#1591DC]" viewBox="0 0 24 24" fill="none">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-soft">
+        <svg className="h-3 w-3 animate-spin text-brand" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
         </svg>
       </div>
     );
   }
-  return <div className="h-5 w-5 rounded-full border-2 border-[#DDE8F2]" />;
+  return <div className="h-5 w-5 rounded-full border-2 border-edge" />;
 }
 
 // ─── Main component ─────────────────────────────────────────
@@ -280,24 +280,24 @@ export function LiveRunCard({
   const visibleCount = currentStep < 0 ? 0 : Math.min(currentStep + 1, STEPS.length);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#DDE8F2] bg-white">
+    <div className="overflow-hidden rounded-2xl border border-edge bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#F0F4F8] px-5 py-4">
+      <div className="flex items-center justify-between border-b border-edge px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span
             className={`h-2 w-2 rounded-full ${
-              isRunning ? "animate-pulse bg-[#1591DC]" : isComplete ? "bg-green-500" : "bg-[#DDE8F2]"
+              isRunning ? "animate-pulse bg-brand" : isComplete ? "bg-pos-soft0" : "bg-edge"
             }`}
           />
-          <span className="text-sm font-semibold text-[#0C1A2B]">Tends Agent</span>
-          <span className="text-xs text-[#5B7490]">
+          <span className="text-sm font-semibold text-ink">Tends Agent</span>
+          <span className="text-xs text-dim">
             {isRunning ? "running now" : isComplete ? "rebalance complete" : "idle"}
           </span>
         </div>
         {!hideButton && (
           <button
             onClick={run}
-            className="rounded-full bg-[#1591DC] px-4 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
+            className="rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
             {isComplete || isRunning ? "Run again" : "Run agent"}
           </button>
@@ -308,10 +308,10 @@ export function LiveRunCard({
       <div className="px-5 py-4">
         {currentStep < 0 ? (
           <div className="py-8 text-center">
-            <p className="text-sm text-[#5B7490]">
+            <p className="text-sm text-dim">
               Agent is monitoring the market.
             </p>
-            <p className="mt-1 text-xs text-[#5B7490]/70">
+            <p className="mt-1 text-xs text-dim/70">
               Press &ldquo;Run agent&rdquo; to see a live rebalance cycle.
             </p>
           </div>
@@ -325,7 +325,7 @@ export function LiveRunCard({
                   {/* Left rail: icon + connecting line */}
                   <div className="flex flex-col items-center">
                     <StatusIcon status={status} />
-                    {!isLast && <div className="my-1 w-px flex-1 bg-[#F0F4F8]" />}
+                    {!isLast && <div className="my-1 w-px flex-1 bg-panel" />}
                   </div>
 
                   {/* Right: content */}
@@ -336,10 +336,10 @@ export function LiveRunCard({
                       >
                         {step.tag}
                       </span>
-                      <span className="text-xs font-medium text-[#0C1A2B]">{step.label}</span>
+                      <span className="text-xs font-medium text-ink">{step.label}</span>
                     </div>
                     {/* Rich data card */}
-                    <div className="rounded-xl bg-[#F7F9FC] p-3">{step.render()}</div>
+                    <div className="rounded-xl bg-panel p-3">{step.render()}</div>
                   </div>
                 </div>
               );

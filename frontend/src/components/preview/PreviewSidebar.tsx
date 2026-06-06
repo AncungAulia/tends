@@ -49,7 +49,7 @@ function Blockie() {
 // label that slides out on hover while the rail is collapsed
 function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="pointer-events-none absolute left-[calc(100%+0.6rem)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#0C1A2B] px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+    <span className="pointer-events-none absolute left-[calc(100%+0.6rem)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-tip px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100">
       {children}
     </span>
   );
@@ -61,21 +61,30 @@ export function PreviewSidebar() {
 
   return (
     <aside
-      className={`sticky top-0 hidden h-screen shrink-0 flex-col self-start border-r-[1.5px] border-[#E8EAEC] bg-[#F9FBFC] px-3 py-5 transition-[width] duration-200 ease-out md:flex ${
+      className={`sticky top-0 hidden h-screen shrink-0 flex-col self-start border-r-[1.5px] border-edge bg-app px-3 py-5 transition-[width] duration-200 ease-out md:flex ${
         collapsed ? "w-16" : "w-52"
       }`}
     >
       {/* brand + collapse button (button shows only when expanded) */}
       <div className="flex items-center justify-between px-3">
         <div className="flex items-center gap-2 overflow-hidden">
+          {/* black mark on light, white mark on dark (swapped via CSS so there's
+              no theme-dependent JS / hydration flash) */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/icon/tends-black.svg"
             alt="Tends"
-            className="h-4 w-4 shrink-0"
+            className="h-4 w-4 shrink-0 dark:hidden"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon/tends-white.svg"
+            alt=""
+            aria-hidden
+            className="hidden h-4 w-4 shrink-0 dark:block"
           />
           {!collapsed && (
-            <span className="whitespace-nowrap text-lg font-bold tracking-tight text-[#0C1A2B]">
+            <span className="whitespace-nowrap text-lg font-bold tracking-tight text-ink">
               Tends
             </span>
           )}
@@ -84,7 +93,7 @@ export function PreviewSidebar() {
           <button
             onClick={() => setCollapsed(true)}
             aria-label="Collapse sidebar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5B7490] transition-colors hover:bg-white hover:text-[#0C1A2B]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-dim transition-colors hover:bg-card hover:text-ink"
           >
             <PanelLeftClose className="h-4 w-4" />
           </button>
@@ -103,8 +112,8 @@ export function PreviewSidebar() {
                 collapsed ? "" : "overflow-hidden"
               } ${
                 active
-                  ? "bg-[#EAF4FC] font-semibold text-[#1591DC]"
-                  : "text-[#5B7490] hover:bg-white hover:text-[#0C1A2B]"
+                  ? "bg-brand-soft font-semibold text-brand"
+                  : "text-dim hover:bg-card hover:text-ink"
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.3 : 2} />
@@ -131,7 +140,7 @@ export function PreviewSidebar() {
 
       <Link
         href="/preview/account"
-        className={`group relative flex items-center gap-2.5 rounded-lg px-1 py-1 transition-colors hover:bg-white ${
+        className={`group relative flex items-center gap-2.5 rounded-lg px-1 py-1 transition-colors hover:bg-card ${
           collapsed ? "" : "overflow-hidden"
         }`}
       >
@@ -140,10 +149,10 @@ export function PreviewSidebar() {
           <Tip>ancung.eth</Tip>
         ) : (
           <div className="min-w-0 whitespace-nowrap">
-            <p className="truncate text-xs font-semibold text-[#0C1A2B]">
+            <p className="truncate text-xs font-semibold text-ink">
               ancung.eth
             </p>
-            <p className="text-[0.625rem] text-[#5B7490]">0x3f4a...c82b</p>
+            <p className="text-[0.625rem] text-dim">0x3f4a...c82b</p>
           </div>
         )}
       </Link>

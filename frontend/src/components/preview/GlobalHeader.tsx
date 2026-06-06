@@ -31,7 +31,7 @@ function Heartbeat({ state = "idle" as keyof typeof AGENT }) {
   return (
     <Link
       href="/preview/agent"
-      className="-ml-1.5 flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3 transition-colors hover:bg-white"
+      className="-ml-1.5 flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3 transition-colors hover:bg-card"
     >
       <span className="relative flex h-2.5 w-2.5 items-center justify-center">
         {s.live && (
@@ -49,10 +49,10 @@ function Heartbeat({ state = "idle" as keyof typeof AGENT }) {
         />
       </span>
       <span className="flex items-baseline gap-1.5 leading-none">
-        <span className="text-[0.8125rem] font-medium text-[#0C1A2B]">
+        <span className="text-[0.8125rem] font-medium text-ink">
           Agent {s.label}
         </span>
-        <span className="text-xs text-[#94A3B8]">· {s.note}</span>
+        <span className="text-xs text-faint">· {s.note}</span>
       </span>
     </Link>
   );
@@ -77,8 +77,8 @@ const NOTIFS: Notif[] = [
   {
     id: 1,
     Icon: ArrowLeftRight,
-    tint: "bg-[#EAF4FC]",
-    fg: "text-[#1591DC]",
+    tint: "bg-brand-soft",
+    fg: "text-brand",
     title: "Rebalanced your portfolio",
     body: "Moved 15% from cmETH into sUSDe",
     time: "2h",
@@ -87,8 +87,8 @@ const NOTIFS: Notif[] = [
   {
     id: 2,
     Icon: ArrowDownLeft,
-    tint: "bg-green-50",
-    fg: "text-green-600",
+    tint: "bg-pos-soft",
+    fg: "text-pos",
     title: "Deposit landed",
     body: "$500 added and put to work",
     time: "1d",
@@ -97,8 +97,8 @@ const NOTIFS: Notif[] = [
   {
     id: 3,
     Icon: TrendingDown,
-    tint: "bg-amber-50",
-    fg: "text-amber-600",
+    tint: "bg-warn-soft",
+    fg: "text-warn",
     title: "cmETH dipped 6%",
     body: "Still within your limits, holding for now",
     time: "2d",
@@ -126,11 +126,11 @@ function Notifications() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Notifications"
-        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[#5B7490] transition-colors hover:bg-slate-200 hover:text-[#0C1A2B]"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-dim transition-colors hover:bg-slate-200 hover:text-ink"
       >
         <Bell className="h-4 w-4" />
         {unread && (
-          <span className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full bg-[#1591DC] ring-2 ring-slate-100" />
+          <span className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full bg-brand ring-2 ring-slate-100" />
         )}
       </button>
 
@@ -142,10 +142,10 @@ function Notifications() {
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-[calc(100%+8px)] z-50 w-80 overflow-hidden rounded-2xl border border-[#E8EAEC] bg-white shadow-xl shadow-[#0C1A2B]/8"
+            className="absolute right-0 top-[calc(100%+8px)] z-50 w-80 overflow-hidden rounded-2xl border border-edge bg-card shadow-xl shadow-[#0C1A2B]/8"
           >
             <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
-              <p className="text-sm font-semibold text-[#0C1A2B]">
+              <p className="text-sm font-semibold text-ink">
                 Notifications
               </p>
               {unread && (
@@ -153,7 +153,7 @@ function Notifications() {
                   onClick={() =>
                     setItems((xs) => xs.map((n) => ({ ...n, unread: false })))
                   }
-                  className="text-[0.6875rem] font-medium text-[#1591DC] transition-opacity hover:opacity-70"
+                  className="text-[0.6875rem] font-medium text-brand transition-opacity hover:opacity-70"
                 >
                   Mark all read
                 </button>
@@ -166,7 +166,7 @@ function Notifications() {
                   key={n.id}
                   href="/preview/activity"
                   onClick={() => setOpen(false)}
-                  className="flex gap-3 px-4 py-2.5 transition-colors hover:bg-[#F7F9FC]"
+                  className="flex gap-3 px-4 py-2.5 transition-colors hover:bg-panel"
                 >
                   <span
                     className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${n.tint} ${n.fg}`}
@@ -174,16 +174,16 @@ function Notifications() {
                     <n.Icon className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[0.8125rem] font-medium text-[#0C1A2B]">
+                    <p className="text-[0.8125rem] font-medium text-ink">
                       {n.title}
                     </p>
-                    <p className="truncate text-xs text-[#5B7490]">{n.body}</p>
+                    <p className="truncate text-xs text-dim">{n.body}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
                     {n.unread && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#1591DC]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand" />
                     )}
-                    <span className="text-[0.625rem] tabular-nums text-[#94A3B8]">
+                    <span className="text-[0.625rem] tabular-nums text-faint">
                       {n.time}
                     </span>
                   </div>
@@ -194,7 +194,7 @@ function Notifications() {
             <Link
               href="/preview/activity"
               onClick={() => setOpen(false)}
-              className="block border-t border-[#E8EAEC] py-2.5 text-center text-xs font-medium text-[#5B7490] transition-colors hover:bg-[#F7F9FC] hover:text-[#0C1A2B]"
+              className="block border-t border-edge py-2.5 text-center text-xs font-medium text-dim transition-colors hover:bg-panel hover:text-ink"
             >
               See all activity
             </Link>
@@ -206,8 +206,8 @@ function Notifications() {
 }
 
 export function GlobalHeader({
-  bgClass = "bg-white",
-  borderClass = "border-b border-[#DDE8F2]",
+  bgClass = "bg-card",
+  borderClass = "border-b border-edge",
 }: {
   bgClass?: string;
   borderClass?: string;
@@ -222,7 +222,7 @@ export function GlobalHeader({
         <Notifications />
         <button
           aria-label="How to use Tends"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[#5B7490] transition-colors hover:bg-slate-200 hover:text-[#0C1A2B]"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-dim transition-colors hover:bg-slate-200 hover:text-ink"
         >
           <BookOpen className="h-4 w-4" />
         </button>

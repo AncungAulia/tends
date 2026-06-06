@@ -12,6 +12,7 @@ import {
   Pencil,
   RotateCcw,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import VaultCard from "@/components/preview/VaultCard";
 
 /* ──────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const RISK = "Medium" as const;
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+    <div className="rounded-2xl border-[1.25px] border-edge bg-card p-5">
       {children}
     </div>
   );
@@ -55,31 +56,31 @@ function Profile() {
               onChange={(e) => setName(e.target.value)}
               onBlur={() => setEditing(false)}
               onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
-              className="w-40 rounded-md border border-[#1591DC] px-2 py-0.5 text-sm font-semibold text-[#0C1A2B] outline-none ring-2 ring-[#1591DC]/15"
+              className="w-40 rounded-md border border-brand px-2 py-0.5 text-sm font-semibold text-ink outline-none ring-2 ring-[#1591DC]/15"
             />
           ) : (
             <button
               onClick={() => setEditing(true)}
               className="group flex items-center gap-1.5"
             >
-              <span className="text-sm font-semibold text-[#0C1A2B]">{name}</span>
-              <Pencil className="h-3 w-3 text-[#94A3B8] opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="text-sm font-semibold text-ink">{name}</span>
+              <Pencil className="h-3 w-3 text-faint opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           )}
           <button
             onClick={copy}
-            className="mt-0.5 flex items-center gap-1.5 text-xs text-[#5B7490] transition-colors hover:text-[#0C1A2B]"
+            className="mt-0.5 flex items-center gap-1.5 text-xs text-dim transition-colors hover:text-ink"
           >
             0x3f4a...c82b
             {copied ? (
-              <Check className="h-3 w-3 text-green-600" />
+              <Check className="h-3 w-3 text-pos" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
           </button>
-          <p className="mt-1.5 text-xs text-[#5B7490]">Connected via Google</p>
+          <p className="mt-1.5 text-xs text-dim">Connected via Google</p>
         </div>
-        <button className="flex shrink-0 items-center gap-2 rounded-full border border-red-200 px-3.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50">
+        <button className="flex shrink-0 items-center gap-2 rounded-full border border-red-200 px-3.5 py-1.5 text-xs font-medium text-neg transition-colors hover:bg-neg-soft">
           <LogOut className="h-3.5 w-3.5" />
           Disconnect
         </button>
@@ -93,7 +94,13 @@ function Profile() {
 type Theme = "system" | "light" | "dark";
 
 function Preferences() {
-  const [theme, setTheme] = useState<Theme>("light");
+  // wired to next-themes (ThemeProvider attribute="class" in providers.tsx).
+  // `theme` is undefined during SSR/first paint (next-themes resolves it on the
+  // client after mount), so the active pill simply lights up once mounted — no
+  // hydration-gate state needed.
+  const { theme, setTheme } = useTheme();
+  const active = theme;
+
   const options: { key: Theme; label: string; icon: typeof Sun }[] = [
     { key: "system", label: "System", icon: Monitor },
     { key: "light", label: "Light", icon: Sun },
@@ -103,18 +110,18 @@ function Preferences() {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[#0C1A2B]">Theme</p>
-          <p className="text-xs text-[#5B7490]">How Tends looks on this device</p>
+          <p className="text-sm font-medium text-ink">Theme</p>
+          <p className="text-xs hidden md:block text-dim">How Tends looks on this device</p>
         </div>
-        <div className="flex gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5">
+        <div className="flex gap-0.5 rounded-lg bg-panel p-0.5">
           {options.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setTheme(key)}
               className={`flex items-center gap-1.5 rounded-md border-[1.25px] px-3 py-1.5 text-xs font-medium transition-colors ${
-                theme === key
-                  ? "border-[#1591DC] bg-[#EAF4FC] text-[#1591DC]"
-                  : "border-transparent text-[#5B7490] hover:text-[#0C1A2B]"
+                active === key
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-transparent text-dim hover:text-ink"
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -135,12 +142,10 @@ function Faucet() {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FC] text-[#1591DC]">
-            <Droplets className="h-5 w-5" />
-          </div>
+
           <div>
-            <p className="text-sm font-medium text-[#0C1A2B]">Mock USDC faucet</p>
-            <p className="text-xs text-[#5B7490]">Test funds on Mantle Sepolia</p>
+            <p className="text-sm font-medium text-ink">Mock USDC faucet</p>
+            <p className="text-xs hidden md:block text-dim">Test funds on Mantle Sepolia</p>
           </div>
         </div>
         <button
@@ -149,7 +154,7 @@ function Faucet() {
             setTimeout(() => setMinting(false), 1500);
           }}
           disabled={minting}
-          className="shrink-0 rounded-full bg-[#1591DC] px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="shrink-0 rounded-full bg-brand px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {minting ? "Minting..." : "Mint 1,000 USDC"}
         </button>
@@ -162,13 +167,15 @@ function Faucet() {
 
 export default function AccountPreview() {
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
-        Account
-      </h1>
-      <p className="mt-1 text-sm text-[#5B7490]">
-        Your vault, profile, and preferences.
-      </p>
+    <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
+      <div className="hidden md:block">
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
+          Account
+        </h1>
+        <p className="mt-1 text-sm text-dim">
+          Your vault, profile, and preferences.
+        </p>
+      </div>
 
       <div className="mt-6 grid items-stretch gap-5 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* left — the vault, stretched to match the right column.

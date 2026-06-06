@@ -112,11 +112,11 @@ export default function OnboardingPreview() {
   const progress = Math.min(step, 3) / 3;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F9FBFC] text-[#0C1A2B]">
+    <div className="flex min-h-screen flex-col bg-app text-ink">
       {/* full-width progress bar, pinned to the very top */}
-      <div className="h-1 w-full bg-[#E8EAEC]">
+      <div className="h-1 w-full bg-edge">
         <motion.div
-          className="h-full bg-[#1591DC]"
+          className="h-full bg-brand"
           animate={{ width: `${progress * 100}%` }}
           transition={spring}
         />
@@ -124,7 +124,7 @@ export default function OnboardingPreview() {
       {/* step counter, far right with whitespace */}
       <div className="flex h-6 justify-end px-6 pt-5">
         {step > 0 && step <= 3 && (
-          <span className="text-xs font-medium tabular-nums text-[#94A3B8]">
+          <span className="text-xs font-medium tabular-nums text-faint">
             {step} of 3
           </span>
         )}
@@ -153,7 +153,7 @@ export default function OnboardingPreview() {
                     onChange={(e) => setAnswers((p) => ({ ...p, name: e.target.value }))}
                     onKeyDown={(e) => e.key === "Enter" && forward()}
                     placeholder="Your name"
-                    className="w-full rounded-xl border-[1.25px] border-[#E8EAEC] bg-white px-4 py-3 text-lg font-medium outline-none transition-all placeholder:text-[#CBD5E1] focus:border-[#1591DC] focus:ring-2 focus:ring-[#1591DC]/15"
+                    className="w-full rounded-xl border-[1.25px] border-edge bg-card px-4 py-3 text-lg font-medium outline-none transition-all placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-[#1591DC]/15"
                   />
                   <NextButton onClick={forward} disabled={!valid(1)} />
                 </div>
@@ -184,7 +184,7 @@ export default function OnboardingPreview() {
           {step > 0 && step < LAST && (
             <button
               onClick={() => go(step - 1)}
-              className="mt-6 flex items-center gap-1.5 text-xs text-[#94A3B8] transition-colors hover:text-[#5B7490]"
+              className="mt-6 flex items-center gap-1.5 text-xs text-faint transition-colors hover:text-dim"
             >
               <ArrowLeft className="h-3 w-3" /> Back
             </button>
@@ -199,7 +199,7 @@ function StepHead({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="mb-6">
       <h2 className="text-2xl font-semibold tracking-[-0.02em]">{title}</h2>
-      {sub && <p className="mt-1.5 text-sm text-[#5B7490]">{sub}</p>}
+      {sub && <p className="mt-1.5 text-sm text-dim">{sub}</p>}
     </div>
   );
 }
@@ -229,17 +229,17 @@ function ChoiceStep({
               onClick={() => onPick(opt.value)}
               className={`flex w-full items-center justify-between gap-3 rounded-xl border-[1.25px] p-4 text-left transition-colors ${
                 on
-                  ? "border-[#1591DC] bg-[#EAF4FC]"
-                  : "border-[#E8EAEC] bg-white hover:border-[#CBD5E1]"
+                  ? "border-brand bg-brand-soft"
+                  : "border-edge bg-card hover:border-edge2"
               }`}
             >
               <span>
-                <span className="block text-sm font-semibold text-[#0C1A2B]">
+                <span className="block text-sm font-semibold text-ink">
                   {opt.label}
                 </span>
-                <span className="block text-xs text-[#5B7490]">{opt.desc}</span>
+                <span className="block text-xs text-dim">{opt.desc}</span>
               </span>
-              {on && <Check className="h-4 w-4 shrink-0 text-[#1591DC]" />}
+              {on && <Check className="h-4 w-4 shrink-0 text-brand" />}
             </button>
           );
         })}
@@ -253,7 +253,7 @@ function NextButton({ onClick, disabled }: { onClick: () => void; disabled: bool
     <button
       onClick={onClick}
       disabled={disabled}
-      className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+      className="mt-5 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
     >
       Continue <ArrowRight className="h-4 w-4" />
     </button>
@@ -267,17 +267,17 @@ function ConnectWallet({ onConnect }: { onConnect: () => void }) {
       <h1 className="text-3xl font-semibold tracking-[-0.03em]">
         Let&apos;s set up your money
       </h1>
-      <p className="mt-3 text-[0.9375rem] leading-relaxed text-[#5B7490]">
+      <p className="mt-3 text-[0.9375rem] leading-relaxed text-dim">
         Connect your wallet to begin. It stays yours. Your agent can manage it,
         but can never move it out to itself.
       </p>
       <button
         onClick={onConnect}
-        className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         <Wallet className="h-4 w-4" /> Connect wallet
       </button>
-      <p className="mt-4 text-xs text-[#94A3B8]">
+      <p className="mt-4 text-xs text-faint">
         A minute of quick questions after this, then you&apos;re set.
       </p>
     </div>
@@ -291,7 +291,7 @@ function Result({ name, risk }: { name: string; risk: Risk }) {
         <h2 className="text-2xl font-semibold tracking-[-0.02em]">
           {name ? `You're all set, ${name}!` : "You're all set!"}
         </h2>
-        <p className="mt-1.5 text-sm text-[#5B7490]">
+        <p className="mt-1.5 text-sm text-dim">
           Your vault is ready. Your agent takes it from here.
         </p>
       </div>
@@ -301,7 +301,7 @@ function Result({ name, risk }: { name: string; risk: Risk }) {
 
       <Link
         href="/preview/overview"
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         Enter Tends
       </Link>
