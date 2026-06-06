@@ -235,8 +235,9 @@ export const defaultRebalancerDeps: RebalancerDeps = {
         account,
       });
       return true;
-    } catch {
-      return false; // would revert on-chain → caller skips instead of burning gas
+    } catch (e) {
+      log.warn({ vault, simulationError: (e as Error).message }, "[exec] simulation revert reason");
+      return false;
     }
   },
   async sendRebalance(vault, instructions) {
