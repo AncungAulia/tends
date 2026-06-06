@@ -55,7 +55,7 @@ function riskLevelFor(riskPreference: number, low: number, med: number, high: nu
 /** Fetch all token balances + getPriceUnsafe prices for a vault. */
 async function fetchTokenStates(vault: `0x${string}`): Promise<TokenState[]> {
   const pf = as0x(addresses.priceFeed);
-  return Promise.all(
+  const results = await Promise.allSettled(
     Object.values(TOKENS)
       .filter((t) => t.address)
       .map(async (t) => {
@@ -82,6 +82,10 @@ async function fetchTokenStates(vault: `0x${string}`): Promise<TokenState[]> {
         } satisfies TokenState;
       }),
   );
+  // Return successfully fetched tokens; skip RPC failures gracefully
+  return results
+    .filter((r): r is PromiseFulfilledResult<TokenState> => r.status === "fulfilled")
+    .map((r) => r.value);
 }
 
 // ── Shared Zod schemas ─────────────────────────────────────────────────────────
