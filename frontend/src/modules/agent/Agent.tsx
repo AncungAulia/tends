@@ -7,8 +7,15 @@ import { Play, Loader2, ChevronDown } from "lucide-react";
 import { useAccount } from "wagmi";
 import { useUserVault } from "@/hooks/useUserVault";
 import { useRiskLevel } from "@/hooks/useRiskLevel";
-import { useActivity } from "@/hooks/useActivityLog";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useAgentActions } from "@/hooks/useAgentActions";
+import { useAgentConfig } from "@/hooks/useAgentConfig";
+import type { AgentConfig } from "@/hooks/useAgentConfig";
+import { useAgentLogStream } from "@/hooks/useAgentLogStream";
+import type { AgentLogEntry } from "@/hooks/useAgentLogStream";
+import { useAgentLog } from "@/hooks/useAgentLog";
+import type { AgentLogRow } from "@/hooks/useAgentLog";
+import { useActivity } from "@/hooks/useActivityLog";
 import SlidingNumber from "@/components/elements/SlidingNumber";
 import { tokenColor } from "@/components/elements/TokenIcon";
 import { AgentChat } from "@/modules/agent/component/AgentChat";
@@ -293,25 +300,30 @@ function AgentDial({ state }: { state: "on" | "off" | "running" }) {
   );
 }
 
-// ─── Agent Log (real data from useActivity + live idle countdown) ──
+// ─── Agent Log ───────────────────────────────────────────────
+// step → display label + badge color
 
-const G = "bg-[#EDF2F7] text-[#5B7490]";
-const B1 = "bg-[#EAF4FC] text-[#1591DC]";
-const GR = "bg-green-50 text-green-700";
-
-type LogEntry = {
-  id: string;
-  kind: "monitor" | "rebalance" | "idle";
-  label: string;
-  minsAgo: number;
-  live?: boolean;
+const STEP_BADGE: Record<string, { label: string; cls: string }> = {
+  "scan-vault":        { label: "SCAN",    cls: "bg-[#EDF2F7] text-[#5B7490] dark:bg-white/10 dark:text-white/45" },
+  "signal-market":     { label: "SIGNAL",  cls: "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15 dark:text-[#4BB8FA]" },
+  "decide-allocation": { label: "DECIDE",  cls: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400" },
+  "exec-rebalance":    { label: "EXEC",    cls: "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400" },
 };
 
-function AgentLogFeed({ checkEvery }: { checkEvery: string }) {
-  const { activities } = useActivity(8);
+const STATUS_DOT: Record<string, string> = {
+  done:  "bg-green-400",
+  skip:  "bg-[#CBD5E1]",
+  error: "bg-red-400",
+};
+
+function stepBadge(step: string) {
+  return STEP_BADGE[step] ?? { label: step.slice(0, 6).toUpperCase(), cls: "bg-[#EDF2F7] text-[#5B7490] dark:bg-white/10 dark:text-white/45" };
+}
+
+function AgentLogFeed({ checkEvery, liveEntries = [] }: { checkEvery: string; liveEntries?: AgentLogEntry[] }) {
+  const { logs } = useAgentLog(20);
   const fSecs = (parseInt(checkEvery, 10) || 4) * 3600;
   const [secs, setSecs] = useState(() => Math.max(60, fSecs - 12 * 60));
-  const [openKey, setOpenKey] = useState("");
   const secsRef = useRef(secs);
 
   useEffect(() => {
@@ -323,88 +335,91 @@ function AgentLogFeed({ checkEvery }: { checkEvery: string }) {
     return () => clearInterval(t);
   }, [fSecs]);
 
-  const feed: LogEntry[] = [
-    { id: "idle-live", kind: "idle", label: "Watching your portfolio", minsAgo: 0, live: true },
-    ...activities.map((a) => ({
-      id: a.id,
-      kind: (a.action === "REBALANCE" ? "rebalance" : "monitor") as "rebalance" | "monitor",
-      label: a.action === "REBALANCE"
-        ? "Rebalanced portfolio"
-        : `${a.action.charAt(0) + a.action.slice(1).toLowerCase()} check`,
-      minsAgo: Math.floor((Date.now() - a.timestamp.getTime()) / 60000),
-    })),
-  ];
+  // merge live SSE entries (top) + persisted DB entries (below)
+  // de-duplicate by id so a fresh SSE entry doesn't double up once persisted
+  const liveIds = new Set(liveEntries.map((e) => e.id));
+  const historical = logs.filter((r) => !liveIds.has(r.id));
+
+  const isEmpty = liveEntries.length === 0 && historical.length === 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white dark:border-white/8 dark:bg-[#0F2035]">
       <div className="px-3 py-2">
-        {feed.map((entry) => {
-          if (entry.kind === "idle" && entry.live) {
-            return (
-              <div key={entry.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
-                <span className="w-[4.5rem] shrink-0">
-                  <span className="flex w-full justify-center rounded-md bg-[#EDF2F7] py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[#5B7490] dark:bg-white/10 dark:text-white/45">
-                    Idle
-                  </span>
-                </span>
-                <span className="flex flex-1 items-center gap-2 text-xs text-[#5B7490] dark:text-white/45">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1591DC] opacity-50" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#1591DC]" />
-                  </span>
-                  {entry.label}
-                </span>
-                <span className="shrink-0 text-[10px] tabular-nums text-[#94A3B8] dark:text-white/30">
-                  next check in {clock(secs)}
-                </span>
-              </div>
-            );
-          }
+        {/* idle row — always shown at top */}
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <span className="w-[4.5rem] shrink-0">
+            <span className="flex w-full justify-center rounded-md bg-[#EDF2F7] py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[#5B7490] dark:bg-white/10 dark:text-white/45">
+              Idle
+            </span>
+          </span>
+          <span className="flex flex-1 items-center gap-2 text-xs text-[#5B7490] dark:text-white/45">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1591DC] opacity-50" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#1591DC]" />
+            </span>
+            Watching your portfolio
+          </span>
+          <span className="shrink-0 text-[10px] tabular-nums text-[#94A3B8] dark:text-white/30">
+            next check in {clock(secs)}
+          </span>
+        </div>
 
-          const tagCls = entry.kind === "rebalance" ? B1 : G;
-          const tag = entry.kind === "rebalance" ? "EXEC" : "SCAN";
-          const key = entry.id;
-          const isOpen = openKey === key;
-          const mAgo = entry.minsAgo;
-          const timeStr = mAgo <= 0 ? "just now" : mAgo < 60 ? `${mAgo}m ago` : `${Math.floor(mAgo / 60)}h ago`;
-
+        {/* live SSE entries */}
+        {liveEntries.map((entry) => {
+          const { label, cls } = stepBadge(entry.step);
+          const isRunning = entry.status === "running";
           return (
-            <div key={key}>
-              <button
-                onClick={() => setOpenKey(isOpen ? "" : key)}
-                className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[#F7F9FC] dark:hover:bg-white/5"
-              >
-                <span className="w-[4.5rem] shrink-0">
-                  <span className={`flex w-full justify-center rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${tagCls}`}>
-                    {tag}
-                  </span>
+            <div key={entry.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+              <span className="w-[4.5rem] shrink-0">
+                <span className={`flex w-full items-center justify-center gap-1 rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${cls}`}>
+                  {isRunning && (
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+                    </span>
+                  )}
+                  {label}
                 </span>
-                <span className={`flex-1 text-xs ${entry.kind === "rebalance" ? "text-[#0C1A2B] dark:text-white" : "text-[#5B7490] dark:text-white/45"}`}>
-                  {entry.label}
-                </span>
-                <span className="shrink-0 text-[10px] text-[#C5D0DC] dark:text-white/20">{timeStr}</span>
-                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-[#C5D0DC] transition-all group-hover:text-[#5B7490] dark:text-white/20 ${isOpen ? "rotate-180 text-[#5B7490]" : ""}`} />
-              </button>
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="my-1 ml-[5rem] mr-2 border-l-2 border-[#1591DC]/25 pl-3 text-xs leading-relaxed text-[#5B7490] dark:text-white/45">
-                      {entry.kind === "rebalance"
-                        ? "The agent reviewed your portfolio and executed a rebalance to keep your allocation on target."
-                        : "Routine check — prices and positions looked healthy, no action was needed."}
-                    </div>
-                  </motion.div>
+              </span>
+              <span className="flex flex-1 items-center gap-1.5 truncate text-xs text-[#0C1A2B] dark:text-white">
+                {!isRunning && (
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[entry.status] ?? "bg-[#CBD5E1]"}`} />
                 )}
-              </AnimatePresence>
+                {entry.message}
+              </span>
+              <span className="shrink-0 text-[10px] tabular-nums text-[#94A3B8] dark:text-white/30">
+                {ago(Date.now() - new Date(entry.ts).getTime())}
+              </span>
             </div>
           );
         })}
+
+        {/* persisted historical entries */}
+        {historical.map((row: AgentLogRow) => {
+          const { label, cls } = stepBadge(row.step);
+          return (
+            <div key={row.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+              <span className="w-[4.5rem] shrink-0">
+                <span className={`flex w-full justify-center rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] ${cls}`}>
+                  {label}
+                </span>
+              </span>
+              <span className="flex flex-1 items-center gap-1.5 truncate text-xs text-[#0C1A2B] dark:text-white">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[row.status] ?? "bg-[#CBD5E1]"}`} />
+                {row.message}
+              </span>
+              <span className="shrink-0 text-[10px] tabular-nums text-[#94A3B8] dark:text-white/30">
+                {ago(Date.now() - new Date(row.ts).getTime())}
+              </span>
+            </div>
+          );
+        })}
+
+        {isEmpty && (
+          <p className="px-2 py-4 text-center text-xs text-[#94A3B8] dark:text-white/30">
+            No runs yet — hit <span className="font-medium text-[#1591DC]">Run now</span> to start
+          </p>
+        )}
       </div>
     </div>
   );
@@ -513,14 +528,25 @@ function ControlTab({
   riskName,
   activityCount,
   onEditGuardrails,
+  onPause,
+  onResume,
+  isPausing,
+  onRunNow,
+  isRunning,
+  liveEntries,
 }: {
   paused: boolean;
   riskName: string;
   activityCount: number;
   onEditGuardrails: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  isPausing: boolean;
+  onRunNow: () => void;
+  isRunning: boolean;
+  liveEntries: AgentLogEntry[];
 }) {
-  const agentState = paused ? "off" : "on";
-  const [localPaused, setLocalPaused] = useState(paused);
+  const agentState = paused ? "off" : isRunning ? "running" : "on";
 
   return (
     <div className="space-y-6">
@@ -529,26 +555,28 @@ function ControlTab({
           <SectionLabel>Agent controls</SectionLabel>
           <div className="flex flex-1 flex-col items-center rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-6 dark:border-white/8 dark:bg-[#0F2035]">
             <div className="mt-2">
-              <AgentDial state={localPaused ? "off" : agentState} />
+              <AgentDial state={agentState} />
             </div>
             <p className="mt-1 text-xs text-[#5B7490] dark:text-white/45">
-              {localPaused ? "agent is paused" : "watching your portfolio"}
+              {paused ? "agent is paused" : isRunning ? "running rebalance..." : "watching your portfolio"}
             </p>
 
             <div className="mt-4 flex w-[80%] max-w-xs items-center gap-2">
               <button
-                disabled
-                title="Coming soon"
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1591DC] px-4 py-2.5 text-xs font-medium text-white opacity-40 cursor-not-allowed"
+                onClick={() => onRunNow()}
+                disabled={isRunning}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1591DC] px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Play className="h-3.5 w-3.5" />
-                Run now
+                {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                {isRunning ? "Running..." : "Run now"}
               </button>
               <button
-                onClick={() => setLocalPaused((v) => !v)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#E8EAEC] bg-white px-4 py-2.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B] dark:border-white/10 dark:bg-white/5 dark:text-white/45 dark:hover:border-white/20 dark:hover:text-white"
+                onClick={paused ? onResume : onPause}
+                disabled={isPausing}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#E8EAEC] bg-white px-4 py-2.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B] disabled:opacity-50 disabled:cursor-not-allowed dark:border-white/10 dark:bg-white/5 dark:text-white/45 dark:hover:border-white/20 dark:hover:text-white"
               >
-                {localPaused ? "Resume" : "Pause"}
+                {isPausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {paused ? "Resume" : "Pause"}
               </button>
             </div>
 
@@ -584,7 +612,7 @@ function ControlTab({
         >
           Agent log
         </SectionLabel>
-        <AgentLogFeed checkEvery="4h" />
+        <AgentLogFeed checkEvery="4h" liveEntries={liveEntries} />
       </div>
     </div>
   );
@@ -592,28 +620,93 @@ function ControlTab({
 
 // ─── Guardrails tab ───────────────────────────────────────────
 
-type AgentConfig = {
-  checkEvery: string;
-  maxPerAsset: number;
-  dailyLimit: number;
-  minDrift: number;
-  stopLoss: { on: boolean; value: number };
+// Local UI state for the guardrails form (not the same as backend AgentConfig)
+type LocalGuardrailState = {
+  cadenceSec: number;
+  maxPerAssetPct: number;
+  dailyLimitPerDay: number;
+  driftThresholdBps: number;
+  stopLossEnabled: boolean;
+  stopLossPct: number;
   notes: string;
 };
 
-const DEFAULT_CONFIG: AgentConfig = {
-  checkEvery: "4h",
-  maxPerAsset: 50,
-  dailyLimit: 3,
-  minDrift: 5,
-  stopLoss: { on: true, value: 10 },
+const DEFAULT_LOCAL: LocalGuardrailState = {
+  cadenceSec: 14400,
+  maxPerAssetPct: 50,
+  dailyLimitPerDay: 3,
+  driftThresholdBps: 500,
+  stopLossEnabled: true,
+  stopLossPct: 10,
   notes: "Prefer stable yield on weekends. Lean conservative near month-end.",
 };
 
-function GuardrailsTab({ config, setConfig }: { config: AgentConfig; setConfig: (f: (c: AgentConfig) => AgentConfig) => void }) {
+function cadenceToFreq(secs: number | null | undefined): string {
+  if (!secs) return "4h";
+  const h = Math.round(secs / 3600);
+  if (h <= 1) return "1h";
+  if (h <= 2) return "2h";
+  if (h <= 4) return "4h";
+  if (h <= 12) return "12h";
+  return "24h";
+}
+
+function freqToCadence(val: string): number {
+  return parseInt(val, 10) * 3600;
+}
+
+function GuardrailsTab({
+  config,
+  onSave,
+  isSaving,
+  isLoading,
+}: {
+  config: AgentConfig | undefined;
+  onSave: (patch: Partial<AgentConfig>) => Promise<unknown>;
+  isSaving: boolean;
+  isLoading: boolean;
+}) {
   const [advanced, setAdvanced] = useState(false);
-  const set = (patch: Partial<AgentConfig>) => setConfig((c) => ({ ...c, ...patch }));
+  const [local, setLocal] = useState<LocalGuardrailState>(DEFAULT_LOCAL);
+
+  // Sync local state when remote config loads
+  useEffect(() => {
+    if (!config) return;
+    setLocal({
+      cadenceSec: config.cadenceSec ?? DEFAULT_LOCAL.cadenceSec,
+      maxPerAssetPct: config.maxPerAssetPct ?? DEFAULT_LOCAL.maxPerAssetPct,
+      dailyLimitPerDay: config.dailyLimitPerDay ?? DEFAULT_LOCAL.dailyLimitPerDay,
+      driftThresholdBps: config.driftThresholdBps ?? DEFAULT_LOCAL.driftThresholdBps,
+      stopLossEnabled: config.stopLossEnabled ?? DEFAULT_LOCAL.stopLossEnabled,
+      stopLossPct: config.stopLossPct ?? DEFAULT_LOCAL.stopLossPct,
+      notes: config.notes ?? DEFAULT_LOCAL.notes,
+    });
+  }, [config]);
+
+  const set = (patch: Partial<LocalGuardrailState>) => setLocal((c) => ({ ...c, ...patch }));
   const num = (v: string) => Math.max(0, parseInt(v.replace(/[^0-9]/g, ""), 10) || 0);
+
+  const freqValue = cadenceToFreq(local.cadenceSec);
+
+  async function handleSave() {
+    await onSave({
+      cadenceSec: local.cadenceSec,
+      maxPerAssetPct: local.maxPerAssetPct,
+      dailyLimitPerDay: local.dailyLimitPerDay,
+      driftThresholdBps: local.driftThresholdBps,
+      stopLossEnabled: local.stopLossEnabled,
+      stopLossPct: local.stopLossEnabled ? local.stopLossPct : null,
+      notes: local.notes,
+    });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-[#5B7490] dark:text-white/45">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading guardrails…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -621,13 +714,18 @@ function GuardrailsTab({ config, setConfig }: { config: AgentConfig; setConfig: 
         <SectionLabel right={<></>}>Limits</SectionLabel>
         <div className="divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5 dark:divide-white/8 dark:border-white/8 dark:bg-[#0F2035]">
           <GuardrailRow label="Check frequency" hint="How often the agent reviews the market">
-            <Dropdown value={config.checkEvery} options={FREQ_PRESETS} onChange={(v) => set({ checkEvery: v })} minW="min-w-[11rem]" />
+            <Dropdown
+              value={freqValue}
+              options={FREQ_PRESETS}
+              onChange={(v) => set({ cadenceSec: freqToCadence(v) })}
+              minW="min-w-[11rem]"
+            />
           </GuardrailRow>
           <GuardrailRow label="Max per asset" hint="Cap allocation to any single token">
-            <NumInput value={config.maxPerAsset} suffix="%" onChange={(v) => set({ maxPerAsset: num(v) })} />
+            <NumInput value={local.maxPerAssetPct} suffix="%" onChange={(v) => set({ maxPerAssetPct: num(v) })} />
           </GuardrailRow>
           <GuardrailRow label="Daily rebalance limit" hint="Max rebalances per day, caps gas">
-            <NumInput value={config.dailyLimit} suffix="/ day" onChange={(v) => set({ dailyLimit: num(v) })} />
+            <NumInput value={local.dailyLimitPerDay} suffix="/ day" onChange={(v) => set({ dailyLimitPerDay: num(v) })} />
           </GuardrailRow>
         </div>
       </div>
@@ -644,15 +742,15 @@ function GuardrailsTab({ config, setConfig }: { config: AgentConfig; setConfig: 
           Advanced
         </SectionLabel>
         <div className={`divide-y divide-[#E8EAEC] rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white px-5 dark:divide-white/8 dark:border-white/8 dark:bg-[#0F2035] ${advanced ? "" : "pointer-events-none select-none opacity-50"}`}>
-          <GuardrailRow label="Min drift to act" hint="Only rebalance if off target by this much">
-            <NumInput value={config.minDrift} suffix="%" onChange={(v) => set({ minDrift: num(v) })} />
+          <GuardrailRow label="Min drift to act" hint="Only rebalance if off target by this much (bps)">
+            <NumInput value={local.driftThresholdBps} suffix="bps" onChange={(v) => set({ driftThresholdBps: num(v) })} />
           </GuardrailRow>
           <GuardrailRow label="Stop-loss" hint="Exit an asset if it drops this much">
             <div className="flex items-center gap-2">
-              {config.stopLoss.on && (
-                <NumInput value={config.stopLoss.value} suffix="%" onChange={(v) => set({ stopLoss: { ...config.stopLoss, value: num(v) } })} />
+              {local.stopLossEnabled && (
+                <NumInput value={local.stopLossPct} suffix="%" onChange={(v) => set({ stopLossPct: num(v) })} />
               )}
-              <Toggle sm on={config.stopLoss.on} onClick={() => set({ stopLoss: { ...config.stopLoss, on: !config.stopLoss.on } })} />
+              <Toggle sm on={local.stopLossEnabled} onClick={() => set({ stopLossEnabled: !local.stopLossEnabled })} />
             </div>
           </GuardrailRow>
         </div>
@@ -662,13 +760,24 @@ function GuardrailsTab({ config, setConfig }: { config: AgentConfig; setConfig: 
         <SectionLabel right={<></>}>Personal Preferences</SectionLabel>
         <textarea
           rows={4}
-          value={config.notes}
+          value={local.notes}
           onChange={(e) => set({ notes: e.target.value })}
           className="w-full resize-none rounded-xl border border-[#E8EAEC] bg-white p-4 text-sm leading-relaxed text-[#0C1A2B] outline-none focus:border-[#1591DC] focus:ring-1 focus:ring-[#1591DC]/20 dark:border-white/10 dark:bg-[#0F2035] dark:text-white"
         />
         <p className="mt-1.5 text-xs text-[#5B7490] dark:text-white/45">
           Write instructions in plain language. The agent reads this before deciding any action.
         </p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="flex items-center gap-2 rounded-full bg-[#1591DC] px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isSaving ? "Saving…" : "Save"}
+        </button>
       </div>
     </div>
   );
@@ -689,11 +798,13 @@ export function Agent() {
   const { currentLevel } = useRiskLevel(vaultAddress);
   const { paused } = usePortfolio(vaultAddress, address);
   const { activities } = useActivity();
+  const { pause, resume, runHermes, isPausing, isRunning } = useAgentActions();
+  const { config: agentConfig, isLoading: configLoading, save: saveConfig, isSaving } = useAgentConfig();
+  const { liveEntries } = useAgentLogStream(vaultAddress);
 
   const riskName = RISK_LABELS[currentLevel ?? 1] ?? "Medium";
 
   const [tab, setTab] = useState<Tab>("control");
-  const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -708,6 +819,7 @@ export function Agent() {
         tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
         active={tab}
         onChange={(id) => setTab(id as Tab)}
+        runningTab={isRunning ? "control" : undefined}
       />
 
       <div key={tab}>
@@ -717,10 +829,23 @@ export function Agent() {
             riskName={riskName}
             activityCount={activities.length}
             onEditGuardrails={() => setTab("guardrails")}
+            onPause={pause}
+            onResume={resume}
+            isPausing={isPausing}
+            onRunNow={runHermes}
+            isRunning={isRunning}
+            liveEntries={liveEntries}
           />
         )}
         {tab === "chat" && <AgentChat />}
-        {tab === "guardrails" && <GuardrailsTab config={config} setConfig={setConfig} />}
+        {tab === "guardrails" && (
+          <GuardrailsTab
+            config={agentConfig}
+            onSave={saveConfig}
+            isSaving={isSaving}
+            isLoading={configLoading}
+          />
+        )}
         {tab !== "chat" && <div className="h-12" />}
       </div>
     </div>

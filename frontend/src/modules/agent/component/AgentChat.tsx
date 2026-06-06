@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ArrowUp, Check, X, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles } from "lucide-react";
+import { useChat } from "@/hooks/useChat";
 
 /* ──────────────────────────────────────────────────────────
    Agent Chat — Tends
@@ -261,30 +262,31 @@ function AgentMessage({
 // ─── Main ───────────────────────────────────────────────────
 
 export function AgentChat() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { messages: hookMessages, sendMessage, streaming } = useChat();
   const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Map hook ChatMessage[] to local Msg[] for rendering
+  const messages: Msg[] = hookMessages.map((m, i) => ({
+    id: i,
+    role: m.role === "hermes" ? "agent" : "user",
+    text: m.text,
+  }));
 
   const showSlash = input.startsWith("/");
   const slashItems = showSlash ? SLASH.filter((s) => s.cmd.startsWith(input.toLowerCase())) : [];
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing]);
+  }, [hookMessages, streaming]);
 
   function send(raw?: string) {
     const text = (raw ?? input).trim();
     if (!text) return;
-    setMessages((m) => [...m, { id: nextId++, role: "user", text }]);
     setInput("");
-    setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      setMessages((m) => [...m, { id: nextId++, role: "agent", ...buildReply(text) }]);
-    }, 900);
+    void sendMessage(text);
   }
 
   function pickCommand(cmd: string) {
@@ -382,7 +384,7 @@ export function AgentChat() {
                 </div>
               ),
             )}
-            {typing && (
+            {streaming && messages[messages.length - 1]?.role !== "agent" && (
               <div className="flex gap-2.5">
                 <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1591DC]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}

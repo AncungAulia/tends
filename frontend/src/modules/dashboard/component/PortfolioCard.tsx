@@ -231,7 +231,11 @@ export function PortfolioCard({ totalAssetsUSDC, delta, isLoading }: PortfolioCa
           <p className="flex items-center text-sm text-[#94A3B8] dark:text-white/30">{range} view</p>
         </div>
         <div className="pl-6">
-          <PortfolioChart data={data} />
+          {isLoading ? (
+            <div className="h-[150px] animate-pulse rounded-xl bg-[#E8EAEC] dark:bg-white/10" />
+          ) : (
+            <PortfolioChart key={Math.round(totalAssetsUSDC)} data={data} />
+          )}
         </div>
       </div>
     </motion.div>
