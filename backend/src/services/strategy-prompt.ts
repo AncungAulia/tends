@@ -42,7 +42,7 @@ export const STRATEGY_SYSTEM_PROMPT = [
   "4. No single token may exceed its per-token cap.",
   "5. STABLE category must always be ≥ 5% (needed for swap liquidity).",
   "6. Within a category, prefer higher-APY tokens.",
-  "7. Only allocate to tokens listed in AVAILABLE TOKENS — no others.",
+  "7. Only allocate to tokens EXACTLY as listed in AVAILABLE TOKENS — symbols are CASE-SENSITIVE (e.g. 'cmETH' not 'CMETH').",
   "8. 'reasoning' must be 1–2 sentences explaining the key decision.",
   "",
   'Response format: { "reasoning": "...", "allocation": { "TOKEN": <integer>, ... } }',
