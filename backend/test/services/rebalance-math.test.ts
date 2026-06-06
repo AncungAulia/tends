@@ -6,6 +6,7 @@ import {
   valueUsd,
   type TokenState,
 } from "../../src/services/rebalance-math.js";
+import type { TokenSymbol } from "../../src/chain/tokens.js";
 
 const E18 = 10n ** 18n;
 const A = {
@@ -15,6 +16,10 @@ const A = {
   mETH: "0x00000000000000000000000000000000000000c4" as const,
   cmETH: "0x00000000000000000000000000000000000000c5" as const,
 };
+
+// Explicit simple allocation maps for behavioral tests — independent of STRATEGY changes.
+const SIMPLE_LOW = new Map<TokenSymbol, number>([["mUSD", 9000], ["USDY", 1000]]);
+const SIMPLE_MED = new Map<TokenSymbol, number>([["mUSD", 4000], ["mETH", 3000], ["cmETH", 3000]]);
 
 /** Build a token state with sane defaults (prices in 18-dec USD). */
 const usdc = (balance: bigint): TokenState => ({
@@ -34,7 +39,7 @@ const CFG = { slippageBps: 100, minSwapValueUsd: E18 };
 
 test("fresh USDC deposit (LOW) → buys mUSD 90% + USDY 10%, no sells", () => {
   const states = [usdc(1_000_000_000n), tok("mUSD", 0n, E18), tok("USDY", 0n, E18)];
-  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_LOW, CFG);
 
   assert.equal(ins.length, 2);
   assert.ok(ins.every((i) => i.tokenIn === A.USDC), "all buys from USDC");
@@ -68,7 +73,7 @@ test("overweight token is sold before buys (sells ordered first)", () => {
 
 test("already balanced → no instructions", () => {
   const states = [usdc(0n), tok("mUSD", 900n * E18, E18), tok("USDY", 100n * E18, E18)];
-  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_LOW, CFG);
   assert.equal(ins.length, 0);
 });
 
@@ -79,13 +84,13 @@ test("sub-dust drift is skipped", () => {
     tok("mUSD", 9005n * (E18 / 10n), E18), // $900.5
     tok("USDY", 995n * (E18 / 10n), E18), // $99.5
   ];
-  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_LOW, CFG);
   assert.equal(ins.length, 0);
 });
 
 test("minAmountOut applies 1% slippage tolerance", () => {
   const states = [usdc(1_000_000_000n), tok("mUSD", 0n, E18), tok("USDY", 0n, E18)];
-  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_LOW, CFG);
   const mUSD = ins.find((i) => i.tokenOut === A.mUSD)!;
   // expect 900 mUSD out, minus 1% → 891
   assert.equal(mUSD.minAmountOut, 891n * E18);
@@ -119,10 +124,16 @@ test("resolveTargetBps: each preset sums to 10000", () => {
 
 test("resolveTargetBps: CUSTOM blends LOW/MEDIUM baskets", () => {
   const m = resolveTargetBps(3, { lowBps: 5000, medBps: 5000, highBps: 0 });
-  assert.equal(m.get("mUSD"), 6500); // 0.5*9000 + 0.5*4000
-  assert.equal(m.get("USDY"), 500); // 0.5*1000
-  assert.equal(m.get("mETH"), 1500); // 0.5*3000
-  assert.equal(m.get("cmETH"), 1500); // 0.5*3000
+  // 0.5*LOW(mUSD 6000) + 0.5*MEDIUM(mUSD 2500) = 3000+1250 = 4250
+  assert.equal(m.get("mUSD"), 4250);
+  // 0.5*LOW(sUSDe 1000) + 0.5*MEDIUM(sUSDe 1000) = 500+500 = 1000
+  assert.equal(m.get("sUSDe"), 1000);
+  // 0.5*LOW(USDY 1000) = 500
+  assert.equal(m.get("USDY"), 500);
+  // 0.5*LOW(CETES 500) + 0.5*MEDIUM(CETES 1000) = 250+500 = 750
+  assert.equal(m.get("CETES"), 750);
+  // 0.5*MEDIUM(mETH 1000) = 500
+  assert.equal(m.get("mETH"), 500);
   const total = [...m.values()].reduce((a, b) => a + b, 0);
   assert.equal(total, 10_000);
 });
@@ -137,15 +148,17 @@ test("resolveTargetBps: CUSTOM requires an allocation", () => {
 
 test("resolveTargetBps: CUSTOM blends all three baskets", () => {
   const m = resolveTargetBps(3, { lowBps: 2000, medBps: 3000, highBps: 5000 });
-  // mUSD: .2*9000 + .3*4000 = 1800+1200 = 3000
-  assert.equal(m.get("mUSD"), 3000);
-  // mETH: .3*3000 + .5*2000 = 900+1000 = 1900
-  assert.equal(m.get("mETH"), 1900);
-  // cmETH: .3*3000 + .5*4000 = 900+2000 = 2900
-  assert.equal(m.get("cmETH"), 2900);
-  // sUSDe: .5*3000 = 1500 ; USDY: .2*1000 = 200 ; WMNT: .5*1000 = 500
-  assert.equal(m.get("sUSDe"), 1500);
+  // mUSD: .2*6000 + .3*2500 = 1200+750 = 1950
+  assert.equal(m.get("mUSD"), 1950);
+  // mETH: .3*1000 + .5*1200 = 300+600 = 900
+  assert.equal(m.get("mETH"), 900);
+  // cmETH: .3*500 + .5*1100 = 150+550 = 700
+  assert.equal(m.get("cmETH"), 700);
+  // sUSDe: .2*1000 + .3*1000 + .5*1200 = 200+300+600 = 1100
+  assert.equal(m.get("sUSDe"), 1100);
+  // USDY: .2*1000 = 200
   assert.equal(m.get("USDY"), 200);
+  // WMNT: .3*500 + .5*700 = 150+350 = 500
   assert.equal(m.get("WMNT"), 500);
   const total = [...m.values()].reduce((a, b) => a + b, 0);
   assert.equal(total, 10_000);
@@ -194,7 +207,7 @@ test("computeSwapInstructions: MEDIUM funds split 40/30/30", () => {
     tok("mETH", 0n, 2000n * E18),
     tok("cmETH", 0n, 2000n * E18),
   ];
-  const ins = computeSwapInstructions(states, resolveTargetBps(1), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_MED, CFG);
   assert.equal(ins.length, 3);
   const byOut = (a: string) => ins.find((i) => i.tokenOut === a)!;
   assert.equal(byOut(A.mUSD).amountIn, 400_000_000n); // $400
@@ -205,10 +218,10 @@ test("computeSwapInstructions: MEDIUM funds split 40/30/30", () => {
 });
 
 test("computeSwapInstructions: simultaneous over- and under-weight, sells first", () => {
-  // LOW target (mUSD 90, USDY 10). Hold $1000 mUSD only → mUSD overweight $100,
+  // SIMPLE_LOW (mUSD 90, USDY 10). Hold $1000 mUSD only → mUSD overweight $100,
   // USDY underweight $100. Expect 1 sell (mUSD→USDC) then 1 buy (USDC→USDY).
   const states = [usdc(0n), tok("mUSD", 1000n * E18, E18), tok("USDY", 0n, E18)];
-  const ins = computeSwapInstructions(states, resolveTargetBps(0), CFG);
+  const ins = computeSwapInstructions(states, SIMPLE_LOW, CFG);
   assert.equal(ins.length, 2);
   assert.equal(ins[0]!.tokenIn, A.mUSD); // sell first
   assert.equal(ins[0]!.tokenOut, A.USDC);
