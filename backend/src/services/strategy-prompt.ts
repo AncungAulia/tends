@@ -86,21 +86,27 @@ export function buildStrategyPrompt(input: StrategyPromptInput): string {
     "FX_MAJOR", "FX_EM",
   ];
 
-  // ── Mandatory minimums ───────────────────────────────────────────────────────
-  const mandatoryCategories = CATEGORY_ORDER.filter(
-    (cat) => CATEGORY_BOUNDS[cat][riskLevel].minBps > 0,
-  );
+  // ── Hard constraints (both floors AND ceilings) ──────────────────────────────
+  const constrainedCategories = CATEGORY_ORDER.filter((cat) => {
+    const b = CATEGORY_BOUNDS[cat][riskLevel];
+    return b.minBps > 0 || b.maxBps < 10000;
+  });
 
-  if (mandatoryCategories.length > 0) {
-    lines.push("MANDATORY MINIMUMS (hard floors — violation causes a retry)");
-    for (const cat of mandatoryCategories) {
-      const minPct = CATEGORY_BOUNDS[cat][riskLevel].minBps / 100;
-      const liveToks = TOKENS_BY_CATEGORY[cat].filter((t) => (prices[t.symbol] ?? 0) > 0);
-      const examples = liveToks.slice(0, 3).map((t) => t.symbol).join(", ");
-      lines.push(`  ${cat.padEnd(12)} ≥ ${minPct}%   (tokens: ${examples})`);
-    }
-    lines.push("");
+  lines.push("HARD CONSTRAINTS — ALL are mandatory. Violation = invalid allocation.");
+  for (const cat of constrainedCategories) {
+    const b = CATEGORY_BOUNDS[cat][riskLevel];
+    const minPct = b.minBps / 100;
+    const maxPct = b.maxBps / 100;
+    const liveToks = TOKENS_BY_CATEGORY[cat].filter((t) => (prices[t.symbol] ?? 0) > 0);
+    const examples = liveToks.slice(0, 3).map((t) => t.symbol).join(", ");
+    const range = minPct === 0
+      ? `max ${maxPct}%`
+      : maxPct === 100
+      ? `min ${minPct}%`
+      : `${minPct}% ≤ total ≤ ${maxPct}%`;
+    lines.push(`  ${cat.padEnd(12)} ${range.padEnd(22)} (e.g. ${examples})`);
   }
+  lines.push("");
 
   // ── Strategy bounds + available tokens per category ─────────────────────────
   lines.push(`STRATEGY BOUNDS [${riskLevel}]`);
