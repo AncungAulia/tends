@@ -13,6 +13,8 @@ import { useVaultStore } from "@/hooks/useVaultStore";
 import { useVaultHoldings } from "@/hooks/useVaultHoldings";
 import { TokenIcon, TOKEN_COLOR } from "@/components/elements/TokenIcon";
 import { motion, AnimatePresence } from "motion/react";
+import { Drawer as Vaul } from "vaul";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 /* ──────────────────────────────────────────────────────────
    Deposit / Withdraw modals — real on-chain balances + txs.
@@ -34,7 +36,7 @@ function TokenSlider({ value, onChange, color }: { value: number; onChange: (v: 
   return (
     <div className="relative flex h-5 w-full items-center">
       {/* unfilled track */}
-      <div className="pointer-events-none absolute inset-x-0 h-1.5 rounded-full bg-[#E8EAEC]" />
+      <div className="pointer-events-none absolute inset-x-0 h-1.5 rounded-full bg-edge" />
       {/* filled track */}
       <div
         className="pointer-events-none absolute left-0 h-1.5 rounded-full"
@@ -64,8 +66,11 @@ function TokenSlider({ value, onChange, color }: { value: number; onChange: (v: 
 // ─── Shared modal shell ──────────────────────────────────
 
 function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  const isMobile = useIsMobile();
+
+  // desktop centered modal handles its own esc + scroll-lock; on mobile Vaul does
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     document.body.style.overflow = "hidden";
     const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onEsc);
@@ -73,13 +78,36 @@ function Modal({ open, onClose, children }: { open: boolean; onClose: () => void
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onEsc);
     };
-  }, [open, onClose]);
+  }, [open, onClose, isMobile]);
 
+  // mobile: Vaul bottom sheet — draggable, scroll-locked, repositions inputs
+  if (isMobile) {
+    return (
+      <Vaul.Root open={open} onOpenChange={(o) => !o && onClose()}>
+        <Vaul.Portal>
+          <Vaul.Overlay className="fixed inset-0 z-50 bg-tip/25 backdrop-blur-[2px]" />
+          <Vaul.Content
+            aria-describedby={undefined}
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl border-t border-edge bg-card outline-none"
+          >
+            <Vaul.Title className="sr-only">Manage funds</Vaul.Title>
+            {/* grabber */}
+            <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-edge" />
+            <div className="flex-1 overflow-y-auto px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+              {children}
+            </div>
+          </Vaul.Content>
+        </Vaul.Portal>
+      </Vaul.Root>
+    );
+  }
+
+  // desktop: centered modal
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div onClick={onClose} className="absolute inset-0 bg-[#0C1A2B]/25 backdrop-blur-[2px]" style={{ animation: "fadeIn .2s ease" }} />
-      <div className="relative w-full max-w-md rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-6 shadow-xl shadow-[#0C1A2B]/10" style={{ animation: "fadeIn .2s ease" }}>
+      <div onClick={onClose} className="absolute inset-0 bg-tip/25 backdrop-blur-[2px]" style={{ animation: "fadeIn .2s ease" }} />
+      <div className="relative w-full max-w-md rounded-2xl border-[1.25px] border-edge bg-card p-6 shadow-xl shadow-[#0C1A2B]/10" style={{ animation: "fadeIn .2s ease" }}>
         {children}
       </div>
     </div>
@@ -90,10 +118,10 @@ function Head({ title, sub, onClose }: { title: string; sub: string; onClose: ()
   return (
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
-        <h2 className="text-lg font-semibold tracking-[-0.01em] text-[#0C1A2B]">{title}</h2>
-        <p className="mt-0.5 text-sm text-[#5B7490]">{sub}</p>
+        <h2 className="text-lg font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+        <p className="mt-0.5 text-sm text-dim">{sub}</p>
       </div>
-      <button onClick={onClose} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]">
+      <button onClick={onClose} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge text-dim transition-colors hover:border-dim hover:text-ink">
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -104,24 +132,24 @@ function AmountField({ amount, setAmount, max, quick }: { amount: string; setAmo
   const onChange = (v: string) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setAmount(v); };
   return (
     <>
-      <p className="mb-1.5 text-xs font-medium text-[#5B7490]">Amount</p>
-      <div className="flex items-center gap-2 rounded-xl border border-[#E8EAEC] bg-white px-4 py-3 transition-colors focus-within:border-[#1591DC] focus-within:ring-1 focus-within:ring-[#1591DC]/20">
-        <span className="text-2xl font-semibold text-[#94A3B8]">$</span>
+      <p className="mb-1.5 text-xs font-medium text-dim">Amount</p>
+      <div className="flex items-center gap-2 rounded-xl border border-edge bg-card px-4 py-3 transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-[#1591DC]/20">
+        <span className="text-2xl font-semibold text-faint">$</span>
         <input
           autoFocus
           inputMode="decimal"
           value={amount}
           onChange={(e) => onChange(e.target.value)}
           placeholder="0.00"
-          className="w-full min-w-0 bg-transparent text-2xl font-semibold tracking-[-0.02em] text-[#0C1A2B] outline-none placeholder:text-[#CBD5E1]"
+          className="w-full min-w-0 bg-transparent text-2xl font-semibold tracking-[-0.02em] text-ink outline-none placeholder:text-faint"
         />
-        <button onClick={() => setAmount(USD(max))} className="shrink-0 rounded-md bg-[#F7F9FC] px-2.5 py-1 text-xs font-semibold text-[#1591DC] transition-colors hover:bg-[#EAF4FC]">
+        <button onClick={() => setAmount(USD(max))} className="shrink-0 rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-brand transition-colors hover:bg-brand-soft">
           MAX
         </button>
       </div>
       <div className="mt-2 flex gap-1.5">
         {quick.map((q) => (
-          <button key={q} onClick={() => setAmount(String(q))} className="rounded-full border border-[#E8EAEC] px-2.5 py-1 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#1591DC] hover:text-[#1591DC]">
+          <button key={q} onClick={() => setAmount(String(q))} className="rounded-full border border-edge px-2.5 py-1 text-xs font-medium text-dim transition-colors hover:border-brand hover:text-brand">
             ${q.toLocaleString("en-US")}
           </button>
         ))}
@@ -133,12 +161,12 @@ function AmountField({ amount, setAmount, max, quick }: { amount: string; setAmo
 function Done({ msg, sub, onClose }: { msg: string; sub: string; onClose: () => void }) {
   return (
     <div className="flex flex-col items-center py-4 text-center" style={{ animation: "fadeIn .25s ease" }}>
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-50">
-        <Check className="h-6 w-6 text-green-600" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-pos-soft">
+        <Check className="h-6 w-6 text-pos" />
       </div>
-      <p className="mt-3 text-sm font-semibold text-[#0C1A2B]">{msg}</p>
-      <p className="mt-0.5 text-xs text-[#5B7490]">{sub}</p>
-      <button onClick={onClose} className="mt-5 w-full rounded-full bg-[#F7F9FC] px-4 py-2.5 text-sm font-medium text-[#0C1A2B] transition-colors hover:bg-[#EAF4FC]">
+      <p className="mt-3 text-sm font-semibold text-ink">{msg}</p>
+      <p className="mt-0.5 text-xs text-dim">{sub}</p>
+      <button onClick={onClose} className="mt-5 w-full rounded-full bg-panel px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-brand-soft">
         Done
       </button>
     </div>
@@ -147,7 +175,7 @@ function Done({ msg, sub, onClose }: { msg: string; sub: string; onClose: () => 
 
 function SubmitButton({ verb, amount, busy, disabled, onClick }: { verb: string; amount: number; busy: boolean; disabled: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} disabled={disabled || busy} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40">
+    <button onClick={onClick} disabled={disabled || busy} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40">
       {busy ? (
         <><Loader2 className="h-4 w-4 animate-spin" /> Working...</>
       ) : amount > 0 ? (
@@ -203,15 +231,15 @@ export function DepositModal({ open, onClose }: { open: boolean; onClose: () => 
       ) : (
         <>
           <AmountField amount={amount} setAmount={setAmount} max={walletBalance} quick={[100, 500, 1000]} />
-          <p className="mt-2 text-xs text-[#94A3B8]">
+          <p className="mt-2 text-xs text-faint">
             Wallet balance:{" "}
             {balLoading ? "…" : `$${USD(walletBalance)} USDC`}
           </p>
           {num > walletBalance && walletBalance > 0 && (
-            <p className="mt-1 text-xs text-red-500">Exceeds your wallet balance.</p>
+            <p className="mt-1 text-xs text-neg">Exceeds your wallet balance.</p>
           )}
           {error && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-neg-soft px-3 py-2 text-xs text-neg">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {error}
             </div>
@@ -321,20 +349,20 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
         <>
           {/* ── Amount / Percent toggle + input ───────────── */}
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-xs font-medium text-[#5B7490]">Amount</p>
-            <div className="flex items-center rounded-full border border-[#E8EAEC] bg-[#F7F9FC] p-0.5">
+            <p className="text-xs font-medium text-dim">Amount</p>
+            <div className="flex items-center rounded-full border border-edge bg-panel p-0.5">
               {(["amount", "percent"] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => switchMode(m)}
                   className={`relative rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${
-                    mode === m ? "text-white" : "text-[#5B7490] hover:text-[#0C1A2B]"
+                    mode === m ? "text-white" : "text-dim hover:text-ink"
                   }`}
                 >
                   {mode === m && (
                     <motion.div
                       layoutId="withdraw-toggle-pill"
-                      className="absolute inset-0 rounded-full bg-[#1591DC] shadow-sm"
+                      className="absolute inset-0 rounded-full bg-brand shadow-sm"
                       transition={{ type: "spring", stiffness: 500, damping: 35 }}
                     />
                   )}
@@ -343,8 +371,8 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-[#E8EAEC] bg-white px-4 py-3 transition-colors focus-within:border-[#1591DC] focus-within:ring-1 focus-within:ring-[#1591DC]/20">
-            <span className="text-2xl font-semibold text-[#94A3B8]">
+          <div className="flex items-center gap-2 rounded-xl border border-edge bg-card px-4 py-3 transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-[#1591DC]/20">
+            <span className="text-2xl font-semibold text-faint">
               {mode === "amount" ? "$" : "%"}
             </span>
             <input
@@ -353,11 +381,11 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
               value={rawInput}
               onChange={(e) => handleRawInput(e.target.value)}
               placeholder="0.00"
-              className="w-full min-w-0 bg-transparent text-2xl font-semibold tracking-[-0.02em] text-[#0C1A2B] outline-none placeholder:text-[#CBD5E1]"
+              className="w-full min-w-0 bg-transparent text-2xl font-semibold tracking-[-0.02em] text-ink outline-none placeholder:text-faint"
             />
             <button
               onClick={setMax}
-              className="shrink-0 rounded-md bg-[#F7F9FC] px-2.5 py-1 text-xs font-semibold text-[#1591DC] transition-colors hover:bg-[#EAF4FC]"
+              className="shrink-0 rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-brand transition-colors hover:bg-brand-soft"
             >
               MAX
             </button>
@@ -368,17 +396,17 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                 <button
                   key={q}
                   onClick={() => setRawInput(String(q))}
-                  className="rounded-full border border-[#E8EAEC] px-2.5 py-1 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#1591DC] hover:text-[#1591DC]"
+                  className="rounded-full border border-edge px-2.5 py-1 text-xs font-medium text-dim transition-colors hover:border-brand hover:text-brand"
                 >
                   {mode === "amount" ? `$${q.toLocaleString("en-US")}` : `${q}%`}
                 </button>
               ))}
             </div>
             {mode === "percent" && parsedInput > 0 && (
-              <span className="text-xs tabular-nums text-[#94A3B8]">≈ ${USD(num)}</span>
+              <span className="text-xs tabular-nums text-faint">≈ ${USD(num)}</span>
             )}
           </div>
-          <p className="mt-2 text-xs text-[#94A3B8]">Available: ${USD(vaultBalance)}</p>
+          <p className="mt-2 text-xs text-faint">Available: ${USD(vaultBalance)}</p>
 
           {/* ── Partial-withdraw breakdown ─────────────────── */}
           <AnimatePresence initial={false}>
@@ -391,8 +419,8 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                 transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
                 style={{ overflow: "hidden" }}
               >
-                <div className="rounded-xl border border-[#E8EAEC] p-3">
-                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#5B7490]">
+                <div className="rounded-xl border border-edge p-3">
+                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim">
                     Assets to sell
                   </p>
 
@@ -407,10 +435,10 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                       <TokenIcon sym="USDC" size={22} />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-[#0C1A2B]">USDC</span>
-                          <span className="text-xs text-[#5B7490]">~${USD(usdcAvail)}</span>
+                          <span className="text-xs font-medium text-ink">USDC</span>
+                          <span className="text-xs text-dim">~${USD(usdcAvail)}</span>
                         </div>
-                        <p className="text-[10px] text-[#94A3B8]">Available directly · no swap needed</p>
+                        <p className="text-[10px] text-faint">Available directly · no swap needed</p>
                       </div>
                     </motion.div>
                   )}
@@ -432,8 +460,8 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                             <TokenIcon sym={h.symbol} size={22} />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-[#0C1A2B]">{h.symbol}</span>
-                                <span className="text-xs tabular-nums text-[#5B7490]">~${USD(proceeds)}</span>
+                                <span className="text-xs font-medium text-ink">{h.symbol}</span>
+                                <span className="text-xs tabular-nums text-dim">~${USD(proceeds)}</span>
                               </div>
                               <div className="mt-1.5">
                                 <TokenSlider
@@ -442,7 +470,7 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                                   color={accentColor}
                                 />
                               </div>
-                              <div className="mt-0.5 flex justify-between text-[10px] text-[#94A3B8]">
+                              <div className="mt-0.5 flex justify-between text-[10px] text-faint">
                                 <span style={{ color: pct > 0 ? accentColor : undefined }}>{pct}% sold</span>
                                 <span>${USD(h.valueUSD ?? 0)} total</span>
                               </div>
@@ -459,13 +487,13 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.08 + nonUsdcHoldings.length * 0.055 + 0.05, duration: 0.2 }}
                     className={`mt-3 flex items-center justify-between rounded-lg px-2.5 py-2 ${
-                      proceedsMet ? "bg-[#F0FDF4]" : "bg-red-50"
+                      proceedsMet ? "bg-pos-soft" : "bg-neg-soft"
                     }`}
                   >
-                    <span className={`text-xs ${proceedsMet ? "text-green-700" : "text-red-600"}`}>
+                    <span className={`text-xs ${proceedsMet ? "text-pos" : "text-neg"}`}>
                       Estimated proceeds
                     </span>
-                    <span className={`text-xs font-semibold tabular-nums ${proceedsMet ? "text-green-700" : "text-red-600"}`}>
+                    <span className={`text-xs font-semibold tabular-nums ${proceedsMet ? "text-pos" : "text-neg"}`}>
                       ~${USD(estimatedProceeds)}
                       {!proceedsMet && " · below target"}
                     </span>
@@ -476,18 +504,18 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
           </AnimatePresence>
 
           {/* Wallet destination */}
-          <div className="mt-2 flex items-center justify-between rounded-lg bg-[#F7F9FC] px-3 py-2 text-xs">
-            <span className="text-[#5B7490]">To your wallet</span>
-            <span className="font-mono text-[#0C1A2B]">
+          <div className="mt-2 flex items-center justify-between rounded-lg bg-panel px-3 py-2 text-xs">
+            <span className="text-dim">To your wallet</span>
+            <span className="font-mono text-ink">
               {address ? truncateAddr(address) : "—"}
             </span>
           </div>
 
           {num > vaultBalance && vaultBalance > 0 && (
-            <p className="mt-1 text-xs text-red-500">Exceeds your available balance.</p>
+            <p className="mt-1 text-xs text-neg">Exceeds your available balance.</p>
           )}
           {error && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-neg-soft px-3 py-2 text-xs text-neg">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {error}
             </div>
@@ -495,11 +523,11 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
 
           {/* Disclaimer */}
           {isMaxWithdraw || !showBreakdown ? (
-            <p className="mt-3 text-xs leading-relaxed text-[#5B7490]">
+            <p className="mt-3 text-xs leading-relaxed text-dim">
               All holdings are liquidated to USDC in the same transaction. Max slippage: 1%.
             </p>
           ) : (
-            <p className="mt-2 text-[10px] leading-relaxed text-[#94A3B8]">
+            <p className="mt-2 text-[10px] leading-relaxed text-faint">
               Sliders reflect proportional liquidation. Exact execution is managed by your agent.
             </p>
           )}

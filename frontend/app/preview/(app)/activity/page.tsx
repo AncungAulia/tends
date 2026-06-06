@@ -8,8 +8,14 @@ import {
   X,
   Check,
   Download,
+  Repeat,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Eye,
+  type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
+import { Drawer as Vaul } from "vaul";
 import SlidingNumber from "@/components/preview/SlidingNumber";
 
 /* ──────────────────────────────────────────────────────────
@@ -76,16 +82,16 @@ function StatCard({
 }) {
   const c =
     tone === "pos"
-      ? "text-green-600"
+      ? "text-pos"
       : tone === "neg"
-        ? "text-red-600"
-        : "text-[#0C1A2B]";
+        ? "text-neg"
+        : "text-ink";
   return (
     <motion.div
       variants={CARD_ITEM}
-      className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
+      className="rounded-2xl border-[1.25px] border-edge bg-card p-5"
     >
-      <p className="text-[0.625rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
+      <p className="text-[0.625rem] font-semibold uppercase tracking-widest text-faint">
         {label}
       </p>
       <p
@@ -96,7 +102,7 @@ function StatCard({
         {suffix}
       </p>
       <Sparkbars data={bars} color={color} />
-      <p className="mt-3 text-[0.6875rem] text-[#5B7490]">{sub}</p>
+      <p className="mt-3 text-[0.6875rem] text-dim">{sub}</p>
     </motion.div>
   );
 }
@@ -187,11 +193,11 @@ function PeriodDropdown({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3.5 py-1.5 text-xs font-medium text-[#0C1A2B] transition-colors hover:border-[#5B7490]"
+        className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-3.5 py-1.5 text-xs font-medium text-ink transition-colors hover:border-dim"
       >
         {value}
         <ChevronDown
-          className={`h-3.5 w-3.5 text-[#5B7490] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 text-dim transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
       <AnimatePresence>
@@ -202,7 +208,7 @@ function PeriodDropdown({
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-[calc(100%+6px)] z-20 w-36 rounded-xl border-[1.25px] border-[#E8EAEC] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8"
+            className="absolute right-0 top-[calc(100%+6px)] z-20 w-36 rounded-xl border-[1.25px] border-edge bg-card p-1 shadow-lg shadow-[#0C1A2B]/8"
           >
           {PERIODS.map((p) => (
             <button
@@ -211,8 +217,8 @@ function PeriodDropdown({
                 onChange(p);
                 setOpen(false);
               }}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-[#F7F9FC] ${
-                p === value ? "font-semibold text-[#1591DC]" : "text-[#5B7490]"
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-panel ${
+                p === value ? "font-semibold text-brand" : "text-dim"
               }`}
             >
               {p}
@@ -243,19 +249,19 @@ type Act = {
 };
 
 const TAG: Record<Act["type"], string> = {
-  Rebalance: "bg-[#EAF4FC] text-[#1591DC]",
-  Deposit: "bg-green-50 text-green-700",
-  Withdraw: "bg-red-50 text-red-600",
-  Monitor: "bg-[#EDF2F7] text-[#5B7490]",
+  Rebalance: "bg-brand-soft text-brand",
+  Deposit: "bg-pos-soft text-pos",
+  Withdraw: "bg-neg-soft text-neg",
+  Monitor: "bg-panel text-dim",
 };
 
 const STEP_TAG: Record<string, string> = {
-  SCAN: "bg-[#EDF2F7] text-[#5B7490]",
-  SIGNAL: "bg-[#EAF4FC] text-[#2C5EAD]",
-  ANALYZE: "bg-[#EAF4FC] text-[#1591DC]",
-  DECIDE: "bg-[#EAF4FC] text-[#1591DC]",
-  EXEC: "bg-[#EAF4FC] text-[#1591DC]",
-  DONE: "bg-green-50 text-green-700",
+  SCAN: "bg-panel text-dim",
+  SIGNAL: "bg-brand-soft text-brand",
+  ANALYZE: "bg-brand-soft text-brand",
+  DECIDE: "bg-brand-soft text-brand",
+  EXEC: "bg-brand-soft text-brand",
+  DONE: "bg-pos-soft text-pos",
 };
 
 const REBALANCE_STEPS: Step[] = [
@@ -581,36 +587,203 @@ const STEP_DOT: Record<string, string> = {
   DONE: "#16A34A",
 };
 
+// per-type glyph for the mobile card rows
+const ACT_ICON: Record<Act["type"], LucideIcon> = {
+  Rebalance: Repeat,
+  Deposit: ArrowDownLeft,
+  Withdraw: ArrowUpRight,
+  Monitor: Eye,
+};
+
+// desktop → right-side drawer, mobile → Vaul bottom sheet. Defaults to mobile so
+// SSR/first paint match; resolves after mount (the sheet only opens on tap, well
+// after hydration, so there's no flash).
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isDesktop;
+}
+
 // ─── Activity row (clickable → opens drawer) ────────────────
 
 function Row({ a, onClick }: { a: Act; onClick: () => void }) {
   const impactColor =
     a.impactTone === "pos"
-      ? "text-green-600"
+      ? "text-pos"
       : a.impactTone === "neg"
-        ? "text-red-600"
-        : "text-[#94A3B8]";
+        ? "text-neg"
+        : "text-faint";
+  const Icon = ACT_ICON[a.type];
   return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-4 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[#F7F9FC]"
-    >
-      <span className="w-12 shrink-0 font-mono text-[0.6875rem] text-[#94A3B8]">
-        {a.time}
-      </span>
-      <span
-        className={`w-24 shrink-0 rounded-md px-2 py-0.5 text-center text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[a.type]}`}
+    <>
+      {/* desktop: compact table row */}
+      <button
+        onClick={onClick}
+        className="hidden w-full items-center gap-4 rounded-lg px-3 py-3 text-left transition-colors hover:bg-panel md:flex"
       >
-        {a.type}
-      </span>
-      <span className="flex-1 truncate text-sm text-[#0C1A2B]">{a.desc}</span>
-      <span
-        className={`w-24 shrink-0 text-right text-xs font-medium ${impactColor}`}
+        <span className="w-12 shrink-0 font-mono text-[0.6875rem] text-faint">
+          {a.time}
+        </span>
+        <span
+          className={`w-24 shrink-0 rounded-md px-2 py-0.5 text-center text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[a.type]}`}
+        >
+          {a.type}
+        </span>
+        <span className="flex-1 truncate text-sm text-ink">{a.desc}</span>
+        <span
+          className={`w-24 shrink-0 text-right text-xs font-medium ${impactColor}`}
+        >
+          {a.impact}
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
+      </button>
+
+      {/* mobile: icon-led card row — desc gets the full width it needs */}
+      <button
+        onClick={onClick}
+        className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors active:bg-panel md:hidden"
       >
-        {a.impact}
-      </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-[#C5D0DC]" />
-    </button>
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${TAG[a.type]}`}
+        >
+          <Icon className="h-4 w-4" strokeWidth={2.2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="truncate text-sm font-medium text-ink">
+              {a.desc}
+            </p>
+            {a.impact !== "—" && (
+              <span className={`shrink-0 text-xs font-semibold ${impactColor}`}>
+                {a.impact}
+              </span>
+            )}
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="text-[0.625rem] font-semibold uppercase tracking-wider text-faint">
+              {a.type}
+            </span>
+            <span className="h-0.5 w-0.5 rounded-full bg-edge2" />
+            <span className="font-mono text-[0.625rem] text-faint">
+              {a.time}
+            </span>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 self-center text-faint" />
+      </button>
+    </>
+  );
+}
+
+// ─── Shared detail body (agent steps timeline / user-tx reasoning) ──
+
+function ActBody({ act }: { act: Act }) {
+  if (act.steps) {
+    return (
+      <>
+        <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-widest text-faint">
+          How it happened
+        </p>
+        <div>
+          {act.steps.map((s, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span
+                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: STEP_DOT[s.tag] }}
+                />
+                {i < act.steps!.length - 1 && (
+                  <span className="my-1 w-px flex-1 bg-edge" />
+                )}
+              </div>
+              <div
+                className={`flex-1 ${i < act.steps!.length - 1 ? "pb-5" : ""}`}
+              >
+                <span
+                  className={`inline-block rounded-md px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-wider ${STEP_TAG[s.tag]}`}
+                >
+                  {s.tag}
+                </span>
+                <p className="mt-1.5 text-sm text-ink">{s.msg}</p>
+                <p className="mt-1 text-xs leading-relaxed text-dim">
+                  {s.detail}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="mb-3 text-[0.6875rem] font-semibold uppercase tracking-widest text-faint">
+        Details
+      </p>
+      <p className="text-sm leading-relaxed text-dim">{act.reasoning}</p>
+    </>
+  );
+}
+
+// ─── Mobile detail (Vaul bottom sheet — draggable, scroll-locked) ───
+
+function MobileDetailSheet({
+  act,
+  onClose,
+}: {
+  act: Act | null;
+  onClose: () => void;
+}) {
+  const impactColor =
+    act?.impactTone === "pos"
+      ? "text-pos"
+      : act?.impactTone === "neg"
+        ? "text-neg"
+        : "text-faint";
+  return (
+    <Vaul.Root open={!!act} onOpenChange={(o) => !o && onClose()}>
+      <Vaul.Portal>
+        <Vaul.Overlay className="fixed inset-0 z-50 bg-tip/30 backdrop-blur-[1px]" />
+        <Vaul.Content
+          aria-describedby={undefined}
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border-t border-edge bg-card outline-none"
+        >
+          {/* grabber */}
+          <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-edge" />
+          {act && (
+            <>
+              <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-4">
+                <div className="min-w-0">
+                  <span
+                    className={`inline-block rounded-md px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[act.type]}`}
+                  >
+                    {act.type}
+                  </span>
+                  <Vaul.Title className="mt-2 text-base font-semibold text-ink">
+                    {act.desc}
+                  </Vaul.Title>
+                  <p className="mt-0.5 text-xs text-dim">
+                    {act.day} · {act.time}
+                  </p>
+                </div>
+                <span className={`shrink-0 text-sm font-semibold ${impactColor}`}>
+                  {act.impact}
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                <ActBody act={act} />
+              </div>
+            </>
+          )}
+        </Vaul.Content>
+      </Vaul.Portal>
+    </Vaul.Root>
   );
 }
 
@@ -628,41 +801,41 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
   }, [open]);
   const impactColor =
     act?.impactTone === "pos"
-      ? "text-green-600"
+      ? "text-pos"
       : act?.impactTone === "neg"
-        ? "text-red-600"
-        : "text-[#94A3B8]";
+        ? "text-neg"
+        : "text-faint";
   return (
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
       {/* backdrop */}
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-[#0C1A2B]/25 backdrop-blur-[1px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-tip/25 backdrop-blur-[1px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
       />
       {/* panel */}
       <div
-        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-card shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
       >
         {act && (
           <>
-            <div className="flex items-start justify-between border-b border-[#E8EAEC] p-5">
+            <div className="flex items-start justify-between border-b border-edge p-5">
               <div>
                 <span
                   className={`inline-block rounded-md px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider ${TAG[act.type]}`}
                 >
                   {act.type}
                 </span>
-                <p className="mt-2 text-base font-semibold text-[#0C1A2B]">
+                <p className="mt-2 text-base font-semibold text-ink">
                   {act.desc}
                 </p>
-                <p className="mt-0.5 text-xs text-[#5B7490]">
+                <p className="mt-0.5 text-xs text-dim">
                   {act.day} · {act.time}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-3">
                 <button
                   onClick={onClose}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border-[1.25px] border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#0C1A2B] hover:text-[#0C1A2B]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border-[1.25px] border-edge text-dim transition-colors hover:border-ink hover:text-ink"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -673,52 +846,7 @@ function Drawer({ act, onClose }: { act: Act | null; onClose: () => void }) {
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
-              {act.steps ? (
-                <>
-                  <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
-                    How it happened
-                  </p>
-                  <div>
-                    {act.steps.map((s, i) => (
-                      <div key={i} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <span
-                            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: STEP_DOT[s.tag] }}
-                          />
-                          {i < act.steps!.length - 1 && (
-                            <span className="my-1 w-px flex-1 bg-[#E3EAF2]" />
-                          )}
-                        </div>
-                        <div
-                          className={`flex-1 ${i < act.steps!.length - 1 ? "pb-5" : ""}`}
-                        >
-                          <span
-                            className={`inline-block rounded-md px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-wider ${STEP_TAG[s.tag]}`}
-                          >
-                            {s.tag}
-                          </span>
-                          <p className="mt-1.5 text-sm text-[#0C1A2B]">
-                            {s.msg}
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-[#5B7490]">
-                            {s.detail}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="mb-3 text-[0.6875rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
-                    Details
-                  </p>
-                  <p className="text-sm leading-relaxed text-[#5B7490]">
-                    {act.reasoning}
-                  </p>
-                </>
-              )}
+              <ActBody act={act} />
             </div>
           </>
         )}
@@ -733,6 +861,7 @@ export default function ActivityPreview() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Act | null>(null);
+  const isDesktop = useIsDesktop();
   const [period, setPeriod] = useState("30 days");
   const [from, setFrom] = useState("2026-05-01");
   const [to, setTo] = useState("2026-05-15");
@@ -757,42 +886,42 @@ export default function ActivityPreview() {
 
   return (
     <>
-      <div className="mx-auto max-w-5xl px-8 py-8">
+      <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
           {/* Header: title + period + export */}
           <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+            <div className="hidden md:block">
+              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
                 Activity
               </h1>
-              <p className="mt-1 text-sm text-[#5B7490]">
+              <p className="mt-1 text-sm text-dim">
                 Every move the agent and you have made.
               </p>
             </div>
             <div className="flex items-center gap-2">
               {period === "Custom range" && (
-                <div className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1">
-                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
+                <div className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-3 py-1">
+                  <span className="text-[0.6875rem] font-medium text-faint">
                     From
                   </span>
                   <input
                     type="date"
                     value={from}
                     onChange={(e) => setFrom(e.target.value)}
-                    className="bg-transparent text-xs text-[#0C1A2B] outline-none [color-scheme:light]"
+                    className="bg-transparent text-xs text-ink outline-none [color-scheme:light]"
                   />
-                  <span className="text-[0.6875rem] font-medium text-[#94A3B8]">
+                  <span className="text-[0.6875rem] font-medium text-faint">
                     to
                   </span>
                   <input
                     type="date"
                     value={to}
                     onChange={(e) => setTo(e.target.value)}
-                    className="bg-transparent text-xs text-[#0C1A2B] outline-none [color-scheme:light]"
+                    className="bg-transparent text-xs text-ink outline-none [color-scheme:light]"
                   />
                 </div>
               )}
               {/* <PeriodDropdown value={period} onChange={setPeriod} />
-              <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3.5 py-1.5 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]">
+              <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-3.5 py-1.5 text-xs font-medium text-dim transition-colors hover:border-dim hover:text-ink">
                 <Download className="h-3.5 w-3.5" /> Export
               </button> */}
             </div>
@@ -812,29 +941,29 @@ export default function ActivityPreview() {
                   onClick={() => setFilter(f)}
                   className={`rounded-full border-[1.25px] px-3 py-1.5 text-xs font-medium transition-colors ${
                     filter === f
-                      ? "border-[#1591DC] bg-[#EAF4FC] text-[#1591DC]"
-                      : "border-[#E8EAEC] bg-white text-[#5B7490] hover:text-[#0C1A2B]"
+                      ? "border-brand bg-brand-soft text-brand"
+                      : "border-edge bg-card text-dim hover:text-ink"
                   }`}
                 >
                   {f}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-3 py-1.5 focus-within:border-[#1591DC]">
-              <Search className="h-3.5 w-3.5 text-[#94A3B8]" />
+            <div className="flex items-center gap-2 rounded-full border-[1.25px] border-edge bg-card px-3 py-1.5 focus-within:border-brand">
+              <Search className="h-3.5 w-3.5 text-faint" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search activity"
-                className="w-36 bg-transparent text-xs text-[#0C1A2B] outline-none placeholder:text-[#94A3B8]"
+                className="w-36 bg-transparent text-xs text-ink outline-none placeholder:text-faint"
               />
             </div>
           </div>
 
           {/* History table */}
-          <div className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-2">
+          <div className="rounded-2xl border-[1.25px] border-edge bg-card p-2">
             {filtered.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[#94A3B8]">
+              <p className="py-10 text-center text-sm text-faint">
                 No activity matches your filter.
               </p>
             ) : (
@@ -845,7 +974,7 @@ export default function ActivityPreview() {
                   animate="show"
                   variants={{ show: { transition: { staggerChildren: 0.05 } } }}
                 >
-                  <p className="px-3 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-widest text-[#94A3B8]">
+                  <p className="px-3 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-widest text-faint">
                     {day}
                   </p>
                   {visible
@@ -872,12 +1001,12 @@ export default function ActivityPreview() {
               {shown < filtered.length ? (
                 <button
                   onClick={() => setShown((s) => s + 6)}
-                  className="rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-5 py-2 text-xs font-medium text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]"
+                  className="rounded-full border-[1.25px] border-edge bg-card px-5 py-2 text-xs font-medium text-dim transition-colors hover:border-dim hover:text-ink"
                 >
                   Load more
                 </button>
               ) : (
-                <p className="text-[0.6875rem] text-[#94A3B8]">
+                <p className="text-[0.6875rem] text-faint">
                   You&apos;re all caught up
                 </p>
               )}
@@ -887,7 +1016,11 @@ export default function ActivityPreview() {
           <div className="h-12" />
       </div>
 
-      <Drawer act={selected} onClose={() => setSelected(null)} />
+      {isDesktop ? (
+        <Drawer act={selected} onClose={() => setSelected(null)} />
+      ) : (
+        <MobileDetailSheet act={selected} onClose={() => setSelected(null)} />
+      )}
     </>
   );
 }
