@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { prisma } from "../../db/client.js";
 import { requireAuth, type AuthVars } from "../auth.js";
@@ -13,6 +14,8 @@ import {
 import { rebalancerService } from "../../services/rebalancer.js";
 import { readHoldings } from "../../services/holdings.js";
 import { enforceGuardrails } from "../../agents/mastra/workflows/enforce-guardrails.js";
+import { runHermesRebalance } from "../../agents/mastra/workflows/rebalancer-workflow.js";
+import { agentLogEmitter, type AgentLogEntry } from "../../services/agent-log-emitter.js";
 import { childLogger } from "../../lib/logger.js";
 
 const log = childLogger("agent-routes");
@@ -29,6 +32,8 @@ export interface AgentDeps {
   holdings: (vault: `0x${string}`) => Promise<{ holdings: unknown[]; totalValueUsd: string }>;
   getPrefs: (privyId: string) => Promise<unknown>;
   savePrefs: (privyId: string, prefs: unknown) => Promise<unknown>;
+  /** Run the LLM-driven Hermes rebalancer workflow for a vault. */
+  runHermes: (vault: string) => Promise<unknown>;
   /** Fired (non-blocking) after a guardrail change → enforce new caps if violated. */
   onConfigChanged?: (vault: `0x${string}`) => void;
 }
@@ -47,6 +52,7 @@ export const prismaAgentDeps: AgentDeps = {
   saveConfig: (vault, patch) => upsertAgentConfig(vault, patch),
   setPause: (vault, enabled) => setAutoRebalance(vault, enabled),
   runNow: (vault) => rebalancerService.runNow(vault),
+  runHermes: (vault) => runHermesRebalance(vault),
   agentLog: (vault, limit) =>
     prisma.agentActivity.findMany({
       where: { vaultAddress: vault },
@@ -135,6 +141,47 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
   r.post("/agent/run-now", async (c) => {
     const out = await withVault(c.get("privyId"), (v) => deps.runNow(v));
     return out === null ? c.json(NO_VAULT, 404) : c.json(out);
+  });
+  r.post("/agent/run-hermes", async (c) => {
+    const out = await withVault(c.get("privyId"), (v) => deps.runHermes(v));
+    return out === null ? c.json(NO_VAULT, 404) : c.json(out);
+  });
+
+  // ── Live agent log (Server-Sent Events) ───────────────────────────────────
+  // Streams real-time agent activity for the authenticated user's vault.
+  // Frontend connects to GET /api/users/me/agent/log/stream to show live status.
+  r.get("/agent/log/stream", async (c) => {
+    const { vaultAddress } = await deps.resolveVault(c.get("privyId"));
+    if (!vaultAddress) return c.json(NO_VAULT, 404);
+
+    const vaultLower = vaultAddress.toLowerCase();
+
+    return streamSSE(c, async (stream) => {
+      const onEntry = (entry: AgentLogEntry) => {
+        if (entry.vaultAddress.toLowerCase() === vaultLower) {
+          void stream.writeSSE({ data: JSON.stringify(entry) }).catch(() => {});
+        }
+      };
+
+      agentLogEmitter.on("entry", onEntry);
+
+      try {
+        // Connected handshake
+        await stream.writeSSE({
+          event: "connected",
+          data: JSON.stringify({ vaultAddress: vaultLower, ts: new Date().toISOString() }),
+        });
+
+        // Keep alive: ping every 25s (prevents proxy/Fly.io 60s idle timeout)
+        while (true) {
+          await stream.sleep(25_000);
+          await stream.writeSSE({ event: "ping", data: new Date().toISOString() });
+        }
+      } finally {
+        // Always clean up this client's listener on disconnect or error
+        agentLogEmitter.off("entry", onEntry);
+      }
+    });
   });
 
   // ── Agent run log ──────────────────────────────────────────────────────────
