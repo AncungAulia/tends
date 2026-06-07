@@ -70,8 +70,6 @@ abstract contract BaseTest is Test {
 
     // ── Setup ────────────────────────────────────────────────────────────────
     function setUp() public virtual {
-        // Foundry starts at block.timestamp=1. Warp past minRebalanceInterval (1h)
-        // so the first rebalance call never hits RebalanceTooSoon.
         vm.warp(2 hours);
 
         owner         = makeAddr("owner");

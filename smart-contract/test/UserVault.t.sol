@@ -28,7 +28,7 @@ contract UserVaultTest is BaseTest {
         assertFalse(aliceVault.paused());
         assertEq(uint8(aliceVault.riskPreference()), uint8(UserVault.RiskLevel.LOW));
         assertEq(aliceVault.maxSlippageBps(), 100);
-        assertEq(aliceVault.minRebalanceInterval(), 1 hours);
+        assertEq(aliceVault.minRebalanceInterval(), 0);
         assertEq(aliceVault.totalAssets(), 0);
         assertEq(aliceVault.totalSupply(), 0);
     }
@@ -410,18 +410,6 @@ contract UserVaultTest is BaseTest {
 
         vm.prank(alice);
         vm.expectRevert(UserVault.NotAuthorizedAgent.selector);
-        aliceVault.rebalance(instr);
-    }
-
-    function testRevert_Rebalance_TooSoon() public {
-        _deposit(alice, aliceVault, 2000e6);
-        _rebalance(aliceVault, address(mockUSDC), address(mockMUSD), 500e6, 490 ether);
-
-        UserVault.SwapInstruction[] memory instr = new UserVault.SwapInstruction[](1);
-        instr[0] = UserVault.SwapInstruction(address(mockUSDC), address(mockMUSD), 100e6, 0);
-
-        vm.prank(agentExecutor);
-        vm.expectRevert(UserVault.RebalanceTooSoon.selector);
         aliceVault.rebalance(instr);
     }
 

@@ -145,15 +145,7 @@ contract UserVaultAgentLiquidateTest is BaseTest {
         vault.deposit(200e6, user);
         vm.stopPrank();
 
-        // Immediate rebalance → RebalanceTooSoon
-        UserVault.SwapInstruction[] memory instr = new UserVault.SwapInstruction[](1);
-        instr[0] = UserVault.SwapInstruction(address(mockUSDC), address(mockMUSD), 100e6, 97 ether);
-        vm.prank(agentExecutor);
-        vm.expectRevert(UserVault.RebalanceTooSoon.selector);
-        vault.rebalance(instr);
-
-        // After cooldown it works
-        _warpAndRefresh(1 hours + 1);
+        // Immediate rebalance after liquidate — no cooldown
         _rebalance(vault, address(mockUSDC), address(mockMUSD), 100e6, 97 ether);
     }
 

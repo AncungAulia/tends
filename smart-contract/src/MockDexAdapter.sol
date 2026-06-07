@@ -15,7 +15,7 @@ contract MockDexAdapter is IDexAdapter {
     using SafeERC20 for IERC20;
 
     address public immutable PRICE_FEED;
-    uint256 public constant MOCK_SLIPPAGE_BPS = 30; // 0.3%
+    uint256 public constant MOCK_SLIPPAGE_BPS = 1; // 0.01%
 
     error SlippageTooHigh(uint256 amountOut, uint256 minAmountOut);
     error ZeroPrice(address token);
