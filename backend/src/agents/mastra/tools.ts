@@ -8,7 +8,19 @@ import { enforceGuardrails } from "./workflows/enforce-guardrails.js";
 import { runHermesRebalance } from "./workflows/rebalancer-workflow.js";
 import { prismaApyReader } from "../../api/routes/apy.js";
 import { prisma } from "../../db/client.js";
-import { as0x } from "../../chain/addresses.js";
+import { addresses, as0x } from "../../chain/addresses.js";
+import { publicClient } from "../../chain/index.js";
+import { ERC20_ABI, PRICE_FEED_ABI } from "../../chain/abis.js";
+import { TOKENS, type TokenSymbol } from "../../chain/tokens.js";
+import {
+  computeSwapInstructions,
+  type TokenState,
+} from "../../services/rebalance-math.js";
+import {
+  defaultRebalancerDeps,
+  SLIPPAGE_BPS,
+} from "../../services/rebalancer.js";
+import { agentLogEmitter } from "../../services/agent-log-emitter.js";
 
 const strategyId = z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
 
@@ -66,6 +78,22 @@ const getApyHistoryTool = createTool({
 
 // ── User-scoped tools — wallet from the session, NOT the LLM ──────────────────
 
+const getUserProfileTool = createTool({
+  id: "getUserProfile",
+  description: "Get the signed-in user's display name and wallet address. Call this at the start of any conversation to greet the user by name.",
+  inputSchema: z.object({}),
+  outputSchema: z.any(),
+  execute: async (_input, context) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { name: null, walletAddress: null };
+    const user = await prisma.user.findUnique({
+      where: { walletAddress: wallet },
+      select: { name: true, walletAddress: true },
+    });
+    return { name: user?.name ?? null, walletAddress: wallet };
+  },
+});
+
 const readUserPositionTool = createTool({
   id: "readUserPosition",
   description: "Read the signed-in user's Tends vault (address, risk preference, deposit).",
@@ -91,7 +119,16 @@ const getHoldingsTool = createTool({
     const vault = await vaultOf(wallet);
     if (!vault) return { holdings: [], totalValueUsd: "0", note: "no vault deployed yet" };
     const { holdings, totalValueUsd } = await readHoldings(vault);
-    return { holdings, totalValueUsd };
+    // Expose only USD value + allocation — not raw token balances — so the model
+    // doesn't confuse token amounts with dollar amounts.
+    return {
+      holdings: holdings.map((h) => ({
+        symbol: h.symbol,
+        valueUsd: Number(h.valueUsd).toFixed(2),
+        allocationPct: h.allocationPct,
+      })),
+      totalValueUsd: Number(totalValueUsd).toFixed(2),
+    };
   },
 });
 
@@ -168,6 +205,7 @@ const setAgentGuardrailsTool = createTool({
 
 /** Read + advisory tools — safe for any model (no mutations). */
 export const tendsReadTools = {
+  getUserProfile: getUserProfileTool,
   listStrategies: listStrategiesTool,
   computeProjection: computeProjectionTool,
   getApyHistory: getApyHistoryTool,
@@ -203,10 +241,148 @@ const triggerRebalanceTool = createTool({
   },
 });
 
+// ── Chat-directed swap: user specifies target allocation, agent executes ────────
+
+const executeDirectSwapTool = createTool({
+  id: "executeDirectSwap",
+  description:
+    "Execute a user-directed portfolio swap on-chain based on natural language intent. " +
+    "ALWAYS call getHoldings FIRST to see current balances and allocation percentages. " +
+    "Then convert the user's intent into targetBps: a mapping from token symbol → desired allocation in basis points (100 bps = 1%, 10000 bps = 100%). " +
+    "USDC is the routing medium with an IMPLICIT 0% target — do NOT include USDC in targetBps. " +
+    "Tokens NOT listed in targetBps will be SOLD to USDC automatically. " +
+    "Sum of all targetBps values must be ≤ 10000. If sum < 10000, the remainder is held in USDC. " +
+    "Examples: " +
+    "'swap all USDC to mETH' with holdings {USDC:50%, mETH:20%, AAPL:30%} → targetBps: {mETH:7000, AAPL:3000}. " +
+    "'swap all stocks to mUSD' with holdings {AAPL:10%,TSLA:5%,NVDA:5%,mUSD:30%,USDC:50%} → targetBps: {mUSD:10000}. " +
+    "'move 30% of cmETH to sUSDe' → compute bps delta and adjust accordingly. " +
+    "Always describe in chat what you will execute BEFORE calling this tool. " +
+    "On success, report the tx hash and the number of swaps executed.",
+  inputSchema: z.object({
+    targetBps: z
+      .record(z.string(), z.number().int().min(0).max(10_000))
+      .describe(
+        "Token symbol → desired allocation in bps. Sum ≤ 10000. Do NOT include USDC. Tokens absent from this map will be sold.",
+      ),
+    reasoning: z
+      .string()
+      .describe("One sentence in English: what the user asked for and what this swap does. Always English — this is written to the audit log regardless of the conversation language."),
+  }),
+  outputSchema: z.any(),
+  execute: async (
+    { targetBps, reasoning }: { targetBps: Record<string, number>; reasoning: string },
+    context,
+  ) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { error: "no wallet linked to this session" };
+    const vault = await vaultOf(wallet);
+    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+
+    // Validate all symbols exist in the token registry.
+    const unknown = Object.keys(targetBps).filter((s) => !(s in TOKENS));
+    if (unknown.length) return { error: `Unknown token symbol(s): ${unknown.join(", ")}` };
+
+    const totalBps = Object.values(targetBps).reduce((s, v) => s + v, 0);
+    if (totalBps > 10_000) {
+      return { error: `targetBps sums to ${totalBps} — must be ≤ 10000` };
+    }
+
+    // Read current on-chain balances + prices for all registered tokens.
+    const tokenList = Object.values(TOKENS).filter((t) => t.address);
+    const states: TokenState[] = await Promise.all(
+      tokenList.map(async (t) => {
+        const [balance, price] = await Promise.all([
+          publicClient.readContract({
+            address: as0x(t.address),
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [vault],
+          }),
+          publicClient.readContract({
+            address: as0x(addresses.priceFeed),
+            abi: PRICE_FEED_ABI,
+            functionName: "getPrice",
+            args: [as0x(t.address)],
+          }),
+        ]);
+        return {
+          symbol: t.symbol,
+          address: as0x(t.address),
+          decimals: t.decimals,
+          balance,
+          price,
+        };
+      }),
+    );
+
+    // Build target allocation map from user's input.
+    const targetMap = new Map<TokenSymbol, number>();
+    for (const [sym, bps] of Object.entries(targetBps)) {
+      if (bps > 0) targetMap.set(sym as TokenSymbol, bps);
+    }
+
+    // Use agent slippage config if set, otherwise default.
+    const config = await getAgentConfig(vault);
+    const slippageBps = config.maxSlippageBps ?? SLIPPAGE_BPS;
+
+    const instructions = computeSwapInstructions(states, targetMap, {
+      slippageBps,
+    });
+
+    if (instructions.length === 0) {
+      return { outcome: "skip", reason: "already at target allocation — no swaps needed" };
+    }
+
+    agentLogEmitter.log({
+      vaultAddress: vault,
+      workflow: "chat",
+      step: "direct-swap",
+      status: "running",
+      message: `Chat swap: ${reasoning}`,
+      data: { swaps: instructions.length },
+    });
+
+    const ok = await defaultRebalancerDeps.simulateRebalance(vault, instructions);
+    if (!ok) {
+      agentLogEmitter.log({
+        vaultAddress: vault,
+        workflow: "chat",
+        step: "direct-swap",
+        status: "error",
+        message: "Chat swap simulation failed — trade would revert on-chain",
+        data: { reasoning },
+      });
+      return {
+        outcome: "error",
+        reason: "swap simulation failed — the trade would revert on-chain. Possible causes: stale price feed, insufficient vault balance, or slippage too tight.",
+      };
+    }
+
+    const hash = await defaultRebalancerDeps.sendRebalance(vault, instructions);
+
+    agentLogEmitter.log({
+      vaultAddress: vault,
+      workflow: "chat",
+      step: "direct-swap",
+      status: "done",
+      message: `Chat swap executed: ${instructions.length} trade(s) — ${reasoning}`,
+      data: { hash, swaps: instructions.length, reasoning },
+    });
+
+    return {
+      outcome: "executed",
+      hash,
+      swaps: instructions.length,
+      reasoning,
+    };
+  },
+});
+
 /** Mutating tools — guardrail updates + Hermes-driven rebalance execution. */
 export const tendsActionTools = {
   setAgentGuardrails: setAgentGuardrailsTool,
   triggerRebalance: triggerRebalanceTool,
+  executeDirectSwap: executeDirectSwapTool,
 };
 
 /** Default toolset for the chat agent (Hermes) = reads only. */

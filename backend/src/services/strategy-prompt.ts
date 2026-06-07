@@ -45,7 +45,7 @@ export const STRATEGY_SYSTEM_PROMPT = [
   "6. STABLE category must always be ≥ 5% (needed for swap liquidity).",
   "7. Within a category, prefer higher-APY tokens.",
   "8. Only allocate to tokens EXACTLY as listed — symbols are CASE-SENSITIVE (e.g. 'cmETH' not 'CMETH').",
-  "9. 'reasoning' must be 1–2 sentences explaining the key decision.",
+  "9. 'reasoning' must be 1–2 sentences in English explaining the key decision.",
   "",
   "STRATEGY: look at MANDATORY MINIMUMS in the prompt first, satisfy those, then distribute the rest.",
   "",

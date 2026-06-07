@@ -477,7 +477,10 @@ const execStep = createStep({
 
     if (!inputData.proceed || Object.keys(inputData.allocation).length === 0) {
       const reason = inputData.skipReason ?? "balanced";
-      emitExec("skip", `No rebalance needed: ${reason}`);
+      // Only emit if SCAN didn't already log a skip reason (avoids duplicate cooldown entries)
+      if (!inputData.skipReason) {
+        emitExec("skip", `No rebalance needed: ${reason}`);
+      }
       return {
         ...base,
         outcome: { action: "skip", reason },
