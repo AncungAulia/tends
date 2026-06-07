@@ -12,10 +12,10 @@ export function StepSetStrategy({ vaultAddress, onNext, onSkip }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-sans text-xl font-bold tracking-tight text-[#0C1A2B] dark:text-white">
+        <h2 className="font-sans text-xl font-bold tracking-tight text-ink">
           Choose Your Strategy
         </h2>
-        <p className="mt-2 text-sm text-[#5B7490] dark:text-white/45">
+        <p className="mt-2 text-sm text-dim">
           Tends Agent will rebalance your vault according to your risk preference.
         </p>
       </div>
@@ -28,7 +28,7 @@ export function StepSetStrategy({ vaultAddress, onNext, onSkip }: Props) {
 
       <button
         onClick={onSkip}
-        className="w-full font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] hover:text-[#0C1A2B] dark:text-white/45 dark:hover:text-white"
+        className="w-full font-mono text-xs uppercase tracking-[0.06em] text-dim hover:text-ink"
       >
         Skip for now
       </button>

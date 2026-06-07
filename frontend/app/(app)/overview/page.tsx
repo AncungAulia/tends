@@ -254,7 +254,7 @@ function PortfolioChart({
       <AnimatePresence>
         {hv && (
           <motion.div
-            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-3 py-2 text-left shadow-lg"
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-ink px-3 py-2 text-left shadow-lg"
             style={{
               left: Math.max(56, Math.min(w - 56, hv.x)),
               top: hv.y - 12,
@@ -343,19 +343,19 @@ function PortfolioCard() {
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5 lg:col-span-2"
+      className="rounded-2xl border-[1.25px] border-edge bg-card p-5 lg:col-span-2"
     >
       <div className="mb-5 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
           Your Portfolio
         </p>
-        <div className="flex gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5">
+        <div className="flex gap-0.5 rounded-lg bg-app p-0.5">
           {["7D", "30D", "90D", "1Y"].map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                range === r ? "bg-[#EAF4FC] text-[#1591DC]" : "text-[#5B7490] hover:text-[#0C1A2B]"
+                range === r ? "bg-brand-soft text-brand" : "text-dim hover:text-ink"
               }`}
             >
               {r}
@@ -366,14 +366,14 @@ function PortfolioCard() {
 
       <div className="grid gap-6 md:grid-cols-[210px_1fr]">
         <div className="flex flex-col justify-center">
-          <p className="text-xs text-[#5B7490]">Total Portfolio Value</p>
+          <p className="text-xs text-dim">Total Portfolio Value</p>
           <div className="flex items-end gap-2">
-            <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-[#0C1A2B]">
+            <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-ink">
               <span>$</span>
               <SlidingNumber number={currentValue} decimalPlaces={2} />
             </p>
             {pctChange != null && (
-              <p className={`mt-2 flex items-center gap-1 text-sm font-medium ${pctPositive ? "text-green-600" : "text-red-500"}`}>
+              <p className={`mt-2 flex items-center gap-1 text-sm font-medium ${pctPositive ? "text-pos" : "text-red-500"}`}>
                 {pctPositive
                   ? <TrendingUp className="h-4 w-4" strokeWidth={2.2} />
                   : <TrendingDown className="h-4 w-4" strokeWidth={2.2} />}
@@ -381,13 +381,13 @@ function PortfolioCard() {
               </p>
             )}
           </div>
-          <div className="my-5 h-px bg-[#E8EAEC]" />
-          <p className="text-xs text-[#5B7490]">Estimated APY</p>
-          <p className="flex items-center text-2xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+          <div className="my-5 h-px bg-edge" />
+          <p className="text-xs text-dim">Estimated APY</p>
+          <p className="flex items-center text-2xl font-semibold tracking-[-0.03em] text-ink">
             {apy != null ? (
               <><SlidingNumber number={apy} decimalPlaces={1} />%</>
             ) : (
-              <span className="text-[#CBD5E1]">—</span>
+              <span className="text-faint">—</span>
             )}
           </p>
         </div>
@@ -411,13 +411,15 @@ function Holdings() {
   const [page, setPage] = useState(0);
   const [dir, setDir] = useState(1);
 
-  const allHoldings = holdings.map((h) => ({
-    sym: h.symbol,
-    pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 100) : 0,
-    val: h.valueUSD ?? 0,
-    qty: h.balanceHuman,
-    qDec: h.decimals === 6 ? 0 : 4,
-  }));
+  const allHoldings = holdings
+    .filter((h) => (h.valueUSD ?? 0) >= 0.01)
+    .map((h) => ({
+      sym: h.symbol,
+      pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 1000) / 10 : 0,
+      val: h.valueUSD ?? 0,
+      qty: h.balanceHuman,
+      qDec: h.decimals === 6 ? 2 : 4,
+    }));
 
   const PER = 3;
   const pages = Math.max(1, Math.ceil(allHoldings.length / PER));
@@ -437,12 +439,12 @@ function Holdings() {
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
+      className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5"
     >
       {/* header: title + pagination + toggle */}
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+          <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
             Your Holdings
           </p>
           <div className="flex items-center justify-center gap-0">
@@ -450,7 +452,7 @@ function Holdings() {
               onClick={() => go(Math.max(0, page - 1))}
               disabled={page === 0}
               aria-label="Previous holdings"
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-app disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -459,20 +461,20 @@ function Holdings() {
             onClick={() => go(Math.min(pages - 1, page + 1))}
             disabled={page === pages - 1}
             aria-label="Next holdings"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[#5B7490] transition-colors hover:bg-[#F7F9FC] disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-app disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex shrink-0 gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5 text-[11px] font-medium">
+        <div className="flex shrink-0 gap-0.5 rounded-lg bg-app p-0.5 text-[11px] font-medium">
           {(["usd", "token"] as const).map((u) => (
             <button
               key={u}
               onClick={() => setUnit(u)}
               className={`rounded-md px-2.5 py-1 transition-colors ${
                 unit === u
-                  ? "bg-[#EAF4FC] text-[#1591DC]"
-                  : "text-[#5B7490] hover:text-[#0C1A2B]"
+                  ? "bg-brand-soft text-brand"
+                  : "text-dim hover:text-ink"
               }`}
             >
               {u === "usd" ? "$" : "Ξ"}
@@ -482,9 +484,9 @@ function Holdings() {
       </div>
 
       {isLoading ? (
-        <div className="h-3.5 animate-pulse rounded-full bg-[#E8EAEC]" />
+        <div className="h-3.5 animate-pulse rounded-full bg-edge" />
       ) : allHoldings.length === 0 ? (
-        <p className="text-xs text-[#94A3B8]">No holdings yet. Deposit to get started.</p>
+        <p className="text-xs text-faint">No holdings yet. Deposit to get started.</p>
       ) : (
         <>
           {/* segmented allocation bar — all holdings, not just this page */}
@@ -508,7 +510,7 @@ function Holdings() {
             <AnimatePresence>
               {hover !== null && (
                 <motion.div
-                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-2.5 py-1.5 text-left shadow-lg"
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-left shadow-lg"
                   style={{ left: `${centerPct}%`, transformOrigin: "bottom center" }}
                   initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
                   animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
@@ -517,7 +519,7 @@ function Holdings() {
                 >
                   <p className="text-xs font-semibold text-white">{allHoldings[hover]?.sym}</p>
                   <p className="text-[10px] text-white/55">
-                    {allHoldings[hover]?.pct}% · ${allHoldings[hover]?.val.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                    {allHoldings[hover]?.pct.toFixed(1)}% · ${allHoldings[hover]?.val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </motion.div>
               )}
@@ -537,25 +539,25 @@ function Holdings() {
                 {rows.map((h, i) => (
                   <div
                     key={h.sym}
-                    className={`flex items-center gap-3 py-2.5 ${i < rows.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
+                    className={`flex items-center gap-3 py-2.5 ${i < rows.length - 1 ? "border-b border-edge" : ""}`}
                   >
                     <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-[#0C1A2B]">{h.sym}</p>
+                      <p className="text-sm font-semibold text-ink">{h.sym}</p>
                     </div>
-                    <span className="w-10 text-right text-xs font-medium text-[#5B7490]">
-                      {h.pct}%
+                    <span className="w-10 text-right text-xs font-medium text-dim">
+                      {h.pct.toFixed(1)}%
                     </span>
                     <div className="w-24 text-right">
                       {unit === "usd" ? (
-                        <p className="flex items-center justify-end text-sm font-semibold text-[#0C1A2B]">
+                        <p className="flex items-center justify-end text-sm font-semibold text-ink">
                           <span>$</span>
-                          <SlidingNumber number={h.val} />
+                          <SlidingNumber number={h.val} decimalPlaces={2} />
                         </p>
                       ) : (
-                        <p className="flex items-center justify-end gap-1 text-sm font-semibold text-[#0C1A2B]">
+                        <p className="flex items-center justify-end gap-1 text-sm font-semibold text-ink">
                           <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
-                          <span className="text-[10px] font-medium text-[#94A3B8]">
+                          <span className="text-[10px] font-medium text-faint">
                             {h.sym}
                           </span>
                         </p>
@@ -575,16 +577,16 @@ function Holdings() {
 // ─── Agent card ──────────────────────────────────────────
 
 const ACT_TAG: Record<string, string> = {
-  Rebalance: "bg-[#EAF4FC] text-[#1591DC]",
-  Deposit:   "bg-green-50 text-green-700",
+  Rebalance: "bg-brand-soft text-brand",
+  Deposit:   "bg-pos-soft text-pos",
   Withdraw:  "bg-red-50 text-red-600",
-  Monitor:   "bg-[#EDF2F7] text-[#5B7490]",
+  Monitor:   "bg-panel text-dim",
 };
 
 const AGENT_STATES = {
-  idle:    { label: "Idle",    dot: "bg-[#1591DC]" },
-  running: { label: "Running", dot: "bg-[#8CC8EE]" },
-  paused:  { label: "Paused",  dot: "bg-[#B4C0CE]" },
+  idle:    { label: "Idle",    dot: "bg-brand" },
+  running: { label: "Running", dot: "bg-brand" },
+  paused:  { label: "Paused",  dot: "bg-panel" },
 } as const;
 
 function AgentCard() {
@@ -609,16 +611,16 @@ function AgentCard() {
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5"
+      className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5"
     >
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
             Your Agent
           </p>
           <span className="inline-flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${state.dot}`} />
-            <span className="text-[11px] font-medium text-[#5B7490]">
+            <span className="text-[11px] font-medium text-dim">
               {state.label}{running ? dots : ""}
             </span>
           </span>
@@ -626,20 +628,20 @@ function AgentCard() {
         <Link
           href="/agent"
           aria-label="Open agent"
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-edge text-dim transition-colors hover:border-dim hover:text-ink"
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
       </div>
 
       <div className="flex gap-3">
-        <div className="flex-1 rounded-xl bg-[#F7F9FC] px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8]">Risk</p>
-          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B]">{riskLabel}</p>
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.08em] text-faint">Risk</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{riskLabel}</p>
         </div>
-        <div className="flex-1 rounded-xl bg-[#F7F9FC] px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8]">Next run</p>
-          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B]">—</p>
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.08em] text-faint">Next run</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">—</p>
         </div>
       </div>
 
@@ -647,26 +649,26 @@ function AgentCard() {
         {isLoading ? (
           <div className="space-y-2.5 py-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-4 animate-pulse rounded bg-[#E8EAEC]" />
+              <div key={i} className="h-4 animate-pulse rounded bg-edge" />
             ))}
           </div>
         ) : activities.length === 0 ? (
-          <p className="py-3 text-xs text-[#94A3B8]">No activity yet.</p>
+          <p className="py-3 text-xs text-faint">No activity yet.</p>
         ) : (
           activities.map((a, i) => {
             const { type, desc } = activityLabel(a.action, a.metadata);
             return (
               <div
                 key={a.id}
-                className={`flex items-center gap-3 py-2.5 ${i < activities.length - 1 ? "border-b border-[#E8EAEC]" : ""}`}
+                className={`flex items-center gap-3 py-2.5 ${i < activities.length - 1 ? "border-b border-edge" : ""}`}
               >
                 <span
                   className={`w-20 shrink-0 rounded-md px-2 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider ${ACT_TAG[type] ?? ACT_TAG.Monitor}`}
                 >
                   {type}
                 </span>
-                <span className="flex-1 truncate text-[13px] text-[#0C1A2B]">{desc}</span>
-                <span className="shrink-0 text-[11px] tabular-nums text-[#94A3B8]">
+                <span className="flex-1 truncate text-[13px] text-ink">{desc}</span>
+                <span className="shrink-0 text-[11px] tabular-nums text-faint">
                   {relTime(a.timestamp)}
                 </span>
               </div>
@@ -687,19 +689,19 @@ export default function OverviewPage() {
       <div className="mx-auto max-w-5xl px-8 py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">Overview</h1>
-            <p className="mt-1 text-sm text-[#5B7490]">Where your money sits today.</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">Overview</h1>
+            <p className="mt-1 text-sm text-dim">Where your money sits today.</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => setModal("withdraw")}
-              className="rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2 text-sm font-medium text-[#5B7490] transition-colors hover:text-[#0C1A2B]"
+              className="rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink"
             >
               Withdraw
             </button>
             <button
               onClick={() => setModal("deposit")}
-              className="rounded-full bg-[#1591DC] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
               Deposit
             </button>

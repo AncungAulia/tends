@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 import { useUserVault } from "@/hooks/useUserVault";
+import { apiFetch } from "@/lib/api";
 import { ResponsiveDialog } from "@/components/elements/ResponsiveDialog";
 import { Spinner } from "@/components/elements/Spinner";
 import { cn } from "@/utils/cn";
@@ -14,6 +16,7 @@ import { StepFirstDeposit } from "./component/StepFirstDeposit";
  * vault yet. Stays mounted through the flow even after the vault is deployed.
  */
 export function Onboarding({ onComplete, onDismiss }: { onComplete: () => void; onDismiss: () => void }) {
+  const { getAccessToken } = usePrivy();
   const {
     hasVault,
     vaultAddress,
@@ -41,6 +44,18 @@ export function Onboarding({ onComplete, onDismiss }: { onComplete: () => void; 
   const handleDeploy = async () => {
     try {
       await deployVault();
+      // Save the name the user entered in the wizard, now that the vault exists.
+      const pendingName = localStorage.getItem("tends_pending_name");
+      if (pendingName) {
+        try {
+          const token = await getAccessToken();
+          await apiFetch("/api/users/me/profile", token, {
+            method: "PATCH",
+            body: JSON.stringify({ name: pendingName }),
+          });
+        } catch { /* non-critical */ }
+        localStorage.removeItem("tends_pending_name");
+      }
       setStep(2);
     } catch {
       // error surfaced via the `error` prop in StepDeployVault
@@ -60,7 +75,7 @@ export function Onboarding({ onComplete, onDismiss }: { onComplete: () => void; 
             key={n}
             className={cn(
               "h-1.5 rounded-full transition-all",
-              n === step ? "w-6 bg-[#1591DC]" : n < step ? "w-1.5 bg-[#1591DC]" : "w-1.5 bg-[#DDE8F2] dark:bg-white/15",
+              n === step ? "w-6 bg-brand" : n < step ? "w-1.5 bg-brand" : "w-1.5 border-edge bg-edge",
             )}
           />
         ))}

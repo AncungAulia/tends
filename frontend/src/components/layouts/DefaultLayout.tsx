@@ -2,6 +2,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
+import { MobileTopBar } from "./MobileTopBar";
+import { BottomNav } from "./BottomNav";
 import { useUserVault } from "@/hooks/useUserVault";
 import { useAuthVerify } from "@/hooks/useAuthVerify";
 import { useDashboardWS } from "@/hooks/useDashboardWS";
@@ -20,9 +22,13 @@ export function DefaultLayout({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh bg-app text-ink">
       <Sidebar />
-      <main className="flex-1 bg-[#F9FBFC] px-4 py-6 pb-24 sm:px-8 md:pb-6 dark:bg-[#0A1628]">{children}</main>
+      <main className="min-w-0 flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <MobileTopBar />
+        {children}
+      </main>
+      <BottomNav />
     </div>
   );
 }

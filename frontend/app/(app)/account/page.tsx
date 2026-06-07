@@ -21,6 +21,7 @@ import { useVaultStore } from "@/hooks/useVaultStore";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useMintTestUsdc } from "@/hooks/useMintTestUsdc";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
+import { apiFetch } from "@/lib/api";
 
 /* ──────────────────────────────────────────────────────────
    Account page — Tends
@@ -35,7 +36,7 @@ const RISK_LABEL: Record<number, VaultRisk> = {
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5">
+    <div className="rounded-2xl border-[1.25px] border-edge bg-card p-5">
       {children}
     </div>
   );
@@ -44,26 +45,45 @@ function Card({ children }: { children: React.ReactNode }) {
 // ─── Profile (name editable inline) ─────────────────────────
 
 function Profile() {
-  const { user, logout } = usePrivy();
+  const { user, logout, getAccessToken } = usePrivy();
   const { address } = useAccount();
   const [copied, setCopied] = useState(false);
-
-  const defaultName =
-    user?.google?.name ??
-    user?.email?.address?.split("@")[0] ??
-    "You";
-
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState("");
   const [editing, setEditing] = useState(false);
 
-  // Sync when user resolves
+  // Load name from backend; fallback to Privy identity if not set
   useEffect(() => {
-    const resolved =
-      user?.google?.name ??
-      user?.email?.address?.split("@")[0] ??
-      "You";
-    setName(resolved);
-  }, [user]);
+    async function load() {
+      try {
+        const token = await getAccessToken();
+        const data = await apiFetch<{ name: string | null }>("/api/users/me/profile", token);
+        if (data.name) { setName(data.name); return; }
+      } catch { /* ignore */ }
+      setName(
+        user?.google?.name ??
+        user?.email?.address?.split("@")[0] ??
+        "You",
+      );
+    }
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveName() {
+    setEditing(false);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      const token = await getAccessToken();
+      await apiFetch("/api/users/me/profile", token, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmed }),
+      });
+      setName(trimmed);
+      toast.success("Name updated.");
+    } catch {
+      toast.error("Failed to save name.");
+    }
+  }
 
   const shortAddress = address
     ? `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -92,35 +112,35 @@ function Profile() {
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onBlur={() => setEditing(false)}
-              onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
-              className="w-40 rounded-md border border-[#1591DC] px-2 py-0.5 text-sm font-semibold text-[#0C1A2B] outline-none ring-2 ring-[#1591DC]/15"
+              onBlur={saveName}
+              onKeyDown={(e) => e.key === "Enter" && saveName()}
+              className="w-40 rounded-md border border-brand px-2 py-0.5 text-sm font-semibold text-ink outline-none ring-2 ring-brand/15"
             />
           ) : (
             <button
               onClick={() => setEditing(true)}
               className="group flex items-center gap-1.5"
             >
-              <span className="text-sm font-semibold text-[#0C1A2B]">{name}</span>
-              <Pencil className="h-3 w-3 text-[#94A3B8] opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="text-sm font-semibold text-ink">{name || "—"}</span>
+              <Pencil className="h-3 w-3 text-faint opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           )}
           <button
             onClick={copy}
-            className="mt-0.5 flex items-center gap-1.5 text-xs text-[#5B7490] transition-colors hover:text-[#0C1A2B]"
+            className="mt-0.5 flex items-center gap-1.5 text-xs text-dim transition-colors hover:text-ink"
           >
             {shortAddress}
             {copied ? (
-              <Check className="h-3 w-3 text-green-600" />
+              <Check className="h-3 w-3 text-pos" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
           </button>
-          <p className="mt-1.5 text-xs text-[#5B7490]">{connectedVia}</p>
+          <p className="mt-1.5 text-xs text-dim">{connectedVia}</p>
         </div>
         <button
           onClick={() => logout()}
-          className="flex shrink-0 items-center gap-2 rounded-full border border-red-200 px-3.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+          className="flex shrink-0 items-center gap-2 rounded-full border border-red-200 px-3.5 py-1.5 text-xs font-medium text-neg transition-colors hover:bg-neg-soft"
         >
           <LogOut className="h-3.5 w-3.5" />
           Disconnect
@@ -145,18 +165,18 @@ function Preferences() {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[#0C1A2B]">Theme</p>
-          <p className="text-xs text-[#5B7490]">How Tends looks on this device</p>
+          <p className="text-sm font-medium text-ink">Theme</p>
+          <p className="text-xs text-dim">How Tends looks on this device</p>
         </div>
-        <div className="flex gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5">
+        <div className="flex gap-0.5 rounded-lg bg-panel p-0.5">
           {options.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setTheme(key)}
               className={`flex items-center gap-1.5 rounded-md border-[1.25px] px-3 py-1.5 text-xs font-medium transition-colors ${
                 theme === key
-                  ? "border-[#1591DC] bg-[#EAF4FC] text-[#1591DC]"
-                  : "border-transparent text-[#5B7490] hover:text-[#0C1A2B]"
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-transparent text-dim hover:text-ink"
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -189,12 +209,12 @@ function Faucet() {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FC] text-[#1591DC]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
             <Droplets className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#0C1A2B]">Mock USDC faucet</p>
-            <p className="text-xs text-[#5B7490]">
+            <p className="text-sm font-medium text-ink">Mock USDC faucet</p>
+            <p className="text-xs text-dim">
               {balance !== undefined ? `Balance: ${balance} USDC · ` : ""}Test funds on Mantle Sepolia
             </p>
           </div>
@@ -202,7 +222,7 @@ function Faucet() {
         <button
           onClick={() => mint(1000)}
           disabled={minting || !address}
-          className="shrink-0 rounded-full bg-[#1591DC] px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="shrink-0 rounded-full bg-brand px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {isPending
             ? "Confirm in wallet..."
@@ -237,10 +257,10 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
-      <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B]">
+      <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
         Account
       </h1>
-      <p className="mt-1 text-sm text-[#5B7490]">
+      <p className="mt-1 text-sm text-dim">
         Your vault, profile, and preferences.
       </p>
 

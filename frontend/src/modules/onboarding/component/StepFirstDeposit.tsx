@@ -51,10 +51,10 @@ export function StepFirstDeposit({ vaultAddress, onDone, onSkip }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-sans text-xl font-bold tracking-tight text-[#0C1A2B] dark:text-white">
+        <h2 className="font-sans text-xl font-bold tracking-tight text-ink">
           Make Your First Deposit
         </h2>
-        <p className="mt-2 text-sm text-[#5B7490] dark:text-white/45">
+        <p className="mt-2 text-sm text-dim">
           Tends Agent begins working as soon as funds are in your vault.
         </p>
       </div>
@@ -69,7 +69,7 @@ export function StepFirstDeposit({ vaultAddress, onDone, onSkip }: Props) {
         disabled={busy}
       />
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-neg">{error}</p>}
 
       <Button
         onClick={handleDeposit}
@@ -83,7 +83,7 @@ export function StepFirstDeposit({ vaultAddress, onDone, onSkip }: Props) {
 
       <button
         onClick={onSkip}
-        className="w-full font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] hover:text-[#0C1A2B] dark:text-white/45 dark:hover:text-white"
+        className="w-full font-mono text-xs uppercase tracking-[0.06em] text-dim hover:text-ink"
       >
         Skip for now
       </button>
