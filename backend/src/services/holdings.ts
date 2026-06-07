@@ -52,6 +52,8 @@ export async function readHoldings(vault: `0x${string}`): Promise<VaultHoldings>
       balance,
       price,
     });
+    // Skip dust: ignore holdings worth less than $0.01
+    if (wad < 10_000_000_000_000_000n) continue;
     totalWad += wad;
     rows.push({ symbol: t.symbol, address: t.address, balance, wad, decimals: t.decimals });
   }

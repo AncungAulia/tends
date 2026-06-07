@@ -325,10 +325,6 @@ export class RebalancerService {
       return { action: "skip", reason: "disabled" };
     }
     const now = this.deps.now();
-    if (now < meta.lastRebalanceTime + meta.minRebalanceInterval) {
-      log.info({ vault }, "on-chain cooldown not elapsed, skip");
-      return { action: "skip", reason: "cooldown" };
-    }
     if (config.cadenceSec != null && now < meta.lastRebalanceTime + BigInt(config.cadenceSec)) {
       log.info({ vault }, "off-chain cadence not elapsed, skip");
       return { action: "skip", reason: "cooldown" };
