@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Check, X, Loader2, ArrowDownLeft, ArrowUpRight, Sparkles } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  ArrowUp,
+  Check,
+  Loader2,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Sparkles,
+  MessageSquare,
+  Plus,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { usePrivy } from "@privy-io/react-auth";
 import { useChat } from "@/hooks/useChat";
 
 /* ──────────────────────────────────────────────────────────
    Agent Chat — Tends
-   Ask · Inspect · Act · slash commands · action confirmation
+   Sessions sidebar · Ask · Inspect · Act · slash commands
    ────────────────────────────────────────────────────────── */
 
 // ─── Slash commands ─────────────────────────────────────────
@@ -42,20 +55,20 @@ function HoldingsCard() {
     { sym: "USDC", pct: 25, val: "$3,107", bar: "#4BB8FA", w: "50%" },
   ];
   return (
-    <div className="mt-2 w-full max-w-sm rounded-xl border border-[#DDE8F2] bg-white p-3 dark:border-white/10 dark:bg-[#0F2035]">
+    <div className="mt-2 w-full max-w-sm rounded-xl border border-edge bg-card p-3">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-xs font-semibold text-[#0C1A2B] dark:text-white">Your holdings</span>
-        <span className="text-sm font-semibold text-[#0C1A2B] dark:text-white">$12,430.50</span>
+        <span className="text-xs font-semibold text-ink">Your holdings</span>
+        <span className="text-sm font-semibold text-ink">$12,430.50</span>
       </div>
       <div className="space-y-2">
         {rows.map((r) => (
           <div key={r.sym} className="flex items-center gap-2">
-            <span className="w-12 text-xs font-medium text-[#0C1A2B] dark:text-white">{r.sym}</span>
-            <div className="h-1.5 flex-1 rounded-[2px] bg-[#F0F4F8] dark:bg-white/10">
+            <span className="w-12 text-xs font-medium text-ink">{r.sym}</span>
+            <div className="h-1.5 flex-1 rounded-[2px] bg-panel">
               <div className="h-1.5 rounded-[2px]" style={{ background: r.bar, width: r.w }} />
             </div>
-            <span className="w-8 text-right text-[10px] text-[#5B7490] dark:text-white/45">{r.pct}%</span>
-            <span className="w-14 text-right text-xs font-medium text-[#0C1A2B] dark:text-white">{r.val}</span>
+            <span className="w-8 text-right text-[10px] text-dim">{r.pct}%</span>
+            <span className="w-14 text-right text-xs font-medium text-ink">{r.val}</span>
           </div>
         ))}
       </div>
@@ -73,49 +86,49 @@ function ActionCard({ kind }: { kind: "move" | "deposit" | "withdraw" }) {
   }[kind];
 
   return (
-    <div className="mt-2 w-full max-w-sm overflow-hidden rounded-xl border border-[#DDE8F2] bg-white dark:border-white/10 dark:bg-[#0F2035]">
+    <div className="mt-2 w-full max-w-sm overflow-hidden rounded-xl border border-edge bg-card">
       <div className="flex items-center gap-3 p-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
           {config.icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#0C1A2B] dark:text-white">{config.title}</p>
-          <p className="text-[11px] text-[#5B7490] dark:text-white/45">{config.sub}</p>
+          <p className="text-sm font-semibold text-ink">{config.title}</p>
+          <p className="text-[11px] text-dim">{config.sub}</p>
         </div>
       </div>
 
       {state === "proposed" && (
-        <div className="flex border-t border-[#F0F4F8] dark:border-white/8">
+        <div className="flex border-t border-edge">
           <button
             onClick={() => setState("cancelled")}
-            className="flex-1 py-2.5 text-xs font-medium text-[#5B7490] transition-colors hover:bg-[#F7F9FC] dark:text-white/45 dark:hover:bg-white/5"
+            className="flex-1 py-2.5 text-xs font-medium text-dim transition-colors hover:bg-panel"
           >
             Cancel
           </button>
-          <div className="w-px bg-[#F0F4F8] dark:bg-white/8" />
+          <div className="w-px bg-panel" />
           <button
             onClick={() => {
               setState("executing");
               setTimeout(() => setState("done"), 2200);
             }}
-            className="flex-1 py-2.5 text-xs font-semibold text-[#1591DC] transition-colors hover:bg-[#EAF4FC] dark:hover:bg-[#1591DC]/10"
+            className="flex-1 py-2.5 text-xs font-semibold text-brand transition-colors hover:bg-brand-soft"
           >
             Confirm
           </button>
         </div>
       )}
       {state === "executing" && (
-        <div className="flex items-center justify-center gap-2 border-t border-[#F0F4F8] py-2.5 text-xs font-medium text-[#1591DC] dark:border-white/8">
+        <div className="flex items-center justify-center gap-2 border-t border-edge py-2.5 text-xs font-medium text-brand">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Executing on-chain...
         </div>
       )}
       {state === "done" && (
-        <div className="flex items-center justify-center gap-1.5 border-t border-[#F0F4F8] bg-green-50 py-2.5 text-xs font-medium text-green-700 dark:border-white/8 dark:bg-green-900/20 dark:text-green-400">
+        <div className="flex items-center justify-center gap-1.5 border-t border-edge bg-pos-soft py-2.5 text-xs font-medium text-pos">
           <Check className="h-3.5 w-3.5" /> Done
         </div>
       )}
       {state === "cancelled" && (
-        <div className="flex items-center justify-center border-t border-[#F0F4F8] py-2.5 text-xs font-medium text-[#94A3B8] dark:border-white/8">
+        <div className="flex items-center justify-center border-t border-edge py-2.5 text-xs font-medium text-faint">
           Cancelled
         </div>
       )}
@@ -131,27 +144,6 @@ type Msg = {
   text?: React.ReactNode;
   card?: "holdings" | "move" | "deposit" | "withdraw";
 };
-
-let nextId = 1;
-
-function buildReply(input: string): Omit<Msg, "id" | "role"> {
-  const t = input.toLowerCase().trim();
-  if (t.startsWith("/move") || t.includes("move") || t.includes("shift") || t.includes("pindah")) {
-    return { text: "Here's what I'd do. Review and confirm whenever you're ready.", card: "move" };
-  }
-  if (t.startsWith("/deposit")) return { text: "Sure, here's the deposit ready to confirm.", card: "deposit" };
-  if (t.startsWith("/withdraw")) return { text: "Here's the withdrawal, confirm to send it back to your wallet.", card: "withdraw" };
-  if (t.startsWith("/holdings") || t.includes("holding") || t.includes("portfolio") || t.includes("how")) {
-    return { text: "You're up +2.31% all time. Here's the breakdown:", card: "holdings" };
-  }
-  if (t.startsWith("/status")) return { text: "Agent is active and monitoring. Next run in about 18 minutes. 47 rebalances so far, est. APY 8.4%." };
-  if (t.startsWith("/explain") || t.includes("strategy") || t.includes("explain")) {
-    return { text: "You're on the Medium strategy. I keep a balanced mix across cmETH, sUSDe, and USDC, leaning toward stable yield when volatility climbs. Right now that's cmETH 40%, sUSDe 35%, USDC 25%." };
-  }
-  if (t.startsWith("/pause")) return { text: "I've paused. I won't manage your portfolio until you resume me." };
-  if (t.startsWith("/resume")) return { text: "Back on. I'll keep watching and rebalance when it makes sense." };
-  return { text: "I can answer questions about your portfolio, explain your strategy, or move funds for you. Try typing / to see what I can do." };
-}
 
 // ─── Slash menu ─────────────────────────────────────────────
 
@@ -177,10 +169,10 @@ function SlashMenu({
   const groups = [...new Set(items.map((s) => s.group))];
 
   return (
-    <div className="absolute inset-x-0 bottom-[calc(100%+8px)] z-20 max-h-72 overflow-y-auto rounded-xl border border-[#DDE8F2] bg-white p-1 shadow-lg shadow-[#0C1A2B]/8 dark:border-white/10 dark:bg-[#0F2035]">
+    <div className="absolute inset-x-0 bottom-[calc(100%+8px)] z-20 max-h-72 overflow-y-auto rounded-xl border border-edge bg-card p-1 shadow-lg shadow-ink/8">
       {groups.map((g, gi) => (
-        <div key={g} className={gi > 0 ? "mt-1 border-t border-[#F0F4F8] pt-1 dark:border-white/8" : ""}>
-          <p className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-widest text-[#94A3B8] dark:text-white/30">{g}</p>
+        <div key={g} className={gi > 0 ? "mt-1 border-t border-edge pt-1" : ""}>
+          <p className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-widest text-faint">{g}</p>
           {items
             .map((s, idx) => ({ s, idx }))
             .filter(({ s }) => s.group === g)
@@ -191,16 +183,16 @@ function SlashMenu({
                 onClick={() => onPick(s.cmd)}
                 onMouseEnter={() => onHover(idx)}
                 className={`flex w-full items-center justify-between gap-4 rounded-lg px-3 py-1.5 text-left transition-colors ${
-                  idx === activeIndex ? "bg-[#EAF4FC] dark:bg-[#1591DC]/15" : ""
+                  idx === activeIndex ? "bg-brand-soft" : ""
                 }`}
               >
-                <span className="font-mono text-xs font-semibold text-[#1591DC] dark:text-[#4BB8FA]">{s.cmd}</span>
-                <span className="truncate text-xs text-[#5B7490] dark:text-white/45">{s.desc}</span>
+                <span className="font-mono text-xs font-semibold text-brand">{s.cmd}</span>
+                <span className="truncate text-xs text-dim">{s.desc}</span>
               </button>
             ))}
         </div>
       ))}
-      <div className="mt-1 flex items-center gap-2 border-t border-[#F0F4F8] px-3 py-1.5 text-[9px] text-[#94A3B8] dark:border-white/8 dark:text-white/30">
+      <div className="mt-1 flex items-center gap-2 border-t border-edge px-3 py-1.5 text-[9px] text-faint">
         <span>↑↓ navigate</span>
         <span>↵ select</span>
         <span>esc dismiss</span>
@@ -209,47 +201,27 @@ function SlashMenu({
   );
 }
 
-// ─── Agent message (typewriter + delayed card) ──────────────
+// ─── Agent message ───────────────────────────────────────────
 
 function AgentMessage({
   text,
   card,
   onTick,
-  instant,
 }: {
   text: string;
   card?: Msg["card"];
   onTick?: () => void;
-  instant?: boolean;
 }) {
-  const [shown, setShown] = useState(instant ? text : "");
-  const [done, setDone] = useState(!!instant);
-
   useEffect(() => {
-    if (instant) return;
-    let i = 0;
-    const id = setInterval(() => {
-      i += 2;
-      setShown(text.slice(0, i));
-      onTick?.();
-      if (i >= text.length) {
-        clearInterval(id);
-        setShown(text);
-        setDone(true);
-        onTick?.();
-      }
-    }, 16);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    onTick?.();
+  }, [text, onTick]);
 
   return (
     <>
-      <p className="text-sm leading-relaxed text-[#0C1A2B] dark:text-white">
-        {shown}
-        {!done && <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse rounded-[1px] bg-[#1591DC] align-middle" />}
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+        {text}
       </p>
-      {done && card && (
+      {card && (
         <div style={{ animation: "fadeIn .3s ease" }}>
           {card === "holdings" && <HoldingsCard />}
           {(card === "move" || card === "deposit" || card === "withdraw") && <ActionCard kind={card} />}
@@ -259,21 +231,220 @@ function AgentMessage({
   );
 }
 
+// ─── Sessions sidebar ────────────────────────────────────────
+
+interface Session {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+function formatRelativeTime(date: string): string {
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function SessionsSidebar({
+  sessions,
+  activeId,
+  onSelect,
+  onNew,
+  onDelete,
+  deletingId,
+}: {
+  sessions: Session[];
+  activeId: string | null;
+  onSelect: (s: Session) => void;
+  onNew: () => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+  deletingId: string | null;
+}) {
+  return (
+    <div className="flex w-52 shrink-0 flex-col gap-2 pr-1">
+      <button
+        onClick={onNew}
+        className="flex items-center gap-2 rounded-xl border border-edge bg-card px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-brand hover:text-brand"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        New Chat
+      </button>
+
+      <div className="flex-1 space-y-0.5 overflow-y-auto">
+        {sessions.length === 0 && (
+          <p className="px-3 py-2 text-[11px] text-faint">No history yet.</p>
+        )}
+        {sessions.map((s) => (
+          <div
+            key={s.id}
+            onClick={() => onSelect(s)}
+            className={`group relative flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 transition-colors ${
+              activeId === s.id
+                ? "bg-brand-soft"
+                : "hover:bg-panel"
+            }`}
+          >
+            <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-faint" />
+            <div className="min-w-0 flex-1 pr-4">
+              <p className="line-clamp-2 text-[11px] font-medium leading-snug text-ink">
+                {s.title}
+              </p>
+              <p className="mt-0.5 text-[10px] text-faint">{formatRelativeTime(s.updatedAt)}</p>
+            </div>
+            <button
+              onClick={(e) => onDelete(s.id, e)}
+              disabled={deletingId === s.id}
+              className="absolute right-2 top-2 hidden rounded p-0.5 text-faint transition-colors hover:text-red-500 group-hover:block"
+              title="Delete"
+            >
+              {deletingId === s.id ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ───────────────────────────────────────────────────
 
 export function AgentChat() {
-  const { messages: hookMessages, sendMessage, streaming } = useChat();
+  const { messages: hookMessages, sendMessage, streaming, status, threadId, newChat, loadThread } =
+    useChat();
+  const { getAccessToken } = usePrivy();
   const [input, setInput] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSession, setActiveSession] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const prevStreaming = useRef(streaming);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Map hook ChatMessage[] to local Msg[] for rendering
   const messages: Msg[] = hookMessages.map((m, i) => ({
     id: i,
     role: m.role === "hermes" ? "agent" : "user",
     text: m.text,
   }));
+
+  // ── Sessions fetching ──────────────────────────────────────
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat-sessions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { sessions: Session[] };
+        setSessions(data.sessions ?? []);
+      }
+    } catch {
+      // non-critical
+    }
+  }, [getAccessToken]);
+
+  useEffect(() => {
+    void fetchSessions();
+  }, [fetchSessions]);
+
+  // Re-fetch after a stream completes so newly created sessions appear in sidebar.
+  useEffect(() => {
+    if (prevStreaming.current && !streaming) {
+      void fetchSessions();
+    }
+    prevStreaming.current = streaming;
+  }, [streaming, fetchSessions]);
+
+  // Mobile: size the chat to the real visible space via the visual viewport
+  // (iOS Safari shrinks visualViewport — not dvh — when the keyboard opens, so
+  // CSS alone can't hug it). Reserve main's bottom padding (the nav clearance,
+  // which the kb-open rule zeroes while typing) so it never double-counts.
+  //
+  // KEY: getBoundingClientRect().top is in LAYOUT-viewport coordinates (doesn't
+  // shrink), while visualViewport.height is the VISIBLE height. When iOS scrolls
+  // the page to reveal the focused input, top drifts (even negative) and the two
+  // no longer line up — the container balloons, the page scrolls, and the sticky
+  // composer unsticks into empty space. Subtracting visualViewport.offsetTop puts
+  // top back into visible-viewport space so the two move together and stay exact.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => {
+      if (window.innerWidth >= 768) {
+        el.style.height = "";
+        return;
+      }
+      const vv = window.visualViewport;
+      const vh = vv?.height ?? window.innerHeight;
+      const offsetTop = vv?.offsetTop ?? 0;
+      const top = Math.max(0, el.getBoundingClientRect().top - offsetTop);
+      const main = el.closest("main");
+      const pad = main
+        ? parseFloat(getComputedStyle(main).paddingBottom) || 0
+        : 0;
+      el.style.height = `${Math.max(160, vh - top - pad)}px`;
+    };
+    const soon = () => requestAnimationFrame(measure);
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+    document.addEventListener("focusin", soon);
+    document.addEventListener("focusout", soon);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+      document.removeEventListener("focusin", soon);
+      document.removeEventListener("focusout", soon);
+    };
+  }, []);
+
+  // ── Session actions ────────────────────────────────────────
+
+  async function handleSelectSession(s: Session) {
+    if (streaming) return;
+    setActiveSession(s.id);
+    await loadThread(s.id);
+  }
+
+  function handleNewChat() {
+    newChat();
+    setActiveSession(null);
+  }
+
+  async function handleDeleteSession(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDeletingId(id);
+    try {
+      const token = await getAccessToken();
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat-sessions/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (activeSession === id) {
+        newChat();
+        setActiveSession(null);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // ── Chat helpers ───────────────────────────────────────────
 
   const showSlash = input.startsWith("/");
   const slashItems = showSlash ? SLASH.filter((s) => s.cmd.startsWith(input.toLowerCase())) : [];
@@ -285,6 +456,8 @@ export function AgentChat() {
   function send(raw?: string) {
     const text = (raw ?? input).trim();
     if (!text) return;
+    // When the user sends the first message in a new chat, mark it as active session
+    if (!activeSession) setActiveSession(threadId);
     setInput("");
     void sendMessage(text);
   }
@@ -330,111 +503,149 @@ export function AgentChat() {
 
   const empty = messages.length === 0;
 
+  // ── Render ─────────────────────────────────────────────────
+
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-17rem)] max-w-3xl flex-col">
-      {/* messages — flow with the page, no inner scrollbar */}
-      <div className="flex-1">
-        {empty ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#1591DC]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-6 w-auto" />
+    <div ref={wrapRef} className="flex min-h-[calc(100dvh-17rem)] gap-4">
+      {/* Sessions sidebar — hidden on mobile, collapsible on desktop */}
+      {sidebarOpen && (
+        <div className="hidden md:flex">
+          <SessionsSidebar
+            sessions={sessions}
+            activeId={activeSession}
+            onSelect={(s) => void handleSelectSession(s)}
+            onNew={handleNewChat}
+            onDelete={(id, e) => void handleDeleteSession(id, e)}
+            deletingId={deletingId}
+          />
+        </div>
+      )}
+
+      {/* Main chat area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Sidebar toggle — desktop only */}
+        <div className="mb-2 hidden md:flex">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-faint transition-colors hover:bg-panel hover:text-dim"
+          >
+            {sidebarOpen ? (
+              <><ChevronLeft className="h-3.5 w-3.5" /> Hide history</>
+            ) : (
+              <><ChevronRight className="h-3.5 w-3.5" /> Show history</>
+            )}
+          </button>
+        </div>
+
+        {/* messages — flow with the page, no inner scrollbar */}
+        <div className="flex-1">
+          {empty ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-6 w-auto" />
+              </div>
+              <p className="mt-4 text-base font-semibold text-ink">
+                How can I help with your portfolio?
+              </p>
+              <p className="mt-1 text-xs text-dim">
+                Ask a question, or tell me to move funds. Type{" "}
+                <span className="font-mono text-brand">/</span> for commands.
+              </p>
+              <div className="mt-5 flex max-w-md flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="rounded-full border border-edge bg-card px-3 py-1.5 text-xs text-dim transition-colors hover:border-brand hover:text-brand"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
-            <p className="mt-4 text-base font-semibold text-[#0C1A2B] dark:text-white">
-              How can I help with your portfolio?
-            </p>
-            <p className="mt-1 text-xs text-[#5B7490] dark:text-white/45">
-              Ask a question, or tell me to move funds. Type{" "}
-              <span className="font-mono text-[#1591DC]">/</span> for commands.
-            </p>
-            <div className="mt-5 flex max-w-md flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="rounded-full border border-[#E8EAEC] bg-white px-3 py-1.5 text-xs text-[#5B7490] transition-colors hover:border-[#1591DC] hover:text-[#1591DC] dark:border-white/10 dark:bg-white/5 dark:text-white/45"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 pb-6">
-            {messages.map((m) =>
-              m.role === "user" ? (
-                <div key={m.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#0C1A2B] px-4 py-2.5 text-sm text-white dark:bg-white/10">
-                    {m.text}
+          ) : (
+            <div className="space-y-4 pb-6">
+              {messages.map((m) =>
+                m.role === "user" ? (
+                  <div key={m.id} className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-white dark:bg-white/10">
+                      {m.text}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div key={m.id} className="flex gap-2.5">
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1591DC]">
+                ) : (
+                  <div key={m.id} className="flex gap-2.5">
+                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <AgentMessage
+                        text={typeof m.text === "string" ? m.text : ""}
+                        card={m.card}
+                        onTick={() => endRef.current?.scrollIntoView({ block: "end" })}
+                      />
+                    </div>
+                  </div>
+                ),
+              )}
+              {streaming && messages[messages.length - 1]?.role !== "agent" && (
+                <div className="flex gap-2.5">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <AgentMessage
-                      text={typeof m.text === "string" ? m.text : ""}
-                      card={m.card}
-                      onTick={() => endRef.current?.scrollIntoView({ block: "end" })}
-                    />
+                  <div className="flex items-center gap-2 rounded-2xl bg-panel px-3 py-3">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint" />
+                    {status && (
+                      <span className="ml-1 text-[11px] text-faint">
+                        {status}...
+                      </span>
+                    )}
                   </div>
                 </div>
-              ),
-            )}
-            {streaming && messages[messages.length - 1]?.role !== "agent" && (
-              <div className="flex gap-2.5">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1591DC]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
-                </div>
-                <div className="flex items-center gap-1 rounded-2xl bg-[#F7F9FC] px-3 py-3 dark:bg-white/5">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#94A3B8] [animation-delay:-0.3s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#94A3B8] [animation-delay:-0.15s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#94A3B8]" />
-                </div>
-              </div>
-            )}
-            <div ref={endRef} style={{ scrollMarginBottom: "6rem" }} />
-          </div>
-        )}
-      </div>
-
-      {/* composer — sticky to the viewport bottom while the page scrolls */}
-      <div className="sticky bottom-0 bg-[#F9FBFC] pb-3 pt-2 dark:bg-[#0A1628]">
-        {/* fade scrim: messages dissolve into the canvas above the bar */}
-        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-linear-to-t from-[#F9FBFC] to-transparent dark:from-[#0A1628]" />
-        <div className="relative">
-          {showSlash && (
-            <SlashMenu items={slashItems} activeIndex={slashIndex} onPick={pickCommand} onHover={setSlashIndex} />
+              )}
+              <div ref={endRef} style={{ scrollMarginBottom: "6rem" }} />
+            </div>
           )}
-          <div className="flex items-end gap-2 rounded-full border border-[#E8EAEC] bg-white px-4 py-2 shadow-sm transition-colors focus-within:border-[#1591DC] focus-within:ring-1 focus-within:ring-[#1591DC]/20 dark:border-white/10 dark:bg-[#0F2035]">
-            <textarea
-              ref={taRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                setSlashIndex(0);
-              }}
-              onKeyDown={onKey}
-              rows={1}
-              placeholder="Message Tends Agent, or type / for commands"
-              className="max-h-32 flex-1 resize-none bg-transparent py-1.5 text-sm text-[#0C1A2B] outline-none placeholder:text-[#94A3B8] dark:text-white"
-            />
-            <button
-              onClick={() => send()}
-              disabled={!input.trim()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1591DC] text-white transition-opacity hover:opacity-90 disabled:opacity-30"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-          </div>
         </div>
-        <p className="mt-2 text-center text-[10px] text-[#94A3B8]">
-          Tends Agent can make mistakes. Review actions before you confirm.
-        </p>
+
+        {/* composer — sticky to the viewport bottom while the page scrolls */}
+        <div className="sticky bottom-0 bg-app pb-3 pt-2">
+          {/* fade scrim */}
+          <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-linear-to-t from-app to-transparent" />
+          <div className="relative">
+            {showSlash && (
+              <SlashMenu items={slashItems} activeIndex={slashIndex} onPick={pickCommand} onHover={setSlashIndex} />
+            )}
+            <div className="flex items-end gap-2 rounded-full border border-edge bg-card px-4 py-2 shadow-sm transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/20">
+              <textarea
+                ref={taRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setSlashIndex(0);
+                }}
+                onKeyDown={onKey}
+                rows={1}
+                placeholder="Message Tends Agent, or type / for commands"
+                className="max-h-32 flex-1 resize-none bg-transparent py-1.5 text-sm text-ink outline-none placeholder:text-faint"
+              />
+              <button
+                onClick={() => send()}
+                disabled={!input.trim()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-opacity hover:opacity-90 disabled:opacity-30"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-center text-[10px] text-faint">
+            Tends Agent can make mistakes. Review actions before you confirm.
+          </p>
+        </div>
       </div>
     </div>
   );
