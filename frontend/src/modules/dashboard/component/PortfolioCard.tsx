@@ -160,7 +160,7 @@ function PortfolioChart({ data }: { data: number[] }) {
       <AnimatePresence>
         {hv && (
           <motion.div
-            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-[#0C1A2B] px-3 py-2 text-left shadow-lg"
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-tip px-3 py-2 text-left shadow-lg"
             style={{ left: Math.max(56, Math.min(w - 56, hv.x)), top: hv.y - 12, transformOrigin: "bottom center" }}
             initial={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
             animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
@@ -184,21 +184,21 @@ export function PortfolioCard({ totalAssetsUSDC, delta, isLoading }: PortfolioCa
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5 lg:col-span-2 dark:border-white/8 dark:bg-[#0F2035]"
+      className="rounded-2xl border-[1.25px] border-edge bg-card p-5 lg:col-span-2"
     >
       <div className="mb-5 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490] dark:text-white/45">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
           Your Portfolio
         </p>
-        <div className="flex gap-0.5 rounded-lg bg-[#F7F9FC] p-0.5 dark:bg-white/5">
+        <div className="flex gap-0.5 rounded-lg bg-panel p-0.5">
           {["7D", "30D", "90D", "1Y"].map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 range === r
-                  ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15 dark:text-[#4BB8FA]"
-                  : "text-[#5B7490] hover:text-[#0C1A2B] dark:text-white/45 dark:hover:text-white"
+                  ? "bg-brand-soft text-brand"
+                  : "text-dim hover:text-ink dark:text-white/45 dark:hover:text-white"
               }`}
             >
               {r}
@@ -209,30 +209,30 @@ export function PortfolioCard({ totalAssetsUSDC, delta, isLoading }: PortfolioCa
 
       <div className="grid gap-6 md:grid-cols-[210px_1fr]">
         <div className="flex flex-col justify-center">
-          <p className="text-xs text-[#5B7490] dark:text-white/45">Total Portfolio Value</p>
+          <p className="text-xs text-dim">Total Portfolio Value</p>
           <div className="flex items-end gap-2">
             {isLoading ? (
-              <div className="mt-1 h-8 w-32 animate-pulse rounded-lg bg-[#E8EAEC] dark:bg-white/10" />
+              <div className="mt-1 h-8 w-32 animate-pulse rounded-lg bg-edge dark:bg-white/10" />
             ) : (
-              <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-[#0C1A2B] dark:text-white">
+              <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-ink">
                 <span>$</span>
                 <SlidingNumber number={totalAssetsUSDC} decimalPlaces={2} />
               </p>
             )}
             {delta !== undefined && delta !== 0 && (
-              <p className={`mt-2 flex items-center gap-1 text-sm font-medium ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+              <p className={`mt-2 flex items-center gap-1 text-sm font-medium ${delta >= 0 ? "text-pos" : "text-neg"}`}>
                 <TrendingUp className="h-4 w-4" strokeWidth={2.2} />
                 {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
               </p>
             )}
           </div>
-          <div className="my-5 h-px bg-[#E8EAEC] dark:bg-white/8" />
-          <p className="text-xs text-[#5B7490] dark:text-white/45">Simulated range</p>
-          <p className="flex items-center text-sm text-[#94A3B8] dark:text-white/30">{range} view</p>
+          <div className="my-5 h-px bg-edge" />
+          <p className="text-xs text-dim">Simulated range</p>
+          <p className="flex items-center text-sm text-faint">{range} view</p>
         </div>
         <div className="pl-6">
           {isLoading ? (
-            <div className="h-[150px] animate-pulse rounded-xl bg-[#E8EAEC] dark:bg-white/10" />
+            <div className="h-[150px] animate-pulse rounded-xl bg-edge dark:bg-white/10" />
           ) : (
             <PortfolioChart key={Math.round(totalAssetsUSDC)} data={data} />
           )}

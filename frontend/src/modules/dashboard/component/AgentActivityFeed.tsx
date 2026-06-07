@@ -11,13 +11,13 @@ export function AgentActivityFeed() {
 
   return (
     <Card className="p-0">
-      <div className="flex items-center justify-between border-b border-[#DDE8F2] px-6 py-4 dark:border-white/8">
-        <h3 className="font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+      <div className="flex items-center justify-between border-b border-edge px-6 py-4">
+        <h3 className="font-sans text-sm font-semibold text-ink">
           Agent Activity
         </h3>
         <Link
           href="/activity"
-          className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#1591DC] hover:underline"
+          className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-brand hover:underline"
         >
           View all
         </Link>
@@ -31,20 +31,20 @@ export function AgentActivityFeed() {
         </div>
       ) : activities.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <p className="text-sm text-[#5B7490] dark:text-white/45">No activity yet.</p>
-          <p className="text-xs text-[#5B7490]/60 dark:text-white/30">
+          <p className="text-sm text-dim">No activity yet.</p>
+          <p className="text-xs text-faint">
             Tends Agent begins working after your first deposit.
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[#DDE8F2]/60 dark:divide-white/5">
+        <ul className="divide-y divide-edge/60 dark:divide-white/5">
           {activities.map((a) => (
             <li key={a.id} className="flex items-center justify-between px-6 py-3 text-sm">
-              <span className="inline-flex items-center gap-2 text-[#0C1A2B] dark:text-white">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1591DC]" />
+              <span className="inline-flex items-center gap-2 text-ink">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
                 {formatAction(a.action)}
               </span>
-              <span className="font-mono text-xs text-[#5B7490] dark:text-white/45">
+              <span className="font-mono text-xs text-dim">
                 {relativeTime(a.timestamp)}
               </span>
             </li>

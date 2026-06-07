@@ -66,23 +66,23 @@ export function Dashboard() {
         {/* Title row */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0C1A2B] dark:text-white">
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
               Overview
             </h1>
-            <p className="mt-1 text-sm text-[#5B7490] dark:text-white/45">
+            <p className="mt-1 text-sm text-dim">
               Where your money sits today.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => setModal("withdraw")}
-              className="rounded-full border-[1.25px] border-[#E8EAEC] bg-white px-4 py-2 text-sm font-medium text-[#5B7490] transition-colors hover:text-[#0C1A2B] dark:border-white/10 dark:bg-white/5 dark:text-white/45 dark:hover:text-white"
+              className="rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink dark:bg-white/5 dark:text-white/45 dark:hover:text-white"
             >
               Withdraw
             </button>
             <button
               onClick={() => setModal("deposit")}
-              className="rounded-full bg-[#1591DC] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
               Deposit
             </button>

@@ -16,10 +16,10 @@ const BENTO_ITEM: Variants = {
 };
 
 const ACT_TAG: Record<string, string> = {
-  Rebalance: "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15 dark:text-[#4BB8FA]",
-  Deposit:   "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400",
+  Rebalance: "bg-brand-soft text-brand",
+  Deposit:   "bg-pos-soft text-pos dark:bg-green-900/20 dark:text-green-400",
   Withdraw:  "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
-  Monitor:   "bg-[#EDF2F7] text-[#5B7490] dark:bg-white/10 dark:text-white/45",
+  Monitor:   "bg-panel text-dim dark:bg-white/10 dark:text-white/45",
 };
 
 function actionType(action: string): string {
@@ -45,7 +45,7 @@ function timeLabel(ts: Date): string {
 const RISK_LABELS: Record<number, string> = { 0: "Low", 1: "Medium", 2: "High", 3: "Custom" };
 
 const AGENT_STATES = {
-  idle:    { label: "Idle",    dot: "bg-[#1591DC]" },
+  idle:    { label: "Idle",    dot: "bg-brand" },
   running: { label: "Running", dot: "bg-[#8CC8EE]" },
   paused:  { label: "Paused",  dot: "bg-[#B4C0CE]" },
 } as const;
@@ -78,16 +78,16 @@ export function AgentCard() {
   return (
     <motion.div
       variants={BENTO_ITEM}
-      className="flex flex-col rounded-2xl border-[1.25px] border-[#E8EAEC] bg-white p-5 dark:border-white/8 dark:bg-[#0F2035]"
+      className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5"
     >
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#5B7490] dark:text-white/45">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
             Your Agent
           </p>
           <span className="inline-flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${state.dot}`} />
-            <span className="text-[11px] font-medium text-[#5B7490] dark:text-white/45">
+            <span className="text-[11px] font-medium text-dim">
               {state.label}{stateKey === "running" ? dots : ""}
             </span>
           </span>
@@ -95,20 +95,20 @@ export function AgentCard() {
         <Link
           href="/agent"
           aria-label="Open agent"
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8EAEC] text-[#5B7490] transition-colors hover:border-[#5B7490] hover:text-[#0C1A2B] dark:border-white/10 dark:text-white/45 dark:hover:border-white/20 dark:hover:text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-edge text-dim transition-colors hover:border-dim hover:text-ink dark:hover:border-white/20 dark:hover:text-white"
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
       </div>
 
       <div className="flex gap-3">
-        <div className="flex-1 rounded-xl bg-[#F7F9FC] px-4 py-3 dark:bg-white/5">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8] dark:text-white/30">Risk</p>
-          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B] dark:text-white">{riskName}</p>
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.08em] text-faint">Risk</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{riskName}</p>
         </div>
-        <div className="flex-1 rounded-xl bg-[#F7F9FC] px-4 py-3 dark:bg-white/5">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-[#94A3B8] dark:text-white/30">Next run</p>
-          <p className="mt-0.5 text-sm font-semibold text-[#0C1A2B] dark:text-white">
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.08em] text-faint">Next run</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">
             {paused ? "Paused" : "~4h"}
           </p>
         </div>
@@ -116,7 +116,7 @@ export function AgentCard() {
 
       {activities.length === 0 ? (
         <div className="mt-3 flex flex-col items-center gap-1 py-4 text-center">
-          <p className="text-xs text-[#5B7490] dark:text-white/45">No activity yet.</p>
+          <p className="text-xs text-dim">No activity yet.</p>
         </div>
       ) : (
         <div className="mt-2">
@@ -126,15 +126,15 @@ export function AgentCard() {
             return (
               <div
                 key={a.id}
-                className={`flex items-center gap-3 py-2.5 ${i < activities.length - 1 ? "border-b border-[#E8EAEC] dark:border-white/8" : ""}`}
+                className={`flex items-center gap-3 py-2.5 ${i < activities.length - 1 ? "border-b border-edge" : ""}`}
               >
                 <span className={`w-20 shrink-0 rounded-md px-2 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider ${tagCls}`}>
                   {type}
                 </span>
-                <span className="flex-1 truncate text-[13px] text-[#0C1A2B] dark:text-white">
+                <span className="flex-1 truncate text-[13px] text-ink">
                   {a.action === "REBALANCE" ? "Rebalanced portfolio" : a.action.charAt(0) + a.action.slice(1).toLowerCase()}
                 </span>
-                <span className="shrink-0 text-[11px] tabular-nums text-[#94A3B8] dark:text-white/30">
+                <span className="shrink-0 text-[11px] tabular-nums text-faint">
                   {timeLabel(a.timestamp)}
                 </span>
               </div>

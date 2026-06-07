@@ -39,7 +39,7 @@ export function SummaryBar({
     return (
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-2xl border border-[#DDE8F2] p-7 dark:border-white/8">
+          <div key={i} className="space-y-3 rounded-2xl border border-edge p-7">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-8 w-28" />
             <Skeleton className="h-3 w-24" />

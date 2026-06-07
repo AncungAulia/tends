@@ -30,7 +30,7 @@ export function usePortfolio(
       },
       { address: vaultAddress, abi: UserVaultAbi, functionName: "paused" },
     ],
-    query: { enabled: !!vaultAddress },
+    query: { enabled: !!vaultAddress, refetchInterval: 30_000 },
   });
 
   const [totalAssets, shares, riskPreference, lastRebalanceTime, paused] =
