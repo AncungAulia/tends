@@ -27,7 +27,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
+    <div className="flex gap-1 rounded-lg border border-edge p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -35,8 +35,8 @@ function Segmented<T extends string>({
           className={cn(
             "rounded-md px-3 py-1.5 font-mono text-xs uppercase tracking-[0.04em] transition-colors",
             value === o.value
-              ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-              : "text-[#5B7490] dark:text-white/45",
+              ? "bg-brand-soft text-brand"
+              : "text-dim",
           )}
         >
           {o.label}
@@ -49,7 +49,7 @@ function Segmented<T extends string>({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-[#0C1A2B] dark:text-white">{label}</span>
+      <span className="text-sm text-ink">{label}</span>
       {children}
     </div>
   );
@@ -101,14 +101,14 @@ export function Settings() {
         <Card className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
             <AddressDisplay address={address} />
-            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/40">
+            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
               {connectedVia}
             </span>
           </div>
         </Card>
 
         <div>
-          <h3 className="mb-2 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+          <h3 className="mb-2 font-sans text-sm font-semibold text-ink">
             Appearance
           </h3>
           <Card>
@@ -129,7 +129,7 @@ export function Settings() {
         </div>
 
         <div>
-          <h3 className="mb-2 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+          <h3 className="mb-2 font-sans text-sm font-semibold text-ink">
             Preferences
           </h3>
           <Card>
@@ -148,15 +148,15 @@ export function Settings() {
 
         {IS_TESTNET && (
           <div>
-            <h3 className="mb-2 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+            <h3 className="mb-2 font-sans text-sm font-semibold text-ink">
               Testnet
             </h3>
             <Card className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#0C1A2B] dark:text-white">
+                <span className="text-sm text-ink">
                   Test USDC balance
                 </span>
-                <span className="font-mono text-sm text-[#0C1A2B] dark:text-white">
+                <span className="font-mono text-sm text-ink">
                   {balance} USDC
                 </span>
               </div>
@@ -169,7 +169,7 @@ export function Settings() {
               >
                 Mint 1,000 test USDC
               </Button>
-              <p className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/40">
+              <p className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
                 Dev faucet · needs a little MNT for gas
               </p>
             </Card>

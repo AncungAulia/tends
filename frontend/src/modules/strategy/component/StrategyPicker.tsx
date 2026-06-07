@@ -110,15 +110,15 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
               className={cn(
                 "rounded-lg border-2 px-3 py-2.5 text-left transition-colors",
                 active
-                  ? "border-[#1591DC] bg-[#EAF4FC] dark:bg-[#1591DC]/10"
-                  : "border-[#DDE8F2] hover:border-[#5B7490] dark:border-white/10 dark:hover:border-white/30",
+                  ? "border-brand bg-brand-soft"
+                  : "border-edge hover:border-dim",
               )}
             >
-              <span className="font-mono text-xs uppercase tracking-[0.06em] text-[#0C1A2B] dark:text-white">
+              <span className="font-mono text-xs uppercase tracking-[0.06em] text-ink">
                 {opt.label}
               </span>
               {isCurrent && (
-                <span className="ml-1.5 font-mono text-[0.6rem] uppercase text-[#16A34A]">
+                <span className="ml-1.5 font-mono text-[0.6rem] uppercase text-pos">
                   active
                 </span>
               )}
@@ -129,13 +129,13 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
 
       {/* Preview card */}
       {preview && selected !== "CUSTOM" && (
-        <div className="space-y-3 rounded-xl border border-[#DDE8F2] bg-[#F7F9FC] p-4 dark:border-white/10 dark:bg-white/3">
+        <div className="space-y-3 rounded-xl border border-edge bg-panel p-4">
           {/* APY */}
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
               Est. APY / yr
             </span>
-            <span className="text-xl font-bold text-[#16A34A]">
+            <span className="text-xl font-bold text-pos">
               {preview.blendedApyPct != null
                 ? `${preview.blendedApyPct}%`
                 : preview.apyLabel}
@@ -144,31 +144,31 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
 
           {/* Asset chips */}
           <div>
-            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+            <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
               Assets
             </span>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {tokens.map(({ pct, symbol }) => (
                 <span
                   key={symbol}
-                  className="inline-flex items-center gap-1 rounded-full border border-[#DDE8F2] bg-white px-2.5 py-0.5 font-mono text-xs dark:border-white/10 dark:bg-white/5"
+                  className="inline-flex items-center gap-1 rounded-full border border-edge bg-card px-2.5 py-0.5 font-mono text-xs"
                 >
-                  <span className="text-[#1591DC] dark:text-[#4BB8FA]">{pct}</span>
-                  <span className="text-[#0C1A2B] dark:text-white">{symbol}</span>
+                  <span className="text-brand">{pct}</span>
+                  <span className="text-ink">{symbol}</span>
                 </span>
               ))}
             </div>
           </div>
 
           {/* Risk + tag row */}
-          <div className="flex items-center justify-between border-t border-[#DDE8F2] pt-2.5 dark:border-white/10">
-            <span className="text-xs text-[#5B7490] dark:text-white/45">{preview.tag}</span>
+          <div className="flex items-center justify-between border-t border-edge pt-2.5">
+            <span className="text-xs text-dim">{preview.tag}</span>
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-[0.06em]",
-                preview.risk === "Very Low" && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                preview.risk === "Very Low" && "bg-pos-soft text-pos",
                 preview.risk === "Moderate" && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                preview.risk === "High" && "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
+                preview.risk === "High" && "bg-neg-soft text-neg",
               )}
             >
               {preview.risk}
@@ -179,8 +179,8 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
 
       {/* CUSTOM allocation inputs */}
       {selected === "CUSTOM" && (
-        <div className="space-y-2 rounded-lg border border-[#DDE8F2] p-3 dark:border-white/10">
-          <p className="text-xs text-[#5B7490] dark:text-white/45">
+        <div className="space-y-2 rounded-lg border border-edge p-3">
+          <p className="text-xs text-dim">
             Set your own allocation across the Low / Medium / High buckets.
           </p>
           {[
@@ -189,7 +189,7 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
             { label: "High", value: high, set: setHigh },
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between gap-3">
-              <span className="font-mono text-xs uppercase text-[#5B7490] dark:text-white/45">
+              <span className="font-mono text-xs uppercase text-dim">
                 {row.label}
               </span>
               <div className="flex w-28 items-center gap-1">
@@ -202,14 +202,14 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
                   disabled={busy}
                   className="font-mono"
                 />
-                <span className="text-xs text-[#5B7490]">%</span>
+                <span className="text-xs text-dim">%</span>
               </div>
             </div>
           ))}
           <p
             className={cn(
               "pt-1 font-mono text-xs",
-              total === 100 ? "text-[#16A34A]" : "text-[#DC2626]",
+              total === 100 ? "text-pos" : "text-neg",
             )}
           >
             Total: {total}% {total === 100 ? "✓" : "— must equal 100%"}
@@ -217,7 +217,7 @@ export function StrategyPicker({ vaultAddress, onSaved, onSelect, saveLabel = "S
         </div>
       )}
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-neg">{error}</p>}
 
       <Button onClick={save} loading={busy} loadingLabel={label} disabled={!customValid} className="w-full">
         {saveLabel}

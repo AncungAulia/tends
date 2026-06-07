@@ -198,11 +198,11 @@ export function ApyHistoryChart() {
   return (
     <Card>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+        <h3 className="font-sans text-sm font-semibold text-ink">
           APY Projection
         </h3>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
+          <div className="flex gap-1 rounded-lg border border-edge p-0.5">
             {STRATEGIES.map((s) => (
               <button
                 key={s.id}
@@ -210,15 +210,15 @@ export function ApyHistoryChart() {
                 className={cn(
                   "rounded-md px-2 py-1 font-mono text-xs",
                   strategy === s.id
-                    ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-                    : "text-[#5B7490] dark:text-white/45",
+                    ? "bg-brand-soft text-brand"
+                    : "text-dim",
                 )}
               >
                 {s.label}
               </button>
             ))}
           </div>
-          <div className="flex gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
+          <div className="flex gap-1 rounded-lg border border-edge p-0.5">
             {RANGES.map((r) => (
               <button
                 key={r.days}
@@ -226,8 +226,8 @@ export function ApyHistoryChart() {
                 className={cn(
                   "rounded-md px-2 py-1 font-mono text-xs",
                   days === r.days
-                    ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-                    : "text-[#5B7490] dark:text-white/45",
+                    ? "bg-brand-soft text-brand"
+                    : "text-dim",
                 )}
               >
                 {r.label}

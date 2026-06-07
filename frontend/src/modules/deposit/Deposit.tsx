@@ -72,7 +72,7 @@ export function Deposit({ open, onClose, vaultAddress, paused, onSuccess }: Depo
             disabled={busy}
           />
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-neg">{error}</p>}
 
           <Button
             onClick={handleDeposit}
@@ -84,7 +84,7 @@ export function Deposit({ open, onClose, vaultAddress, paused, onSuccess }: Depo
             Deposit
           </Button>
 
-          <p className="text-center font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/40">
+          <p className="text-center font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
             Signed via your embedded wallet
           </p>
         </div>

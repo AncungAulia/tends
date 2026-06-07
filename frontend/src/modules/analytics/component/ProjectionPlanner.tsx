@@ -84,7 +84,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
     <>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-dim">
             Capital (USDC)
           </label>
           <Input
@@ -96,7 +96,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
           />
         </div>
         <div>
-          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-dim">
             Duration (days)
           </label>
           <Input
@@ -110,8 +110,8 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
       </div>
 
       {isCustom && (
-        <div className="mt-4 rounded-lg border border-[#DDE8F2] p-3 dark:border-white/10">
-          <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+        <div className="mt-4 rounded-lg border border-edge p-3">
+          <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
             Custom allocation
           </p>
           <div className="grid grid-cols-3 gap-3">
@@ -121,7 +121,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
               { label: "High", value: high, set: setHigh },
             ].map((row) => (
               <div key={row.label}>
-                <label className="mb-1 block text-xs text-[#5B7490] dark:text-white/45">
+                <label className="mb-1 block text-xs text-dim">
                   {row.label} %
                 </label>
                 <Input
@@ -138,7 +138,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
           <p
             className={cn(
               "mt-2 font-mono text-xs",
-              total === 100 ? "text-[#16A34A]" : "text-[#DC2626]",
+              total === 100 ? "text-pos" : "text-neg",
             )}
           >
             Total: {total}% {total === 100 ? "✓" : "— must equal 100%"}
@@ -148,13 +148,13 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         {!valid ? (
-          <p className="text-sm text-[#5B7490] dark:text-white/45 sm:col-span-3">
+          <p className="text-sm text-dim sm:col-span-3">
             {isCustom && !customValid
               ? "Set a custom allocation that totals 100% to see a projection."
               : "Enter capital and duration to see a projection."}
           </p>
         ) : isError ? (
-          <p className="text-sm text-[#5B7490] dark:text-white/45 sm:col-span-3">
+          <p className="text-sm text-dim sm:col-span-3">
             Projection is temporarily unavailable. Try again shortly.
           </p>
         ) : isLoading || !data ? (
@@ -166,7 +166,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
             <Projection label="Base" value={data.base} />
             <Projection label="Best" value={data.best} tone="up" />
             <Projection label="Worst" value={data.worst} tone="down" />
-            <p className="font-mono text-xs text-[#5B7490] dark:text-white/45 sm:col-span-3">
+            <p className="font-mono text-xs text-dim sm:col-span-3">
               Blended APY: {formatPercent(data.blendedApyPct)}
             </p>
           </>
@@ -179,7 +179,7 @@ export function ProjectionPlanner({ initialCapital, strategy: strategyProp, bare
 
   return (
     <Card>
-      <h3 className="mb-4 font-sans text-sm font-semibold text-[#0C1A2B] dark:text-white">
+      <h3 className="mb-4 font-sans text-sm font-semibold text-ink">
         Projection
       </h3>
       {content}
@@ -197,26 +197,26 @@ function Projection({
   tone?: "up" | "down";
 }) {
   return (
-    <div className="rounded-xl border border-[#DDE8F2] p-4 dark:border-white/8">
-      <p className="font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+    <div className="rounded-xl border border-edge p-4">
+      <p className="font-mono text-xs uppercase tracking-[0.06em] text-dim">
         {label}
       </p>
       <div className="mt-1 flex items-center gap-2">
         <span
           className={cn(
             "font-mono text-xl font-bold",
-            tone === "up" && "text-[#16A34A]",
-            tone === "down" && "text-[#DC2626]",
-            !tone && "text-[#0C1A2B] dark:text-white",
+            tone === "up" && "text-pos",
+            tone === "down" && "text-neg",
+            !tone && "text-ink",
           )}
         >
           {formatUSD(value)}
         </span>
         {tone === "up" && (
-          <TrendingUp size={18} strokeWidth={2.5} className="shrink-0 text-[#16A34A]" />
+          <TrendingUp size={18} strokeWidth={2.5} className="shrink-0 text-pos" />
         )}
         {tone === "down" && (
-          <TrendingDown size={18} strokeWidth={2.5} className="shrink-0 text-[#DC2626]" />
+          <TrendingDown size={18} strokeWidth={2.5} className="shrink-0 text-neg" />
         )}
       </div>
     </div>

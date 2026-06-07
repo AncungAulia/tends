@@ -1,41 +1,57 @@
 import { usePrivy } from "@privy-io/react-auth";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 export interface ChatMessage {
   role: "user" | "hermes";
   text: string;
 }
 
-/** Chat with Tends Agent via SSE (POST /api/chat). Streams reply token by token. */
+const TOOL_LABELS: Record<string, string> = {
+  getUserProfile: "Reading your profile",
+  getHoldings: "Fetching holdings",
+  getAgentSettings: "Loading guardrails",
+  readUserPosition: "Checking vault",
+  getRecentActivity: "Reviewing activity",
+  listStrategies: "Checking strategies",
+  computeProjection: "Computing projection",
+  getApyHistory: "Loading APY history",
+  setAgentGuardrails: "Updating guardrails",
+  triggerRebalance: "Triggering rebalance",
+  executeDirectSwap: "Executing swap",
+};
+
+/** Chat with Tends Agent via SSE (POST /api/chat-v2). Streams reply token by token.
+ *  Manages thread IDs for multi-session chat history. */
 export function useChat() {
   const { getAccessToken } = usePrivy();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
+  const isNewRef = useRef(true);
 
   const sendMessage = useCallback(
     async (message: string) => {
       if (!message.trim() || streaming) return;
 
-      // Add the user message AND an empty Tends Agent message up-front so the typing
-      // loader appears during the whole wait (token + network + first token).
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", text: message },
-        { role: "hermes", text: "" },
-      ]);
+      setMessages((prev) => [...prev, { role: "user", text: message }]);
       setStreaming(true);
 
       try {
         const token = await getAccessToken();
+        const isNew = isNewRef.current;
+        const title = isNew ? message.slice(0, 60) : undefined;
+        isNewRef.current = false;
+
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/chat`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/chat-v2`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ message, thread: threadId, isNew, title }),
           },
         );
 
@@ -45,13 +61,13 @@ export function useChat() {
         const decoder = new TextDecoder();
         let reply = "";
         let buffer = "";
+        let hermesAdded = false;
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-          // SSE events are separated by a blank line; keep the trailing partial.
           const events = buffer.split("\n\n");
           buffer = events.pop() ?? "";
 
@@ -63,44 +79,88 @@ export function useChat() {
               if (line.startsWith("event:")) {
                 type = line.slice(6).trim();
               } else if (line.startsWith("data:")) {
-                // strip "data:" + one optional leading space — preserve the rest
                 dataLines.push(line.slice(line[5] === " " ? 6 : 5));
               }
             }
 
-            if (type === "done" || type === "error") {
+            if (type === "done") {
+              setStatus(null);
               setStreaming(false);
               return;
             }
-            // Multiple data lines in one event represent newline-separated text.
+            if (type === "error") {
+              const errMsg = dataLines.join("") || "Tends Agent encountered an error.";
+              setMessages((prev) => [
+                ...prev,
+                { role: "hermes" as const, text: `⚠️ ${errMsg}` },
+              ]);
+              setStatus(null);
+              setStreaming(false);
+              return;
+            }
+            if (type === "status") {
+              const toolName = dataLines.join("").trim();
+              setStatus(TOOL_LABELS[toolName] ?? toolName);
+              continue;
+            }
             reply += dataLines.join("\n");
-            setMessages((prev) => [
-              ...prev.slice(0, -1),
-              { role: "hermes", text: reply },
-            ]);
+            setStatus(null);
+            if (!hermesAdded) {
+              hermesAdded = true;
+              setMessages((prev) => [...prev, { role: "hermes", text: reply }]);
+            } else {
+              setMessages((prev) => [
+                ...prev.slice(0, -1),
+                { role: "hermes", text: reply },
+              ]);
+            }
           }
         }
       } catch {
-        // Replace the pending (empty) Tends Agent message with the error.
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          const errored = { role: "hermes" as const, text: "Tends Agent is unavailable. Try again." };
-          if (last?.role === "hermes") copy[copy.length - 1] = errored;
-          else copy.push(errored);
-          return copy;
-        });
+        setMessages((prev) => [
+          ...prev,
+          { role: "hermes" as const, text: "Tends Agent is unavailable. Try again." },
+        ]);
       } finally {
         setStreaming(false);
       }
     },
-    [getAccessToken, streaming],
+    [getAccessToken, streaming, threadId],
+  );
+
+  /** Start a fresh conversation — new thread ID, clear messages. */
+  const newChat = useCallback(() => {
+    setThreadId(crypto.randomUUID());
+    isNewRef.current = true;
+    setMessages([]);
+    setStatus(null);
+    setStreaming(false);
+  }, []);
+
+  /** Load historical messages from an existing thread. */
+  const loadThread = useCallback(
+    async (tid: string) => {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/chat-sessions/${tid}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { messages: ChatMessage[] };
+      setThreadId(tid);
+      isNewRef.current = false;
+      setMessages(data.messages ?? []);
+      setStatus(null);
+      setStreaming(false);
+    },
+    [getAccessToken],
   );
 
   const reset = useCallback(() => {
     setMessages([]);
     setStreaming(false);
+    setStatus(null);
   }, []);
 
-  return { messages, sendMessage, streaming, reset };
+  return { messages, sendMessage, streaming, status, reset, threadId, newChat, loadThread };
 }

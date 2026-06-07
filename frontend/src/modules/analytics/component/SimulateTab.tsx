@@ -243,7 +243,7 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
 
         {/* Capital input */}
         <div className="max-w-xs">
-          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+          <label className="mb-1.5 block font-mono text-xs uppercase tracking-[0.06em] text-dim">
             Capital (USDC)
           </label>
           <Input
@@ -257,7 +257,7 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
 
         {/* Strategy + Range selectors */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex w-fit gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
+          <div className="flex w-fit gap-1 rounded-lg border border-edge p-0.5">
             {STRATEGIES.map((s) => (
               <button
                 key={s.id}
@@ -265,15 +265,15 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
                 className={cn(
                   "rounded-md px-3 py-1.5 font-mono text-xs transition-colors",
                   strategy === s.id
-                    ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-                    : "text-[#5B7490] dark:text-white/45",
+                    ? "bg-brand-soft text-brand"
+                    : "text-dim",
                 )}
               >
                 {s.label}
               </button>
             ))}
           </div>
-          <div className="flex gap-1 rounded-lg border border-[#DDE8F2] p-0.5 dark:border-white/10">
+          <div className="flex gap-1 rounded-lg border border-edge p-0.5">
             {RANGES.map((r) => (
               <button
                 key={r.days}
@@ -281,8 +281,8 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
                 className={cn(
                   "rounded-md px-2 py-1.5 font-mono text-xs transition-colors",
                   days === r.days
-                    ? "bg-[#EAF4FC] text-[#1591DC] dark:bg-[#1591DC]/15"
-                    : "text-[#5B7490] dark:text-white/45",
+                    ? "bg-brand-soft text-brand"
+                    : "text-dim",
                 )}
               >
                 {r.label}
@@ -293,14 +293,14 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
 
         {/* Custom allocation inputs */}
         {isCustom && (
-          <div className="rounded-xl border border-[#DDE8F2] p-4 dark:border-white/10">
-            <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+          <div className="rounded-xl border border-edge p-4">
+            <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-dim">
               Custom allocation
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {ALL_ASSETS.map((asset) => (
                 <div key={asset}>
-                  <label className="mb-1 block font-mono text-xs text-[#5B7490] dark:text-white/45">
+                  <label className="mb-1 block font-mono text-xs text-dim">
                     {asset} %
                   </label>
                   <Input
@@ -316,7 +316,7 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
                 </div>
               ))}
             </div>
-            <p className={cn("mt-2 font-mono text-xs", totalCustomPct === 100 ? "text-[#16A34A]" : "text-[#DC2626]")}>
+            <p className={cn("mt-2 font-mono text-xs", totalCustomPct === 100 ? "text-pos" : "text-neg")}>
               Total: {totalCustomPct}% {totalCustomPct === 100 ? "✓" : "— must equal 100%"}
             </p>
           </div>
@@ -324,12 +324,12 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
 
         {/* Asset breakdown table */}
         {rows.length > 0 && customValid && (
-          <div className="overflow-hidden rounded-xl border border-[#DDE8F2] dark:border-white/10">
+          <div className="overflow-hidden rounded-xl border border-edge">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#DDE8F2] dark:border-white/10">
+                <tr className="border-b border-edge">
                   {["Asset", "Allocation", "APY / yr", "Contribution"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+                    <th key={h} className="px-4 py-2.5 text-left font-mono text-[0.65rem] uppercase tracking-[0.06em] text-dim">
                       {h}
                     </th>
                   ))}
@@ -337,20 +337,20 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={r.asset} className={cn(i < rows.length - 1 && "border-b border-[#DDE8F2] dark:border-white/10")}>
-                    <td className="px-4 py-3 font-mono text-xs font-medium text-[#0C1A2B] dark:text-white">{r.asset}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[#5B7490] dark:text-white/45">{r.weight}%</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[#0C1A2B] dark:text-white">{r.apy.toFixed(2)}%</td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-[#1591DC]">+{r.contribution.toFixed(2)}%</td>
+                  <tr key={r.asset} className={cn(i < rows.length - 1 && "border-b border-edge")}>
+                    <td className="px-4 py-3 font-mono text-xs font-medium text-ink">{r.asset}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-dim">{r.weight}%</td>
+                    <td className="px-4 py-3 font-mono text-xs text-ink">{r.apy.toFixed(2)}%</td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-brand">+{r.contribution.toFixed(2)}%</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-[#DDE8F2] bg-[#F7F9FC] dark:border-white/10 dark:bg-white/[0.03]">
-                  <td colSpan={3} className="px-4 py-3 font-mono text-xs font-semibold text-[#0C1A2B] dark:text-white">
+                <tr className="border-t border-edge bg-panel">
+                  <td colSpan={3} className="px-4 py-3 font-mono text-xs font-semibold text-ink">
                     Blended APY
                   </td>
-                  <td className="px-4 py-3 font-mono text-sm font-bold text-[#1591DC]">
+                  <td className="px-4 py-3 font-mono text-sm font-bold text-brand">
                     {blendedApy.toFixed(2)}%
                   </td>
                 </tr>
@@ -367,9 +367,9 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
               { label: "Monthly yield", value: monthlyYield },
               { label: "Daily yield",   value: dailyYield },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded-xl border border-[#DDE8F2] p-4 dark:border-white/[0.08]">
-                <p className="font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">{label}</p>
-                <p className="mt-1 font-mono text-xl font-bold text-[#16A34A]">{formatUSD(value)}</p>
+              <div key={label} className="rounded-xl border border-edge p-4">
+                <p className="font-mono text-xs uppercase tracking-[0.06em] text-dim">{label}</p>
+                <p className="mt-1 font-mono text-xl font-bold text-pos">{formatUSD(value)}</p>
               </div>
             ))}
           </div>
@@ -379,13 +379,13 @@ export function SimulateTab({ initialCapital }: { initialCapital?: number }) {
         {showResults && (
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+              <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-dim">
                 APY Projection
               </p>
               <div ref={apyContainerRef} className="h-[180px] w-full" />
             </div>
             <div>
-              <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-[#5B7490] dark:text-white/45">
+              <p className="mb-3 font-mono text-xs uppercase tracking-[0.06em] text-dim">
                 Portfolio Growth
               </p>
               <div ref={valContainerRef} className="h-[180px] w-full" />
