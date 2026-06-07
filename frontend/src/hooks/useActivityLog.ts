@@ -24,12 +24,42 @@ interface RawActivity {
   txHash?: string;
 }
 
+export interface PnlPoint {
+  t: number;        // unix seconds (UTCTimestamp)
+  valueUsd: number;
+  pnlUsd: number;
+  pnlPct: number;
+}
+
+interface PnlData {
+  initialDepositUsd: number;
+  points: PnlPoint[];
+}
+
+/** Portfolio value / PnL time-series for the chart. range = "7d"|"30d"|"90d"|"1y". */
+export function usePnl(range: string) {
+  const { getAccessToken, authenticated } = usePrivy();
+  const { data, isLoading } = useQuery<PnlData>({
+    queryKey: ["pnl", range],
+    enabled: authenticated,
+    queryFn: async () => {
+      const token = await getAccessToken();
+      return apiFetch<PnlData>(`/api/users/me/pnl?range=${range}`, token);
+    },
+  });
+  return {
+    points: data?.points ?? [],
+    initialDepositUsd: data?.initialDepositUsd ?? 0,
+    isLoading,
+  };
+}
+
 /**
  * Agent activity for the user. Primary: backend (GET /api/users/me/activity).
  * Fallback: on-chain AgentActivityLog by vault — so the rebalance log still
  * shows when the backend is erroring or its DB is out of sync.
  */
-export function useActivity(limit?: number) {
+export function useActivity(limit = 50) {
   const { getAccessToken, authenticated } = usePrivy();
   const vaultAddress = useVaultStore((s) => s.vaultAddress);
 
@@ -39,13 +69,13 @@ export function useActivity(limit?: number) {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ["activity"],
+    queryKey: ["activity", limit],
     enabled: authenticated,
     retry: 1,
     queryFn: async () => {
       const token = await getAccessToken();
       const res = await apiFetch<{ activities: RawActivity[] }>(
-        "/api/users/me/activity",
+        `/api/users/me/activity?limit=${limit}`,
         token,
       );
       return (res.activities ?? []).map(
@@ -67,7 +97,7 @@ export function useActivity(limit?: number) {
     address: ADDRESSES.ACTIVITY_LOG,
     abi: AgentActivityLogAbi,
     functionName: "getActivitiesByVault",
-    args: [vaultAddress!, 20n],
+    args: [vaultAddress!, 50n],
     query: { enabled: needFallback },
   });
 
@@ -83,7 +113,7 @@ export function useActivity(limit?: number) {
   const all = backendActivities.length ? backendActivities : onchainActivities;
 
   return {
-    activities: limit ? all.slice(0, limit) : all,
+    activities: all,
     isLoading,
     refetch,
   };
