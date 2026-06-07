@@ -258,6 +258,9 @@ export class IndexerService {
     txHash: string | null;
     blockNumber: bigint | null;
   }): Promise<void> {
+    // REBALANCE is indexed from the UserVault Rebalanced event (which carries swap count).
+    // Skipping here prevents a duplicate record with empty metadata.
+    if (args.action.toUpperCase() === "REBALANCE") return;
     await this.repo.recordActivity(toActivityLogRecord(args));
     this.broadcast({ type: "activity", vault: args.vault, action: args.action });
     log.info({ vault: args.vault, action: args.action }, "activity indexed");
@@ -308,10 +311,26 @@ export class IndexerService {
     return vaults;
   }
 
-  /** Attach Deposit / Withdraw / RiskPreferenceUpdated watchers for one vault. */
+  /** Attach Deposit / Withdraw / Rebalanced / RiskPreferenceUpdated watchers for one vault. */
   private watchVault(vault: `0x${string}`, unwatch: (() => void)[]): void {
     const base = { address: vault, abi: USER_VAULT_ABI } as const;
     unwatch.push(
+      publicClient.watchContractEvent({
+        ...base,
+        eventName: "Rebalanced",
+        onLogs: (logs) => {
+          for (const l of logs)
+            if (l.args.agent && l.args.timestamp !== undefined && l.args.instructions)
+              void this.onRebalanced({
+                vault,
+                agent: l.args.agent,
+                timestampSec: l.args.timestamp,
+                swaps: l.args.instructions.length,
+                txHash: l.transactionHash ?? null,
+                blockNumber: l.blockNumber,
+              });
+        },
+      }),
       publicClient.watchContractEvent({
         ...base,
         eventName: "Deposit",
