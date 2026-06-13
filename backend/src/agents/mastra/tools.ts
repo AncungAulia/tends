@@ -14,6 +14,7 @@ import { ERC20_ABI, PRICE_FEED_ABI } from "../../chain/abis.js";
 import { TOKENS, type TokenSymbol } from "../../chain/tokens.js";
 import {
   computeSwapInstructions,
+  applyAllocationCaps,
   type TokenState,
 } from "../../services/rebalance-math.js";
 import {
@@ -321,11 +322,27 @@ const executeDirectSwapTool = createTool({
       if (bps > 0) targetMap.set(sym as TokenSymbol, bps);
     }
 
-    // Use agent slippage config if set, otherwise default.
     const config = await getAgentConfig(vault);
-    const slippageBps = config.maxSlippageBps ?? SLIPPAGE_BPS;
 
-    const instructions = computeSwapInstructions(states, targetMap, {
+    // GUARDRAIL: honor the user's daily trade limit (shared counter with the
+    // auto-rebalancer — counts today's on-chain REBALANCE activities).
+    if (config.dailyLimitPerDay != null) {
+      const todayCount = await defaultRebalancerDeps.countTodayRebalances(vault);
+      if (todayCount >= config.dailyLimitPerDay) {
+        return {
+          outcome: "error",
+          reason: `daily trade limit reached (${todayCount}/${config.dailyLimitPerDay} today) — raise it in agent settings or try tomorrow`,
+        };
+      }
+    }
+
+    // GUARDRAIL: clamp the requested allocation to the user's per-asset ceiling +
+    // per-token caps — the SAME limits the auto-rebalancer enforces. A chat command
+    // can't push an asset past its cap; the excess parks in USDC.
+    const cappedTarget = applyAllocationCaps(targetMap, config);
+
+    const slippageBps = config.maxSlippageBps ?? SLIPPAGE_BPS;
+    const instructions = computeSwapInstructions(states, cappedTarget, {
       slippageBps,
     });
 

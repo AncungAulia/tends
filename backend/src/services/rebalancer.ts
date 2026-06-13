@@ -13,7 +13,7 @@ import { TOKENS, type TokenSymbol } from "../chain/tokens.js";
 import {
   computeSwapInstructions,
   resolveTargetBps,
-  clampTargetToCaps,
+  applyAllocationCaps,
   driftFloorWad,
   valueUsd,
   type SwapInstruction,
@@ -137,20 +137,8 @@ export async function defaultBuildInstructions(
 
   let targetBps = resolveTargetBps(risk as 0 | 1 | 2 | 3, custom);
 
-  // Merge maxPerAssetPct (global %) with perTokenCapsBps (per-token): take the minimum per token.
-  const globalCapBps = guardrails.maxPerAssetPct != null ? guardrails.maxPerAssetPct * 100 : null;
-  if (globalCapBps != null || guardrails.perTokenCapsBps) {
-    const effectiveCaps: Partial<Record<TokenSymbol, number>> = {};
-    if (globalCapBps != null) {
-      for (const sym of Object.keys(TOKENS) as TokenSymbol[]) {
-        const perToken = guardrails.perTokenCapsBps?.[sym];
-        effectiveCaps[sym] = perToken !== undefined ? Math.min(perToken, globalCapBps) : globalCapBps;
-      }
-    } else {
-      Object.assign(effectiveCaps, guardrails.perTokenCapsBps);
-    }
-    targetBps = clampTargetToCaps(targetBps, effectiveCaps);
-  }
+  // Clamp to the user's per-asset ceiling + per-token caps (shared with executeDirectSwap).
+  targetBps = applyAllocationCaps(targetBps, guardrails);
 
   // drift threshold raises the dust floor: only act if drift exceeds X% of portfolio
   let minSwap = MIN_SWAP_USD;

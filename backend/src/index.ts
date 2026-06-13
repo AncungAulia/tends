@@ -5,6 +5,8 @@ import { WebSocketServer } from "ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";
+import { Scalar } from "@scalar/hono-api-reference";
+import { openapiSpec } from "./api/openapi.js";
 import { env } from "./config/env.js";
 import { childLogger } from "./lib/logger.js";
 import { prisma } from "./db/client.js";
@@ -45,6 +47,11 @@ app.get("/health", async (c) => {
     ts: new Date().toISOString(),
   });
 });
+
+// API docs — public, non-/api paths so they sit ahead of the rate limiter + auth.
+// GET /openapi.json → the hand-authored OpenAPI 3.1 spec; GET /docs → Scalar UI.
+app.get("/openapi.json", (c) => c.json(openapiSpec));
+app.get("/docs", Scalar({ url: "/openapi.json", pageTitle: "Tends Backend API" }));
 
 app.use("/api/*", rateLimit);
 

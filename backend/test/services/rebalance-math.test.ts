@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeSwapInstructions,
   resolveTargetBps,
+  applyAllocationCaps,
   valueUsd,
   type TokenState,
 } from "../../src/services/rebalance-math.js";
@@ -228,4 +229,45 @@ test("computeSwapInstructions: simultaneous over- and under-weight, sells first"
   assert.equal(ins[0]!.amountIn, 100n * E18); // sell $100 of mUSD
   assert.equal(ins[1]!.tokenIn, A.USDC); // buy after
   assert.equal(ins[1]!.tokenOut, A.USDY);
+});
+
+// ── applyAllocationCaps — shared guardrail clamp (auto-rebalancer + executeDirectSwap) ──
+const tsym = (s: string) => s as TokenSymbol;
+const tmap = (o: Record<string, number>) => new Map(Object.entries(o).map(([k, v]) => [tsym(k), v]));
+
+test("applyAllocationCaps: no guardrails → target unchanged", () => {
+  const out = applyAllocationCaps(tmap({ mUSD: 6000, mETH: 4000 }), {
+    perTokenCapsBps: null,
+    maxPerAssetPct: null,
+  });
+  assert.deepEqual(Object.fromEntries(out), { mUSD: 6000, mETH: 4000 });
+});
+
+test("applyAllocationCaps: maxPerAssetPct caps every asset at the global ceiling", () => {
+  // 30% ceiling → each of mUSD/mETH clamped to 3000; the 4000 excess parks in USDC
+  const out = applyAllocationCaps(tmap({ mUSD: 5000, mETH: 5000 }), {
+    perTokenCapsBps: null,
+    maxPerAssetPct: 30,
+  });
+  assert.equal(out.get(tsym("mUSD")), 3000);
+  assert.equal(out.get(tsym("mETH")), 3000);
+});
+
+test("applyAllocationCaps: perTokenCapsBps caps the named token, never exceeds it", () => {
+  const out = applyAllocationCaps(tmap({ sUSDe: 8000, mUSD: 2000 }), {
+    perTokenCapsBps: { sUSDe: 2500 },
+    maxPerAssetPct: null,
+  });
+  assert.equal(out.get(tsym("sUSDe")), 2500);
+  assert.ok((out.get(tsym("mUSD")) ?? 0) >= 2000); // residual redistributed to headroom
+});
+
+test("applyAllocationCaps: lower of per-token cap and global ceiling wins", () => {
+  // global 40% (4000) but sUSDe capped at 25% (2500) → 2500 wins for sUSDe
+  const out = applyAllocationCaps(tmap({ sUSDe: 9000, mUSD: 1000 }), {
+    perTokenCapsBps: { sUSDe: 2500 },
+    maxPerAssetPct: 40,
+  });
+  assert.ok((out.get(tsym("sUSDe")) ?? 0) <= 2500);
+  assert.ok((out.get(tsym("mUSD")) ?? 0) <= 4000); // mUSD bound by the 40% global ceiling
 });

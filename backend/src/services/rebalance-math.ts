@@ -1,6 +1,7 @@
 import {
   STRATEGY,
   RISK_LEVEL,
+  TOKENS,
   type RiskLevel,
   type TokenSymbol,
 } from "../chain/tokens.js";
@@ -124,6 +125,33 @@ export function clampTargetToCaps(
     residual--;
   }
   return result;
+}
+
+/**
+ * Clamp a target allocation to the user's guardrails: a global per-asset ceiling
+ * (maxPerAssetPct, a %) merged with per-token caps (perTokenCapsBps) — the lower wins
+ * per token. Excess that can't fit falls through to USDC. Shared by the auto-rebalancer
+ * and the chat-driven executeDirectSwap so BOTH paths honor the same limits.
+ */
+export function applyAllocationCaps(
+  target: Map<TokenSymbol, number>,
+  guardrails: {
+    perTokenCapsBps?: Partial<Record<TokenSymbol, number>> | null;
+    maxPerAssetPct?: number | null;
+  },
+): Map<TokenSymbol, number> {
+  const globalCapBps = guardrails.maxPerAssetPct != null ? guardrails.maxPerAssetPct * 100 : null;
+  if (globalCapBps == null && !guardrails.perTokenCapsBps) return target;
+  const effectiveCaps: Partial<Record<TokenSymbol, number>> = {};
+  if (globalCapBps != null) {
+    for (const sym of Object.keys(TOKENS) as TokenSymbol[]) {
+      const perToken = guardrails.perTokenCapsBps?.[sym];
+      effectiveCaps[sym] = perToken !== undefined ? Math.min(perToken, globalCapBps) : globalCapBps;
+    }
+  } else {
+    Object.assign(effectiveCaps, guardrails.perTokenCapsBps);
+  }
+  return clampTargetToCaps(target, effectiveCaps);
 }
 
 /** Min-swap USD floor from a drift threshold (bps of portfolio): skip churn below it. */
