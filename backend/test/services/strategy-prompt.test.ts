@@ -197,18 +197,22 @@ test("buildStrategyPrompt: holdings percentage rounds to 1 decimal", () => {
 test("buildStrategyPrompt: MEDIUM risk shows INDEX bounds 5%/20%", () => {
   const p = buildStrategyPrompt(makeInput("MEDIUM", { prices: { USA500: 7363 } }));
   assert.ok(p.includes("INDEX"), "INDEX category not found");
-  // INDEX MEDIUM: minBps=500 → 5%, maxBps=2000 → 20%
-  const idx = p.indexOf("INDEX");
-  const line = p.substring(idx, idx + 60);
+  // INDEX MEDIUM: minBps=500 → 5%, maxBps=2000 → 20%. The `min%/max%` form lives in
+  // the STRATEGY BOUNDS section (HARD CONSTRAINTS above uses the `≤ total ≤` form).
+  const bounds = p.substring(p.indexOf("STRATEGY BOUNDS"));
+  const idx = bounds.indexOf("INDEX");
+  const line = bounds.substring(idx, idx + 60);
   assert.ok(line.includes("5%/20%"), `INDEX line should show 5%/20%: ${line}`);
 });
 
 test("buildStrategyPrompt: MEDIUM risk shows COMMODITY bounds 0%/8%", () => {
   const p = buildStrategyPrompt(makeInput("MEDIUM", { prices: { WTI: 89.2 } }));
   assert.ok(p.includes("COMMODITY"), "COMMODITY category not found");
-  // COMMODITY MEDIUM: minBps=0 → 0%, maxBps=800 → 8%
-  const idx = p.indexOf("COMMODITY");
-  const line = p.substring(idx, idx + 60);
+  // COMMODITY MEDIUM: minBps=0 → 0%, maxBps=800 → 8%. Read from the STRATEGY BOUNDS
+  // section, which uses the `min%/max%` form (HARD CONSTRAINTS uses `max 8%`).
+  const bounds = p.substring(p.indexOf("STRATEGY BOUNDS"));
+  const idx = bounds.indexOf("COMMODITY");
+  const line = bounds.substring(idx, idx + 60);
   assert.ok(line.includes("0%/8%"), `COMMODITY line should show 0%/8%: ${line}`);
 });
 

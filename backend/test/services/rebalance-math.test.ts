@@ -124,16 +124,16 @@ test("resolveTargetBps: each preset sums to 10000", () => {
 
 test("resolveTargetBps: CUSTOM blends LOW/MEDIUM baskets", () => {
   const m = resolveTargetBps(3, { lowBps: 5000, medBps: 5000, highBps: 0 });
-  // 0.5*LOW(mUSD 6000) + 0.5*MEDIUM(mUSD 2500) = 3000+1250 = 4250
-  assert.equal(m.get("mUSD"), 4250);
-  // 0.5*LOW(sUSDe 1000) + 0.5*MEDIUM(sUSDe 1000) = 500+500 = 1000
-  assert.equal(m.get("sUSDe"), 1000);
-  // 0.5*LOW(USDY 1000) = 500
+  // 0.5*LOW(mUSD 7000) + 0.5*MEDIUM(mUSD 3000) = 3500+1500 = 5000
+  assert.equal(m.get("mUSD"), 5000);
+  // 0.5*LOW(USDY 1000) = 500 (USDY only in LOW)
   assert.equal(m.get("USDY"), 500);
-  // 0.5*LOW(CETES 500) + 0.5*MEDIUM(CETES 1000) = 250+500 = 750
-  assert.equal(m.get("CETES"), 750);
-  // 0.5*MEDIUM(mETH 1000) = 500
-  assert.equal(m.get("mETH"), 500);
+  // 0.5*LOW(GILTS 1000) + 0.5*MEDIUM(GILTS 500) = 500+250 = 750
+  assert.equal(m.get("GILTS"), 750);
+  // 0.5*LOW(XAU 500) + 0.5*MEDIUM(XAU 500) = 250+250 = 500
+  assert.equal(m.get("XAU"), 500);
+  // 0.5*MEDIUM(mETH 2000) = 1000 (mETH only in MEDIUM)
+  assert.equal(m.get("mETH"), 1000);
   const total = [...m.values()].reduce((a, b) => a + b, 0);
   assert.equal(total, 10_000);
 });
@@ -148,18 +148,18 @@ test("resolveTargetBps: CUSTOM requires an allocation", () => {
 
 test("resolveTargetBps: CUSTOM blends all three baskets", () => {
   const m = resolveTargetBps(3, { lowBps: 2000, medBps: 3000, highBps: 5000 });
-  // mUSD: .2*6000 + .3*2500 = 1200+750 = 1950
-  assert.equal(m.get("mUSD"), 1950);
-  // mETH: .3*1000 + .5*1200 = 300+600 = 900
-  assert.equal(m.get("mETH"), 900);
-  // cmETH: .3*500 + .5*1100 = 150+550 = 700
-  assert.equal(m.get("cmETH"), 700);
-  // sUSDe: .2*1000 + .3*1000 + .5*1200 = 200+300+600 = 1100
-  assert.equal(m.get("sUSDe"), 1100);
-  // USDY: .2*1000 = 200
+  // mUSD: .2*7000 + .3*3000 + .5*500 = 1400+900+250 = 2550
+  assert.equal(m.get("mUSD"), 2550);
+  // mETH: .3*2000 + .5*1500 = 600+750 = 1350
+  assert.equal(m.get("mETH"), 1350);
+  // cmETH: .3*1000 + .5*2500 = 300+1250 = 1550
+  assert.equal(m.get("cmETH"), 1550);
+  // sUSDe: .5*1000 = 500 (HIGH only)
+  assert.equal(m.get("sUSDe"), 500);
+  // USDY: .2*1000 = 200 (LOW only)
   assert.equal(m.get("USDY"), 200);
-  // WMNT: .3*500 + .5*700 = 150+350 = 500
-  assert.equal(m.get("WMNT"), 500);
+  // WMNT: .5*500 = 250 (HIGH only)
+  assert.equal(m.get("WMNT"), 250);
   const total = [...m.values()].reduce((a, b) => a + b, 0);
   assert.equal(total, 10_000);
 });

@@ -138,6 +138,24 @@ test("onRebalanced records the mapped activity", async () => {
 
 test("onActivityLogged records the mapped activity", async () => {
   const { repo, activities } = fakeRepo();
+  // Non-REBALANCE actions (e.g. PAUSE) are recorded straight from ActivityLogged.
+  await new IndexerService(repo).onActivityLogged({
+    vault: VAULT,
+    agent: AGENT,
+    action: "PAUSE",
+    timestampSec: 1_700_000_000n,
+    txHash: "0xabc",
+    blockNumber: 3n,
+  });
+  assert.equal(activities.length, 1);
+  assert.equal(activities[0]!.action, "PAUSE");
+  assert.equal(activities[0]!.txHash, "0xabc");
+});
+
+test("onActivityLogged dedupes REBALANCE (indexed from the Rebalanced event instead)", async () => {
+  const { repo, activities } = fakeRepo();
+  // REBALANCE from ActivityLogged is skipped to avoid a duplicate, empty-metadata
+  // record — the swap-carrying Rebalanced event is the source of truth.
   await new IndexerService(repo).onActivityLogged({
     vault: VAULT,
     agent: AGENT,
@@ -146,8 +164,7 @@ test("onActivityLogged records the mapped activity", async () => {
     txHash: "0xabc",
     blockNumber: 3n,
   });
-  assert.equal(activities.length, 1);
-  assert.equal(activities[0]!.txHash, "0xabc");
+  assert.equal(activities.length, 0);
 });
 
 test("handlers broadcast a WS event after persisting", async () => {

@@ -22,8 +22,9 @@ test("blended APY follows the risk ladder: LOW < MEDIUM < HIGH (default APYs)", 
 test("listStrategies: returns all four with blended APY (CUSTOM null)", () => {
   const list = listStrategies(APY);
   assert.deepEqual(list.map((s) => s.id), ["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
-  // LOW: 60% mUSD(5) + 10% sUSDe(10) + 10% USDY(5) + 5% VBILL(5) + 5% CETES(9) + 5% GILTS(4.5) + 5% TESOURO(6) = 5.725
-  assert.equal(list.find((s) => s.id === "LOW")!.blendedApyPct, 5.73);
+  // LOW: 70% mUSD(5) + 10% USDY(5) + 10% GILTS(4.5) + 5% XAU(0) + 5% EUR(0)
+  //    = (7000*5 + 1000*5 + 1000*4.5) / 10000 = 4.45
+  assert.equal(list.find((s) => s.id === "LOW")!.blendedApyPct, 4.45);
   assert.equal(list.find((s) => s.id === "CUSTOM")!.blendedApyPct, null);
   // MEDIUM has diverse tokens including indices+stocks — verify it has a positive blended APY
   assert.ok((list.find((s) => s.id === "MEDIUM")!.blendedApyPct ?? 0) > 0);

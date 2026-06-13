@@ -21,14 +21,14 @@ test("parseApyOverrides: keeps known tokens with numeric values, drops the rest"
 });
 
 test("blendedApy: weights per-token APYs by allocation", () => {
-  // LOW = 60% mUSD(5) + 10% sUSDe(missing→0) + 10% USDY(7) + 20% others(missing→0)
-  // = (6000*5 + 1000*7) / 10000 = 3.7
-  assert.equal(blendedApy(resolveTargetBps(0), { mUSD: 5, USDY: 7 }), 3.7);
+  // LOW = 70% mUSD(5) + 10% USDY(7) + 10% GILTS(missing→0) + 5% XAU + 5% EUR (missing→0)
+  // = (7000*5 + 1000*7) / 10000 = 4.2
+  assert.equal(blendedApy(resolveTargetBps(0), { mUSD: 5, USDY: 7 }), 4.2);
 });
 
 test("blendedApy: missing APY treated as 0", () => {
-  // Only mUSD(6000 bps) provided; others → 0: (6000*10)/10000 = 6
-  assert.equal(blendedApy(resolveTargetBps(0), { mUSD: 10 }), 6);
+  // Only mUSD(7000 bps) provided; others → 0: (7000*10)/10000 = 7
+  assert.equal(blendedApy(resolveTargetBps(0), { mUSD: 10 }), 7);
 });
 
 test("computeProjection: zero APY keeps capital (worst shaves 1%)", () => {
@@ -63,13 +63,15 @@ test("computeProjection: rounds to 2 decimals", () => {
 });
 
 test("projectForRisk: LOW preset uses blended APY of its basket", () => {
-  // Provide all LOW strategy tokens at 5% → blended = 5%
+  // LOW basket = 70% mUSD + 10% USDY + 10% GILTS + 5% XAU + 5% EUR.
+  // Provide the yield-bearing legs (mUSD/USDY/GILTS) at 5%; XAU/EUR have no yield
+  // (0%) → blended = 9000bps * 5% / 10000 = 4.5%.
   const allLowAt5 = {
     mUSD: 5, sUSDe: 5, USDY: 5, VBILL: 5, CETES: 5, GILTS: 5, TESOURO: 5,
   };
   const p = projectForRisk(0, 1000, 365, allLowAt5);
-  assert.equal(p.blendedApyPct, 5);
-  assert.ok(Math.abs(p.base - 1050) < 0.01);
+  assert.equal(p.blendedApyPct, 4.5);
+  assert.ok(Math.abs(p.base - 1045) < 0.05);
 });
 
 test("projectForRisk: CUSTOM blends baskets", () => {
