@@ -50,10 +50,37 @@ function makeDeps(over: Partial<RebalancerDeps> = {}) {
     readMaxRecentSnapshot: async () => null,
     sendLiquidate: async () => "0xliquidate" as `0x${string}`,
     sendPause: async () => "0xpause" as `0x${string}`,
+    readHoldings: async () => ({ holdings: [] }),
     ...over,
   };
   return { deps, calls };
 }
+
+test("sweepBands: a holding outside its band triggers a rebalance", async () => {
+  const { deps, calls } = makeDeps({
+    readAgentConfig: async () => cfg({ perTokenBandsBps: { cmETH: { min: 2000, max: 3000 } } }),
+    readHoldings: async () => ({ holdings: [{ symbol: "cmETH", allocationPct: 35 }] }), // > 30%
+  });
+  await new RebalancerService(deps).sweepBands();
+  assert.equal(calls.sendRebalance.length, 1);
+});
+
+test("sweepBands: in-band holding → no rebalance", async () => {
+  const { deps, calls } = makeDeps({
+    readAgentConfig: async () => cfg({ perTokenBandsBps: { cmETH: { min: 2000, max: 3000 } } }),
+    readHoldings: async () => ({ holdings: [{ symbol: "cmETH", allocationPct: 25 }] }),
+  });
+  await new RebalancerService(deps).sweepBands();
+  assert.equal(calls.sendRebalance.length, 0);
+});
+
+test("sweepBands: no bands configured → skips the vault", async () => {
+  const { deps, calls } = makeDeps({
+    readHoldings: async () => ({ holdings: [{ symbol: "cmETH", allocationPct: 99 }] }),
+  });
+  await new RebalancerService(deps).sweepBands();
+  assert.equal(calls.sendRebalance.length, 0);
+});
 
 test("processVault: paused → skip, no tx sent", async () => {
   const { deps, calls } = makeDeps({ readVaultMeta: async () => meta({ paused: true }) });

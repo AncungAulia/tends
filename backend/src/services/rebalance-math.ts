@@ -138,10 +138,11 @@ export function applyAllocationCaps(
   guardrails: {
     perTokenCapsBps?: Partial<Record<TokenSymbol, number>> | null;
     maxPerAssetPct?: number | null;
+    perTokenBandsBps?: Partial<Record<TokenSymbol, { min: number; max: number }>> | null;
   },
 ): Map<TokenSymbol, number> {
   const globalCapBps = guardrails.maxPerAssetPct != null ? guardrails.maxPerAssetPct * 100 : null;
-  if (globalCapBps == null && !guardrails.perTokenCapsBps) return target;
+  if (globalCapBps == null && !guardrails.perTokenCapsBps && !guardrails.perTokenBandsBps) return target;
   const effectiveCaps: Partial<Record<TokenSymbol, number>> = {};
   if (globalCapBps != null) {
     for (const sym of Object.keys(TOKENS) as TokenSymbol[]) {
@@ -151,7 +152,32 @@ export function applyAllocationCaps(
   } else {
     Object.assign(effectiveCaps, guardrails.perTokenCapsBps);
   }
+  // a band's upper edge (max) is also a hard cap — the lower of all wins per token
+  if (guardrails.perTokenBandsBps) {
+    for (const [sym, band] of Object.entries(guardrails.perTokenBandsBps)) {
+      const t = sym as TokenSymbol;
+      effectiveCaps[t] = effectiveCaps[t] === undefined ? band.max : Math.min(effectiveCaps[t]!, band.max);
+    }
+  }
   return clampTargetToCaps(target, effectiveCaps);
+}
+
+/**
+ * Pure: symbols whose CURRENT allocation (%) sits OUTSIDE its configured band
+ * [min,max] (bps). Used as a rebalance trigger — a holding drifting below its floor
+ * or above its ceiling means the portfolio should be rebalanced back toward target.
+ */
+export function tokensOutOfBand(
+  holdings: { symbol: string; allocationPct: number }[],
+  bands: Partial<Record<string, { min: number; max: number }>> | null | undefined,
+): string[] {
+  if (!bands) return [];
+  return holdings
+    .filter((h) => {
+      const band = bands[h.symbol];
+      return band != null && (h.allocationPct < band.min / 100 || h.allocationPct > band.max / 100);
+    })
+    .map((h) => h.symbol);
 }
 
 /** Min-swap USD floor from a drift threshold (bps of portfolio): skip churn below it. */

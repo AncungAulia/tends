@@ -120,6 +120,7 @@ model AgentConfig {
   driftThresholdBps    Int? // only rebalance if drift exceeds this % of portfolio (null = dust floor)
   maxSlippageBps       Int      @default(100) // swap slippage tolerance
   perTokenCapsBps      Json? // { "sUSDe": 4000, ... } hard cap per token in bps (null = none)
+  perTokenBandsBps     Json? // { "cmETH": { "min": 2000, "max": 3000 } } drift band per token; out-of-band → rebalance
   notes                String? // free-text the chat agent reads for personalization
   maxPerAssetPct       Int? // global max allocation per token (%, null = default 50)
   dailyLimitPerDay     Int? // max rebalances per day (null = no limit)

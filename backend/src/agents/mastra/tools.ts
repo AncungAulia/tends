@@ -176,6 +176,7 @@ const setAgentGuardrailsTool = createTool({
     "autoRebalanceEnabled (pause/resume the agent); " +
     "maxSlippageBps (swap slippage tolerance, 100=1%, 200=2%); " +
     "perTokenCapsBps — an independent MAXIMUM per token in bps (3000 = max 30% of portfolio). Each token is a separate ceiling; they do NOT need to sum to 100. e.g. cap sUSDe at 25% → {\"sUSDe\":2500}. This is a safety limit, NOT the strategy allocation; " +
+    "perTokenBandsBps — a drift BAND per token { min, max } in bps. When the token's allocation drifts outside the band (e.g. its price rises so it goes above max, or falls below min), the agent rebalances it back to target — checked right after each price update. e.g. 'keep cmETH between 20% and 30%' → {\"cmETH\":{\"min\":2000,\"max\":3000}}; " +
     "cadenceSec (min seconds between rebalances); driftThresholdBps (only rebalance if drift exceeds this); notes (free text). " +
     "NOTE: this does NOT change the on-chain risk strategy (that needs the user's signature in the app).",
   inputSchema: z.object({
@@ -184,6 +185,13 @@ const setAgentGuardrailsTool = createTool({
     driftThresholdBps: z.number().int().min(0).max(10_000).nullable().optional(),
     maxSlippageBps: z.number().int().min(0).max(5_000).optional(),
     perTokenCapsBps: z.record(z.string(), z.number().int().min(0).max(10_000)).nullable().optional(),
+    perTokenBandsBps: z
+      .record(
+        z.string(),
+        z.object({ min: z.number().int().min(0).max(10_000), max: z.number().int().min(0).max(10_000) }),
+      )
+      .nullable()
+      .optional(),
     notes: z.string().max(1_000).nullable().optional(),
   }),
   outputSchema: z.any(),

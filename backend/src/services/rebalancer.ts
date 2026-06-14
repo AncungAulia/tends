@@ -14,6 +14,7 @@ import {
   computeSwapInstructions,
   resolveTargetBps,
   applyAllocationCaps,
+  tokensOutOfBand,
   driftFloorWad,
   valueUsd,
   type SwapInstruction,
@@ -26,6 +27,7 @@ import {
 } from "./agent-config.js";
 import { prisma } from "../db/client.js";
 import { agentLogEmitter } from "./agent-log-emitter.js";
+import { readHoldings } from "./holdings.js";
 
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
@@ -88,6 +90,8 @@ export interface RebalancerDeps {
   sendLiquidate: (vault: `0x${string}`) => Promise<`0x${string}`>;
   /** On-chain emergencyPause via agent executor. */
   sendPause: (vault: `0x${string}`, reason: string) => Promise<`0x${string}`>;
+  /** Current holdings (symbol + allocation %) — for the per-token band sweep. */
+  readHoldings: (vault: `0x${string}`) => Promise<{ holdings: { symbol: string; allocationPct: number }[] }>;
 }
 
 /** Read a vault's current token balances + PriceFeed prices, then plan swaps,
@@ -283,6 +287,7 @@ export const defaultRebalancerDeps: RebalancerDeps = {
       account: wallet.account!,
     });
   },
+  readHoldings: (vault) => readHoldings(vault),
 };
 
 /**
@@ -427,6 +432,37 @@ export class RebalancerService {
         await this.processVault(v);
       } catch (err) {
         log.error({ vault: v, err }, "rebalance failed");
+      }
+    }
+  }
+
+  /**
+   * Price-driven band sweep: run right AFTER the relayer pushes fresh prices (prices
+   * only move on a push, so this is the moment a band can be breached). For each vault
+   * whose holdings now sit outside a configured per-token band, rebalance back to
+   * target. processVault keeps all the usual guards (pause/stale/caps/daily-limit/simulate).
+   */
+  async sweepBands(): Promise<void> {
+    const vaults = await this.deps.listVaults();
+    for (const vault of vaults) {
+      try {
+        const config = await this.deps.readAgentConfig(vault);
+        if (!config.autoRebalanceEnabled || !config.perTokenBandsBps) continue;
+        const { holdings } = await this.deps.readHoldings(vault);
+        const breached = tokensOutOfBand(holdings, config.perTokenBandsBps);
+        if (breached.length === 0) continue;
+        log.info({ vault, breached }, "token(s) out of band after price update — rebalancing");
+        agentLogEmitter.log({
+          vaultAddress: vault,
+          workflow: "deterministic",
+          step: "band-sweep",
+          status: "running",
+          message: `Out-of-band after price move: ${breached.join(", ")} — rebalancing to target`,
+          data: { breached },
+        });
+        await this.processVault(vault);
+      } catch (err) {
+        log.warn({ vault, err }, "band sweep failed for vault");
       }
     }
   }

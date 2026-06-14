@@ -4,6 +4,7 @@ import {
   computeSwapInstructions,
   resolveTargetBps,
   applyAllocationCaps,
+  tokensOutOfBand,
   valueUsd,
   type TokenState,
 } from "../../src/services/rebalance-math.js";
@@ -270,4 +271,33 @@ test("applyAllocationCaps: lower of per-token cap and global ceiling wins", () =
   });
   assert.ok((out.get(tsym("sUSDe")) ?? 0) <= 2500);
   assert.ok((out.get(tsym("mUSD")) ?? 0) <= 4000); // mUSD bound by the 40% global ceiling
+});
+
+// ── per-token drift bands (Option C: cmETH must stay 20-30%, else rebalance) ──
+const hold = (symbol: string, allocationPct: number) => ({ symbol, allocationPct });
+
+test("tokensOutOfBand: flags a holding above its band max", () => {
+  const holdings = [hold("cmETH", 35), hold("mUSD", 50), hold("USDY", 15)];
+  // cmETH band 20-30% → 35% breaches; USDY band 10-20% → 15% ok; mUSD no band
+  assert.deepEqual(
+    tokensOutOfBand(holdings, { cmETH: { min: 2000, max: 3000 }, USDY: { min: 1000, max: 2000 } }),
+    ["cmETH"],
+  );
+});
+
+test("tokensOutOfBand: flags a holding below its band min (the floor)", () => {
+  assert.deepEqual(tokensOutOfBand([hold("cmETH", 15)], { cmETH: { min: 2000, max: 3000 } }), ["cmETH"]);
+});
+
+test("tokensOutOfBand: within band → none; null bands → none", () => {
+  assert.deepEqual(tokensOutOfBand([hold("cmETH", 25)], { cmETH: { min: 2000, max: 3000 } }), []);
+  assert.deepEqual(tokensOutOfBand([hold("cmETH", 99)], null), []);
+});
+
+test("applyAllocationCaps: a band's max edge acts as a hard cap", () => {
+  // cmETH band max 30% → 50% requested clamps to ≤3000 bps
+  const out = applyAllocationCaps(tmap({ cmETH: 5000, mUSD: 5000 }), {
+    perTokenBandsBps: { cmETH: { min: 2000, max: 3000 } },
+  });
+  assert.ok((out.get(tsym("cmETH")) ?? 0) <= 3000);
 });

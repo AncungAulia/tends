@@ -42,7 +42,11 @@ export function buildJobs(): ScheduledJob[] {
       name: "relayer",
       enabled: env.RELAYER_ENABLED,
       intervalMs: env.RELAYER_INTERVAL_SEC * 1000,
-      run: () => relayerService.relayOnce(),
+      run: async () => {
+        await relayerService.relayOnce();
+        // prices just moved → enforce per-token drift bands (event-driven check)
+        await rebalancerService.sweepBands();
+      },
     },
     {
       name: "rebalancer",

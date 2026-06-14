@@ -10,6 +10,8 @@ export interface AgentConfigValue {
   driftThresholdBps: number | null;
   maxSlippageBps: number;
   perTokenCapsBps: Partial<Record<TokenSymbol, number>> | null;
+  /** Per-token drift band in bps; a holding outside [min,max] triggers a rebalance. */
+  perTokenBandsBps: Partial<Record<TokenSymbol, { min: number; max: number }>> | null;
   notes: string | null;
   maxPerAssetPct: number | null;
   dailyLimitPerDay: number | null;
@@ -26,6 +28,7 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfigValue, "vaultAddress"> = {
   driftThresholdBps: null,
   maxSlippageBps: 100,
   perTokenCapsBps: null,
+  perTokenBandsBps: null,
   notes: null,
   maxPerAssetPct: null,
   dailyLimitPerDay: null,
@@ -62,6 +65,19 @@ export function validateAgentConfig(input: AgentConfigPatch): AgentConfigPatch {
       out.perTokenCapsBps = input.perTokenCapsBps;
     }
   }
+  if (input.perTokenBandsBps !== undefined) {
+    if (input.perTokenBandsBps === null) out.perTokenBandsBps = null;
+    else {
+      for (const [k, band] of Object.entries(input.perTokenBandsBps)) {
+        if (!(k in TOKENS)) throw new Error(`unknown token in perTokenBandsBps: ${k}`);
+        if (!band || typeof band !== "object") throw new Error(`band for ${k} must be { min, max }`);
+        const min = intIn((band as { min: unknown }).min, 0, 10_000, `band.min for ${k}`);
+        const max = intIn((band as { max: unknown }).max, 0, 10_000, `band.max for ${k}`);
+        if (min > max) throw new Error(`band.min (${min}) must be ≤ band.max (${max}) for ${k}`);
+      }
+      out.perTokenBandsBps = input.perTokenBandsBps;
+    }
+  }
   if (input.notes !== undefined) {
     if (input.notes !== null && (typeof input.notes !== "string" || input.notes.length > 1_000))
       throw new Error("notes must be a string ≤ 1000 chars or null");
@@ -93,6 +109,7 @@ export async function getAgentConfig(vaultAddress: string): Promise<AgentConfigV
     driftThresholdBps: row.driftThresholdBps,
     maxSlippageBps: row.maxSlippageBps,
     perTokenCapsBps: (row.perTokenCapsBps as AgentConfigValue["perTokenCapsBps"]) ?? null,
+    perTokenBandsBps: (row.perTokenBandsBps as AgentConfigValue["perTokenBandsBps"]) ?? null,
     notes: row.notes,
     maxPerAssetPct: row.maxPerAssetPct,
     dailyLimitPerDay: row.dailyLimitPerDay,
@@ -108,6 +125,7 @@ export async function upsertAgentConfig(
 ): Promise<AgentConfigValue> {
   const c = validateAgentConfig(patch);
   const caps = c.perTokenCapsBps !== undefined ? jsonOrNull(c.perTokenCapsBps) : undefined;
+  const bands = c.perTokenBandsBps !== undefined ? jsonOrNull(c.perTokenBandsBps) : undefined;
   await prisma.agentConfig.upsert({
     where: { vaultAddress },
     create: {
@@ -117,6 +135,7 @@ export async function upsertAgentConfig(
       driftThresholdBps: c.driftThresholdBps ?? null,
       maxSlippageBps: c.maxSlippageBps ?? DEFAULT_AGENT_CONFIG.maxSlippageBps,
       perTokenCapsBps: caps === undefined ? Prisma.DbNull : caps,
+      perTokenBandsBps: bands === undefined ? Prisma.DbNull : bands,
       notes: c.notes ?? null,
       maxPerAssetPct: c.maxPerAssetPct ?? null,
       dailyLimitPerDay: c.dailyLimitPerDay ?? null,
@@ -129,6 +148,7 @@ export async function upsertAgentConfig(
       ...(c.driftThresholdBps !== undefined && { driftThresholdBps: c.driftThresholdBps }),
       ...(c.maxSlippageBps !== undefined && { maxSlippageBps: c.maxSlippageBps }),
       ...(caps !== undefined && { perTokenCapsBps: caps }),
+      ...(bands !== undefined && { perTokenBandsBps: bands }),
       ...(c.notes !== undefined && { notes: c.notes }),
       ...(c.maxPerAssetPct !== undefined && { maxPerAssetPct: c.maxPerAssetPct }),
       ...(c.dailyLimitPerDay !== undefined && { dailyLimitPerDay: c.dailyLimitPerDay }),
