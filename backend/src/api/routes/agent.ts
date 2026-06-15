@@ -86,8 +86,10 @@ export const prismaAgentDeps: AgentDeps = {
     };
   },
   onConfigChanged: (vault) => {
-    // enforce the just-saved guardrails (rebalance if a cap is now violated) — async
+    // Enforce new caps if violated, then run full processVault for broader guardrail changes
+    // (e.g. auto-rebalance re-enabled, drift threshold tightened). Both are best-effort.
     void enforceGuardrails(vault).catch((err) => log.warn({ vault, err }, "guardrail enforce failed"));
+    void rebalancerService.processVault(vault).catch((err) => log.warn({ vault, err }, "config-change-triggered rebalance failed"));
   },
   getPrefs: async (privyId) => {
     const user = await prisma.user.findUnique({ where: { privyId }, select: { preferences: true } });

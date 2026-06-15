@@ -403,6 +403,19 @@ export class IndexerService {
     await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
     this.broadcast({ type: "risk_updated", vault, level });
     log.info({ vault, level }, "risk preference indexed");
+    // New target allocation — rebalance immediately toward it (best-effort)
+    await this.triggerRebalance(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "risk-change-triggered rebalance failed"),
+    );
+  }
+
+  async onAllowedTokenUpdated(vault: string, token: string, allowed: boolean): Promise<void> {
+    this.broadcast({ type: "allowed_token_updated", vault, token, allowed });
+    log.info({ vault, token, allowed }, "allowed token updated");
+    // Token exclusion/inclusion changes target allocation — rebalance immediately (best-effort)
+    await this.triggerRebalance(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "token-exclusion-triggered rebalance failed"),
+    );
   }
 
   /** Enumerate all vault addresses from the factory. */
@@ -469,6 +482,15 @@ export class IndexerService {
                 l.args.medBps ?? 0,
                 l.args.highBps ?? 0,
               );
+        },
+      }),
+      publicClient.watchContractEvent({
+        ...base,
+        eventName: "AllowedTokenUpdated",
+        onLogs: (logs) => {
+          for (const l of logs)
+            if (l.args.token && l.args.allowed !== undefined)
+              void this.onAllowedTokenUpdated(vault, l.args.token, l.args.allowed);
         },
       }),
     );
