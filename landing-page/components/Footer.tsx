@@ -287,16 +287,10 @@ export default function Footer() {
               inset: 0,
               padding: isMobile ? "0 20px" : "0 60px",
               color: "#ffffff",
-              // Touch devices can't hover the spotlight, so just show the bright
-              // wordmark outright on mobile instead of leaving it near-invisible.
-              opacity: isMobile ? 1 : lit ? 1 : 0,
+              opacity: lit ? 1 : 0,
               transition: "opacity 0.3s ease",
-              WebkitMaskImage: isMobile
-                ? "none"
-                : `radial-gradient(circle 260px at ${spot.x}px ${spot.y}px, black 0%, transparent 100%)`,
-              maskImage: isMobile
-                ? "none"
-                : `radial-gradient(circle 260px at ${spot.x}px ${spot.y}px, black 0%, transparent 100%)`,
+              WebkitMaskImage: `radial-gradient(circle 260px at ${spot.x}px ${spot.y}px, black 0%, transparent 100%)`,
+              maskImage: `radial-gradient(circle 260px at ${spot.x}px ${spot.y}px, black 0%, transparent 100%)`,
             }}
           >
             Tends.
