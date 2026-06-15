@@ -273,6 +273,19 @@ export class IndexerService {
     const owner = await this.readVaultOwner(vault);
     await this.repo.upsertVault(toVaultRecord(owner, vault, null));
 
+    // Sync riskPreference first — isolated from getLogs so DRPC errors there don't block this.
+    const base = { address: vault, abi: USER_VAULT_ABI } as const;
+    const riskOnChain = await publicClient.readContract({ ...base, functionName: "riskPreference" }).catch(() => null);
+    if (riskOnChain != null) {
+      const level = Number(riskOnChain);
+      let lowBps = 0, medBps = 0, highBps = 0;
+      if (level === 3) {
+        const alloc = await publicClient.readContract({ ...base, functionName: "customAllocation" }).catch(() => null);
+        if (alloc) { [lowBps, medBps, highBps] = alloc as [number, number, number]; }
+      }
+      await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
+    }
+
     // DRPC free tier: eth_getLogs max 10 000 blocks — paginate in 9 000-block chunks.
     // fromBlock: stored deployedBlock (most precise) or fallback to last 200 000 blocks.
     const latest = await publicClient.getBlockNumber();
@@ -295,24 +308,10 @@ export class IndexerService {
       return acc;
     };
 
-    const base = { address: vault, abi: USER_VAULT_ABI } as const;
-    const [depositLogs, withdrawLogs, riskOnChain] = await Promise.all([
+    const [depositLogs, withdrawLogs] = await Promise.all([
       getLogsPaged(DEPOSIT_EVENT),
       getLogsPaged(WITHDRAW_EVENT),
-      publicClient.readContract({ ...base, functionName: "riskPreference" }).catch(() => null),
     ]);
-
-    // Sync riskPreference from on-chain — DB default (1=MEDIUM) can be wrong if the
-    // vault was deployed with a different initial value or switched before indexer started.
-    if (riskOnChain != null) {
-      const level = Number(riskOnChain);
-      let lowBps = 0, medBps = 0, highBps = 0;
-      if (level === 3) {
-        const alloc = await publicClient.readContract({ ...base, functionName: "customAllocation" }).catch(() => null);
-        if (alloc) { [lowBps, medBps, highBps] = alloc as [number, number, number]; }
-      }
-      await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
-    }
 
     let totalDepositedAssets = 0n;
     let totalDepositedShares = 0n;
