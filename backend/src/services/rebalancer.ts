@@ -101,7 +101,24 @@ export async function defaultBuildInstructions(
   risk: number,
   guardrails: Guardrails = DEFAULT_AGENT_CONFIG,
 ): Promise<SwapInstruction[]> {
-  const tokenList = Object.values(TOKENS).filter((t) => t.address);
+  // Only plan swaps for tokens the vault actually allows — prevents TokenNotAllowed revert
+  // on vaults that haven't had addAllowedTokens called yet (e.g. old implementations).
+  const allTokens = Object.values(TOKENS).filter((t) => t.address);
+  const IS_ALLOWED_ABI = [
+    { name: "isAllowedToken", type: "function", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "bool" }] },
+  ] as const;
+  const allowedFlags = await Promise.all(
+    allTokens.map((t) =>
+      publicClient.readContract({
+        address: vault,
+        abi: IS_ALLOWED_ABI,
+        functionName: "isAllowedToken",
+        args: [as0x(t.address)],
+      }).catch(() => false),
+    ),
+  );
+  // USDC is always included — it's the vault asset and implicitly tradeable, not in isAllowedToken
+  const tokenList = allTokens.filter((t, i) => t.symbol === "USDC" || allowedFlags[i]);
 
   const states: TokenState[] = await Promise.all(
     tokenList.map(async (t) => {
@@ -363,12 +380,12 @@ export class RebalancerService {
     );
     if (instructions.length === 0) {
       log.info({ vault }, "already balanced, skip");
-      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "skip", message: "Portfolio already at target — no swaps needed" });
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "skip", message: "Portfolio on target. No trades needed." });
       return { action: "skip", reason: "balanced" };
     }
     if (!(await this.deps.simulateRebalance(vault, instructions))) {
       log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip — no gas spent");
-      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Swap simulation failed — aborting" });
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Simulation reverted. No trades sent." });
       return { action: "skip", reason: "unsafe" };
     }
 
@@ -457,7 +474,7 @@ export class RebalancerService {
           workflow: "deterministic",
           step: "band-sweep",
           status: "running",
-          message: `Out-of-band after price move: ${breached.join(", ")} — rebalancing to target`,
+          message: `Price shift moved ${breached.join(", ")} out of band. Rebalancing.`,
           data: { breached },
         });
         await this.processVault(vault);

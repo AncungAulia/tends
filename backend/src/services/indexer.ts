@@ -9,6 +9,30 @@ import { rebalancerService } from "./rebalancer.js";
 
 const log = childLogger("indexer");
 
+// Inline ABI event definitions for getLogs calls (backfill)
+const DEPOSIT_EVENT = {
+  name: "Deposit",
+  type: "event",
+  inputs: [
+    { name: "sender", type: "address", indexed: true },
+    { name: "owner", type: "address", indexed: true },
+    { name: "assets", type: "uint256", indexed: false },
+    { name: "shares", type: "uint256", indexed: false },
+  ],
+} as const;
+
+const WITHDRAW_EVENT = {
+  name: "Withdraw",
+  type: "event",
+  inputs: [
+    { name: "sender", type: "address", indexed: true },
+    { name: "receiver", type: "address", indexed: true },
+    { name: "owner", type: "address", indexed: true },
+    { name: "assets", type: "uint256", indexed: false },
+    { name: "shares", type: "uint256", indexed: false },
+  ],
+} as const;
+
 /** Default deposit hook: rebalance the vault now (processVault respects cooldown/pause/balanced). */
 async function defaultTriggerRebalance(vault: `0x${string}`): Promise<void> {
   await rebalancerService.processVault(vault);
@@ -67,7 +91,7 @@ export function toVaultUpsertArgs(rec: VaultRecord): Prisma.VaultUpsertArgs {
         },
       },
     },
-    update: { deployedBlock: rec.deployedBlock },
+    update: { ...(rec.deployedBlock !== null ? { deployedBlock: rec.deployedBlock } : {}) },
   };
 }
 
@@ -186,9 +210,23 @@ export const prismaIndexerRepo: IndexerRepo = {
     await prisma.vault.upsert(toPositionUpsertArgs(vault, owner, shares, assets));
   },
   async subFromPosition(vault, shares) {
-    await prisma.vault.update({
-      where: { address: vault },
-      data: { shares: { decrement: shares.toString() } },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.vault.findUniqueOrThrow({
+        where: { address: vault },
+        select: { shares: true, initialDeposit: true },
+      });
+      const totalShares = BigInt(current.shares.toString());
+      const costBasis = BigInt(current.initialDeposit.toString());
+      const remainingShares = totalShares > shares ? totalShares - shares : 0n;
+      // cost-basis reduced proportionally, not by current value — keeps PnL correct on partial withdraws
+      const newCostBasis = totalShares > 0n ? (costBasis * remainingShares) / totalShares : 0n;
+      await tx.vault.update({
+        where: { address: vault },
+        data: {
+          shares: { decrement: shares.toString() },
+          initialDeposit: newCostBasis.toString(),
+        },
+      });
     });
   },
   async setRiskPreference(vault, update) {
@@ -234,7 +272,63 @@ export class IndexerService {
   async backfillVault(vault: `0x${string}`): Promise<void> {
     const owner = await this.readVaultOwner(vault);
     await this.repo.upsertVault(toVaultRecord(owner, vault, null));
-    log.info({ vault, owner }, "vault backfilled");
+
+    // DRPC free tier: eth_getLogs max 10 000 blocks — paginate in 9 000-block chunks.
+    // fromBlock: stored deployedBlock (most precise) or fallback to last 200 000 blocks.
+    const latest = await publicClient.getBlockNumber();
+    const stored = await prisma.vault.findUnique({
+      where: { address: vault },
+      select: { deployedBlock: true },
+    });
+    const fromBlock = stored?.deployedBlock ?? (latest > 200_000n ? latest - 200_000n : 0n);
+    const PAGE = 9_000n;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getLogsPaged = async (event: any): Promise<any[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const acc: any[] = [];
+      for (let from = fromBlock; from <= latest; from += PAGE) {
+        const to = from + PAGE - 1n > latest ? latest : from + PAGE - 1n;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        acc.push(...((await publicClient.getLogs({ address: vault, event, fromBlock: from, toBlock: to })) as any[]));
+      }
+      return acc;
+    };
+
+    const [depositLogs, withdrawLogs] = await Promise.all([
+      getLogsPaged(DEPOSIT_EVENT),
+      getLogsPaged(WITHDRAW_EVENT),
+    ]);
+
+    let totalDepositedAssets = 0n;
+    let totalDepositedShares = 0n;
+    for (const l of depositLogs) {
+      if (l.args.assets !== undefined && l.args.shares !== undefined) {
+        totalDepositedAssets += BigInt(l.args.assets);
+        totalDepositedShares += BigInt(l.args.shares);
+      }
+    }
+    let totalWithdrawnShares = 0n;
+    for (const l of withdrawLogs) {
+      if (l.args.shares !== undefined) totalWithdrawnShares += BigInt(l.args.shares);
+    }
+
+    if (totalDepositedShares === 0n) {
+      log.info({ vault, owner }, "vault backfilled (no deposits)");
+      return;
+    }
+
+    const currentShares = totalDepositedShares - totalWithdrawnShares;
+    // Proportional cost-basis: portion of deposited assets still held
+    const initialDeposit = (totalDepositedAssets * currentShares) / totalDepositedShares;
+    await prisma.vault.update({
+      where: { address: vault },
+      data: { shares: currentShares.toString(), initialDeposit: initialDeposit.toString() },
+    });
+    log.info(
+      { vault, owner, currentShares: currentShares.toString(), initialDeposit: initialDeposit.toString() },
+      "vault backfilled",
+    );
   }
 
   async onRebalanced(args: {

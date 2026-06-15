@@ -175,8 +175,12 @@ const setAgentGuardrailsTool = createTool({
     "Update the signed-in user's agent GUARDRAILS (safety limits the auto-rebalancer respects). Off-chain, instant, reversible, NO signature. Include ONLY fields to change. Fields: " +
     "autoRebalanceEnabled (pause/resume the agent); " +
     "maxSlippageBps (swap slippage tolerance, 100=1%, 200=2%); " +
+    "maxPerAssetPct (global max allocation % per single token, e.g. 30 = no token can exceed 30% of portfolio; null = default 50%); " +
+    "dailyLimitPerDay (max number of rebalances per day; null = no limit); " +
+    "stopLossEnabled (true/false — enable auto-exit when portfolio drops below stop-loss level); " +
+    "stopLossPct (e.g. 10 = exit all positions if portfolio drops -10% from cost basis; requires stopLossEnabled=true); " +
     "perTokenCapsBps — an independent MAXIMUM per token in bps (3000 = max 30% of portfolio). Each token is a separate ceiling; they do NOT need to sum to 100. e.g. cap sUSDe at 25% → {\"sUSDe\":2500}. This is a safety limit, NOT the strategy allocation; " +
-    "perTokenBandsBps — a drift BAND per token { min, max } in bps. When the token's allocation drifts outside the band (e.g. its price rises so it goes above max, or falls below min), the agent rebalances it back to target — checked right after each price update. e.g. 'keep cmETH between 20% and 30%' → {\"cmETH\":{\"min\":2000,\"max\":3000}}; " +
+    "perTokenBandsBps — a drift BAND per token { min, max } in bps. When the token's allocation drifts outside the band, the agent rebalances it back to target right after each price update. e.g. 'keep cmETH between 20% and 30%' → {\"cmETH\":{\"min\":2000,\"max\":3000}}; " +
     "cadenceSec (min seconds between rebalances); driftThresholdBps (only rebalance if drift exceeds this); notes (free text). " +
     "NOTE: this does NOT change the on-chain risk strategy (that needs the user's signature in the app).",
   inputSchema: z.object({
@@ -184,6 +188,10 @@ const setAgentGuardrailsTool = createTool({
     cadenceSec: z.number().int().nonnegative().nullable().optional(),
     driftThresholdBps: z.number().int().min(0).max(10_000).nullable().optional(),
     maxSlippageBps: z.number().int().min(0).max(5_000).optional(),
+    maxPerAssetPct: z.number().int().min(1).max(100).nullable().optional(),
+    dailyLimitPerDay: z.number().int().min(1).max(100).nullable().optional(),
+    stopLossEnabled: z.boolean().optional(),
+    stopLossPct: z.number().int().min(1).max(99).nullable().optional(),
     perTokenCapsBps: z.record(z.string(), z.number().int().min(0).max(10_000)).nullable().optional(),
     perTokenBandsBps: z
       .record(
