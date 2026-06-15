@@ -1,0 +1,18 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+/broadcast/UpgradeUserVault.s.sol/
+
+# Upgrade scripts (deployment artifacts — run once, not part of core contracts)
+/script/UpgradeUserVault.s.sol
+
+# Docs
+docs/
+
+# Dotenv file
+.env

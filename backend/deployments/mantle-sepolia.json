@@ -1,0 +1,102 @@
+{
+  "network": "Mantle Sepolia",
+  "chainId": 5003,
+  "rpc": "https://rpc.sepolia.mantle.xyz",
+  "explorer": "https://explorer.sepolia.mantle.xyz",
+  "deployedAt": "2026-05-25",
+  "deployer": "0x56A2950ddE6B1040d1DCC4b4C4Fc314Bd56eFB0E",
+  "agentExecutor": "0x3544CC33237DF9c340A3bf7fBa914Fd03B2DfC2a",
+  "mockOracle": "0x26f9178b4082b68D8cC55874D377f9829Fc8C22d",
+
+  "mocks": {
+    "USDC":  "0x29faf6cAFA4BeA1dC7c232f0a1818d4da6b724DD",
+    "mUSD":  "0xADA0466303441102cb16F8eC1594C744d603f746",
+    "USDY":  "0x0D7766158f14ad7bB82d9FD8A47734e801E3F5B8",
+    "mETH":  "0xD89395Df78aaFdF86b330899d1C6189211e88750",
+    "cmETH": "0xb6F57152bC6Ac9cdC7862f8dAe0AAC17f6F5D8fF",
+    "sUSDe": "0xF76DA0ec605CFac82f1DA86080da21316C07d130",
+    "WMNT":  "0x61a4ac2678048ED431E362c14D2eC7A0B3191966"
+  },
+
+  "core": {
+    "PriceFeed":        "0x7F37687840d238fBE7Ff2E66AD9ed458fa689A2A",
+    "AgentActivityLog": "0x864f888330821b6025b2FE670f30E01Ee8776449",
+    "MockDexAdapter":   "0x4c54F58cdbE8159efB71985e1E5289cBdEced2Bd",
+    "StrategyRouter":   "0xb2f36070E6eae3353E8e755172B477DF213ae248",
+    "UserVaultImpl":    "0xfdb083371f44Cf53181350389D3217e51B431776",
+    "VaultFactory":     "0x279B31B00F64C0ce85BCe2Bd7e377CdcAE58d400"
+  },
+
+  "implementations": {
+    "PriceFeed":        "0x020744cC10fEaD789dE205de76A2769B9A4945DE",
+    "AgentActivityLog": "0x56CeD9fD5E49C1Aba1371D7aDe383DD16da76484",
+    "StrategyRouter":   "0xD68968cf68E9930a689e0fC9d648a898050a548A",
+    "VaultFactory":     "0x30c92fFadAd24Ca079227A92A33b78683D36Fde6"
+  },
+
+  "rwa": {
+    "bonds": {
+      "CETES":   "0x1054424a70dae9098babec332e18a0f07d37d251",
+      "GILTS":   "0xbea967ace62d23d335ddad03972659509e1c3559",
+      "KTB":     "0x10d9eb91d0a69098431fb833e666bd64455d45f3",
+      "TESOURO": "0xfda1e869846776e3c182f5e105640ac48d474605"
+    },
+    "commodities": {
+      "URANIUM": "0x1d7939e37e08802a6b86204f8e3c52ba4a6cbfba",
+      "WTI":     "0x932e82632e80b06318ca969e33f99a54f1a04b10",
+      "XAG":     "0xf380e8b6803ad065ef0567dd20c894a55050737c",
+      "XAU":     "0x5b0770513b6cd76bf225462f3ec42783e8da69a1",
+      "XAUt":    "0x0aa42416baccdb2fd4768b61111deb7f7d212f9b",
+      "XCU":     "0xb3e1f06ac529aded2aa20aa38f4c0b4ad317e5f5",
+      "XPT":     "0x62e518611d5a135a50c18e5fcf3a333d6d3a0506"
+    },
+    "funds": {
+      "ACRED": "0x3d85b13c76fc218830e3c0d2e147d1a6b8f3cdc8",
+      "BENJI": "0x56514dcf6e038ba1f77530cb9df01b2f9427ea11",
+      "BUIDL": "0x92cf957248c8a695da67d91835bd02e6371e5bfd",
+      "ONDO":  "0x4e3a788cd351f73d70c85f640758d90d7c573a4d",
+      "VBILL": "0xbc58f30dfaae433f5531a037365c06b98960e54a"
+    },
+    "fx": {
+      "BRL": "0xd568d045d34dca3f4f24be8099a8b90779047b6a",
+      "EUR": "0x781dfd2a2e6b2fb23e10a4b36691520e4bc36e2a",
+      "GBP": "0x2cbc4431d40121faa5b5a6d15240285761128f5a",
+      "IDR": "0x37e11a01f58f973098bef434a34e7fc3be4e3041",
+      "JPY": "0x718c268093b11bea78a9b84861b2e4e96e86c33b",
+      "KRW": "0x42feae1f60b23feb1f5c501977af161116fe3e99",
+      "SGD": "0x039263c8b98f62f7e2debcd277ef3f1f2baf9dce",
+      "TRY": "0x58061565f6f2b5c8322ee3fa2dcd6497d72e5b20"
+    },
+    "indices": {
+      "KOSPI200":  "0xc43bd39225a38ce33751c55c74741834a8e82d16",
+      "NIKKEI225": "0x6289654b4197744800d761a4641ba0c4a79f5ed1",
+      "USA100":    "0x7bb9e063dab0b53fb7b7b438548d5a8c62e3afb7",
+      "USA500":    "0x6956dbbeb8eca1160ae21d2d703cdf6b86525825"
+    },
+    "stocks": {
+      "AAPL":  "0xc2226548fb4332dce1e31dc317bcf61effd51375",
+      "AMZN":  "0x5dbc3c81dbbb39dd865ec27c66abb48150325df1",
+      "GOOGL": "0xdd63da0a5ec0a76029dd49c32de7de73d8918e96",
+      "META":  "0x028ffc7b83ac3ec143bed5a8f14c7e49a356c793",
+      "MSFT":  "0x61d3e9944feff4a17854e408c5ac766a1d9adb63",
+      "NVDA":  "0x6ceaf0d037e628d8c08e1462f628bde4da633813",
+      "PLTR":  "0x56979c925faa2b84637f2991c31fd6b1b33624b0",
+      "TSLA":  "0x9e2dbb4930607e58401c3f55cbe2e0819a8a0523"
+    }
+  },
+
+  "priceFeedConfig": {
+    "staticPrices": {
+      "USDC": "1000000000000000000",
+      "mUSD": "1000000000000000000"
+    },
+    "feedIds": {
+      "USDY":  "USDY",
+      "mETH":  "mETH_FUNDAMENTAL",
+      "cmETH": "cmETH",
+      "sUSDe": "sUSDe",
+      "WMNT":  "MNT"
+    },
+    "maxStaleness": "7200"
+  }
+}

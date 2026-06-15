@@ -1,0 +1,70 @@
+name: Fly Deploy (backend)
+
+# Manual deploy only (auto-deploy on push DISABLED 2026-06-04 — we deploy by hand
+# with `cd backend && fly deploy -c fly.toml` / `-c fly.hermes.toml`).
+# Run from the Actions tab ("Run workflow") if you ever want the CI path back.
+# - tends-api uses fly.toml, tends-hermes uses fly.hermes.toml.
+# Builds run on Fly's remote builders (--remote-only).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      hermes: ${{ steps.filter.outputs.hermes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'backend/src/**'
+              - 'backend/prisma/**'
+              - 'backend/package.json'
+              - 'backend/pnpm-lock.yaml'
+              - 'backend/pnpm-workspace.yaml'
+              - 'backend/Dockerfile'
+              - 'backend/fly.toml'
+              - '.github/workflows/fly-deploy.yml'
+            hermes:
+              - 'backend/src/**'
+              - 'backend/prisma/**'
+              - 'backend/package.json'
+              - 'backend/pnpm-lock.yaml'
+              - 'backend/pnpm-workspace.yaml'
+              - 'backend/hermes/**'
+              - 'backend/fly.hermes.toml'
+              - '.github/workflows/fly-deploy.yml'
+
+  deploy-api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # release_command in fly.toml runs `prisma migrate deploy` before going live.
+      - run: flyctl deploy --remote-only -c fly.toml
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-hermes:
+    needs: changes
+    if: needs.changes.outputs.hermes == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only -c fly.hermes.toml
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

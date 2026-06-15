@@ -1,0 +1,780 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import {
+  TrendingUp,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import Link from "next/link";
+import { motion, AnimatePresence, type Variants } from "motion/react";
+import { TokenIcon, tokenColor } from "@/components/preview/TokenIcon";
+import { DepositModal, WithdrawModal } from "@/components/preview/MoneyModals";
+import SlidingNumber from "@/components/preview/SlidingNumber";
+
+// bento cards settle in one-by-one on first paint
+const BENTO_CONTAINER: Variants = {
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.04 } },
+};
+const BENTO_ITEM: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+/* ──────────────────────────────────────────────────────────
+   Overview page mock — Tends
+   Light theme, Aspekta, blue tones. Mercury-inspired.
+   ────────────────────────────────────────────────────────── */
+
+// ─── Line chart (portfolio value over time) ─────────────────
+
+const CHART_H = 150;
+const PAD = 8;
+
+// 30 days of portfolio value, trending up with variance
+const DATA = [
+  11800, 11820, 11790, 11850, 11910, 11880, 11950, 12010, 11980, 12060, 12040,
+  12110, 12090, 12150, 12200, 12180, 12130, 12090, 12160, 12230, 12280, 12250,
+  12310, 12290, 12350, 12330, 12290, 12360, 12410, 12430,
+];
+
+// indices where agent rebalanced (markers on the line)
+const REBALANCES = [6, 14, 22, 29];
+
+// Catmull-Rom → bezier: smooth curve through the points
+function smoothPath(pts: { x: number; y: number }[]) {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 8;
+    const c1y = p1.y + (p2.y - p0.y) / 8;
+    const c2x = p2.x - (p3.x - p1.x) / 8;
+    const c2y = p2.y - (p3.y - p1.y) / 8;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const DIM = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+// chart data starts May 3; map a point index to its date label
+function dateForIndex(i: number) {
+  let day = 3 + i;
+  let month = 5;
+  while (day > DIM[month - 1]) {
+    day -= DIM[month - 1];
+    month++;
+  }
+  return `${MONTHS[month - 1]} ${day}`;
+}
+
+function PortfolioChart() {
+  const ref = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<SVGPathElement>(null);
+  const [w, setW] = useState(640);
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver((e) => setW(e[0].contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // measured at the real pixel width — no aspect-ratio stretch (keeps the curve crisp)
+  const min = Math.min(...DATA);
+  const max = Math.max(...DATA);
+  const rng = max - min || 1;
+  const nn = DATA.length;
+  const pts = DATA.map((v, i) => ({
+    x: (i / (nn - 1)) * (w - PAD * 2) + PAD,
+    y: CHART_H - PAD - ((v - min) / rng) * (CHART_H - PAD * 2),
+  }));
+  const line = smoothPath(pts);
+  const area = `${line} L${pts[nn - 1].x.toFixed(1)},${CHART_H} L${pts[0].x.toFixed(1)},${CHART_H} Z`;
+
+  // exact y on the smooth curve at a given x (binary search by path length)
+  function yAtX(targetX: number) {
+    const path = lineRef.current;
+    if (!path) return 0;
+    const len = path.getTotalLength();
+    let lo = 0;
+    let hi = len;
+    for (let k = 0; k < 18; k++) {
+      const mid = (lo + hi) / 2;
+      if (path.getPointAtLength(mid).x < targetX) lo = mid;
+      else hi = mid;
+    }
+    return path.getPointAtLength((lo + hi) / 2).y;
+  }
+
+  let hv: { x: number; y: number; value: number; date: string } | null = null;
+  if (hoverX !== null) {
+    const frac = Math.max(0, Math.min(1, (hoverX - PAD) / (w - PAD * 2)));
+    const pos = frac * (nn - 1);
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(nn - 1, i0 + 1);
+    const value = Math.round(DATA[i0] + (DATA[i1] - DATA[i0]) * (pos - i0));
+    hv = {
+      x: hoverX,
+      y: yAtX(hoverX),
+      value,
+      date: dateForIndex(Math.round(pos)),
+    };
+  }
+
+  return (
+    <div ref={ref} className="relative min-w-0">
+      <svg
+        width="100%"
+        height={CHART_H}
+        className="block touch-pan-y"
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setHoverX(
+            Math.max(pts[0].x, Math.min(pts[nn - 1].x, e.clientX - rect.left)),
+          );
+        }}
+        onMouseLeave={() => setHoverX(null)}
+        onTouchStart={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setHoverX(
+            Math.max(
+              pts[0].x,
+              Math.min(pts[nn - 1].x, e.touches[0].clientX - rect.left),
+            ),
+          );
+        }}
+        onTouchMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setHoverX(
+            Math.max(
+              pts[0].x,
+              Math.min(pts[nn - 1].x, e.touches[0].clientX - rect.left),
+            ),
+          );
+        }}
+        onTouchEnd={() => setHoverX(null)}
+      >
+        <defs>
+          <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1591DC" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#1591DC" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.path
+          d={area}
+          fill="url(#fill)"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.45 }}
+        />
+        <motion.path
+          ref={lineRef}
+          d={line}
+          fill="none"
+          stroke="#1591DC"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.1, ease: "easeInOut" }}
+        />
+        {REBALANCES.map((i) => (
+          <circle
+            key={i}
+            cx={pts[i].x}
+            cy={pts[i].y}
+            r="3.5"
+            fill="#fff"
+            stroke="#1591DC"
+            strokeWidth="2"
+          />
+        ))}
+        {hv && (
+          <>
+            <line
+              x1={hv.x}
+              y1={0}
+              x2={hv.x}
+              y2={CHART_H}
+              stroke="#1591DC"
+              strokeOpacity="0.25"
+              strokeWidth="1"
+            />
+            <circle
+              cx={hv.x}
+              cy={hv.y}
+              r="4.5"
+              fill="#1591DC"
+              stroke="#fff"
+              strokeWidth="2"
+            />
+          </>
+        )}
+      </svg>
+      <AnimatePresence>
+        {hv && (
+          <motion.div
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-tip px-3 py-2 text-left shadow-lg"
+            style={{
+              left: Math.max(56, Math.min(w - 56, hv.x)),
+              top: hv.y - 12,
+              transformOrigin: "bottom center",
+            }}
+            initial={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
+            animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
+            exit={{ opacity: 0, scale: 0.9, x: "-50%", y: "-100%" }}
+            transition={{ duration: 0.14, ease: "easeOut" }}
+          >
+            <p className="text-[0.625rem] font-medium text-white/45">
+              Portfolio value
+            </p>
+            <p className="text-sm font-semibold tabular-nums text-white">
+              ${hv.value.toLocaleString("en-US")}
+            </p>
+            <p className="mt-0.5 text-[0.625rem] text-white/50">{hv.date}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function PortfolioCard() {
+  const [range, setRange] = useState("30D");
+  return (
+    <motion.div
+      variants={BENTO_ITEM}
+      className="rounded-2xl border-[1.25px] border-edge bg-card p-5 lg:col-span-2"
+    >
+      <div className="mb-5 flex items-center justify-between">
+        <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-dim">
+          Your Portfolio
+        </p>
+        <div className="flex gap-0.5 rounded-lg bg-panel p-0.5">
+          {["7D", "30D", "90D", "1Y"].map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`rounded-md px-2.5 py-1 text-[0.6875rem] font-medium transition-colors ${
+                range === r
+                  ? "bg-brand-soft text-brand"
+                  : "text-dim hover:text-ink"
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-[210px_1fr]">
+        <div className="flex flex-col justify-center">
+          <p className="hidden text-xs text-dim md:block">
+            Total Portfolio Value
+          </p>
+          <div className="flex items-end gap-2">
+            <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-ink">
+              <span>$</span>
+              <SlidingNumber number={12430.5} decimalPlaces={2} />
+            </p>
+            <p className="mt-2 flex items-center gap-1 text-sm font-medium text-pos">
+              <TrendingUp className="h-4 w-4" strokeWidth={2.2} /> +5.3%
+            </p>
+          </div>
+          <div className="my-5 hidden h-px bg-edge md:block" />
+          <div className="mt-4 flex items-end justify-start gap-2 md:gap-0 md:mt-0 md:block">
+            <p className="flex items-center text-2xl font-semibold tracking-[-0.03em] text-ink">
+              <SlidingNumber number={8.4} decimalPlaces={1} />%
+            </p>
+            <p className="text-xs mb-[2px] text-dim">Estimated APY</p>
+          </div>
+        </div>
+        <div className="md:pl-6">
+          <PortfolioChart />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Holdings ───────────────────────────────────────────────
+
+const HOLDINGS = [
+  {
+    sym: "cmETH",
+    name: "Mantle LST",
+    pct: 30,
+    val: 3729,
+    qty: 1.151,
+    qDec: 3,
+    delta: "+0.8%",
+  },
+  {
+    sym: "sUSDe",
+    name: "Ethena",
+    pct: 22,
+    val: 2735,
+    qty: 2733,
+    qDec: 0,
+    delta: "+0.1%",
+  },
+  {
+    sym: "USDC",
+    name: "Stablecoin",
+    pct: 16,
+    val: 1989,
+    qty: 1989,
+    qDec: 0,
+    delta: "—",
+  },
+  {
+    sym: "mETH",
+    name: "Mantle ETH",
+    pct: 13,
+    val: 1616,
+    qty: 0.505,
+    qDec: 3,
+    delta: "+0.5%",
+  },
+  {
+    sym: "USDY",
+    name: "Ondo yield",
+    pct: 11,
+    val: 1367,
+    qty: 1353,
+    qDec: 0,
+    delta: "+0.2%",
+  },
+  {
+    sym: "WMNT",
+    name: "Wrapped MNT",
+    pct: 8,
+    val: 994,
+    qty: 1228,
+    qDec: 0,
+    delta: "-0.3%",
+  },
+];
+
+function Holdings() {
+  const [hover, setHover] = useState<number | null>(null);
+  const [unit, setUnit] = useState<"usd" | "token">("usd");
+  const [page, setPage] = useState(0);
+  const [dir, setDir] = useState(1);
+
+  const PER = 3;
+  const pages = Math.ceil(HOLDINGS.length / PER);
+  const rows = HOLDINGS.slice(page * PER, page * PER + PER);
+
+  function go(next: number) {
+    setDir(next > page ? 1 : -1);
+    setPage(next);
+  }
+
+  const centerPct =
+    hover === null
+      ? 0
+      : HOLDINGS.slice(0, hover).reduce((s, h) => s + h.pct, 0) +
+        HOLDINGS[hover].pct / 2;
+
+  // which segment sits under a pointer/touch x (drives the bar tooltip on touch)
+  function segAt(clientX: number, rect: DOMRect) {
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let acc = 0;
+    for (let i = 0; i < HOLDINGS.length; i++) {
+      acc += HOLDINGS[i].pct / 100;
+      if (frac <= acc) return i;
+    }
+    return HOLDINGS.length - 1;
+  }
+
+  return (
+    <motion.div
+      variants={BENTO_ITEM}
+      className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5"
+    >
+      {/* header: title + value-unit toggle (no more link out — holdings is "now") */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 truncate text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-dim">
+            Your Holdings
+          </p>
+          <div className="hidden items-center md:flex">
+            <button
+              onClick={() => go(Math.max(0, page - 1))}
+              disabled={page === 0}
+              aria-label="Previous holdings"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-panel disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => go(Math.min(pages - 1, page + 1))}
+              disabled={page === pages - 1}
+              aria-label="Next holdings"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-panel disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-0.5 rounded-lg bg-panel p-0.5 text-[0.6875rem] font-medium">
+          {(["usd", "token"] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => setUnit(u)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                unit === u
+                  ? "bg-brand-soft text-brand"
+                  : "text-dim hover:text-ink"
+              }`}
+            >
+              {u === "usd" ? "$" : "Ξ"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* segmented allocation bar — reflects ALL holdings, not just this page */}
+      <div className="relative">
+        <div
+          className="flex h-6 touch-pan-y md:h-3.5"
+          onTouchStart={(e) =>
+            setHover(
+              segAt(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()),
+            )
+          }
+          onTouchMove={(e) =>
+            setHover(
+              segAt(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()),
+            )
+          }
+          onTouchEnd={() => setHover(null)}
+        >
+          {HOLDINGS.map((h, i) => (
+            <div
+              key={h.sym}
+              style={{
+                flexGrow: h.pct,
+                background: tokenColor(h.sym),
+                marginLeft: i === 0 ? 0 : -5,
+                zIndex: HOLDINGS.length - i,
+              }}
+              className="relative basis-0 cursor-pointer rounded-[3px]"
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+            />
+          ))}
+        </div>
+
+        {/* hover tooltip */}
+        <AnimatePresence>
+          {hover !== null && (
+            <motion.div
+              className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
+              style={{
+                left: `${centerPct}%`,
+                transformOrigin: "bottom center",
+              }}
+              initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
+              animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
+              exit={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+            >
+              <p className="text-xs font-semibold text-white">
+                {HOLDINGS[hover].sym}
+              </p>
+              <p className="text-[0.625rem] text-white/55">
+                {HOLDINGS[hover].pct}% · $
+                {HOLDINGS[hover].val.toLocaleString("en-US")} ·{" "}
+                {HOLDINGS[hover].name}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* paged legend — height follows the 3 rows (both pages have 3) so the
+          card never jumps; popLayout pops the exiting page out of flow during
+          the slide, overflow-hidden clips the horizontal overshoot */}
+      {/* mobile: every holding at once, no pagination */}
+      <div className="mt-3 md:hidden">
+        {HOLDINGS.map((h, i) => (
+          <div
+            key={h.sym}
+            className={`flex items-center gap-3 py-2.5 ${i < HOLDINGS.length - 1 ? "border-b border-edge" : ""}`}
+          >
+            <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-ink">{h.sym}</p>
+              <p className="text-[0.625rem] text-dim">{h.name}</p>
+            </div>
+            <span className="w-10 text-right text-xs font-medium text-dim">
+              {h.pct}%
+            </span>
+            {unit === "usd" ? (
+              <p className="flex w-24 items-center justify-end text-sm font-semibold text-ink">
+                <span>$</span>
+                <SlidingNumber number={h.val} />
+              </p>
+            ) : (
+              <p className="flex w-24 items-center justify-end gap-1 text-sm font-semibold text-ink">
+                <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
+                <span className="text-[0.625rem] font-medium text-faint">
+                  {h.sym}
+                </span>
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* desktop: paged carousel */}
+      <div className="relative mt-3 hidden flex-1 overflow-hidden md:block">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, x: dir * 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: dir * -28 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            {rows.map((h, i) => (
+              <div
+                key={h.sym}
+                className={`flex items-center gap-3 py-2.5 ${i < rows.length - 1 ? "border-b border-edge" : ""}`}
+              >
+                <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-ink">
+                    {h.sym}
+                  </p>
+                  <p className="text-[0.625rem] text-dim">{h.name}</p>
+                </div>
+                <span className="w-10 text-right text-xs font-medium text-dim">
+                  {h.pct}%
+                </span>
+                <div className="w-24 text-right">
+                  {unit === "usd" ? (
+                    <p className="flex items-center justify-end text-sm font-semibold text-ink">
+                      <span>$</span>
+                      <SlidingNumber number={h.val} />
+                    </p>
+                  ) : (
+                    <p className="flex items-center justify-end gap-1 text-sm font-semibold text-ink">
+                      <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
+                      <span className="text-[0.625rem] font-medium text-faint">
+                        {h.sym}
+                      </span>
+                    </p>
+                  )}
+                
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* pager: prev · dots · next */}
+    </motion.div>
+  );
+}
+
+// ─── Your Agent card ────────────────────────────────────────
+
+// type → badge colors, same palette as the Activity page rows
+const ACT_TAG: Record<string, string> = {
+  Rebalance: "bg-brand-soft text-brand",
+  Monitor: "bg-panel text-dim",
+};
+
+// most recent agent activity. time = clock if today, else a relative word.
+const ACTIVITY = [
+  { type: "Rebalance", desc: "Moved 15% cmETH to sUSDe", time: "14:32" },
+  { type: "Monitor", desc: "Conditions stable, held steady", time: "11:05" },
+  { type: "Rebalance", desc: "Shifted 8% USDC to cmETH", time: "Yesterday" },
+];
+
+// agent lifecycle, shown as a single status dot. flip AGENT_STATE to preview.
+//   idle    = on, watching your conditions (primary blue, the resting state)
+//   running = making a move right now (light blue, softer)
+//   paused  = you stopped it (gray)
+const AGENT_STATES = {
+  idle: { label: "Idle", dot: "bg-brand" },
+  running: { label: "Running", dot: "bg-[#8CC8EE]" },
+  paused: { label: "Paused", dot: "bg-[#B4C0CE]" },
+} as const;
+
+const AGENT_STATE: keyof typeof AGENT_STATES = "idle";
+
+function AgentCard() {
+  const state = AGENT_STATES[AGENT_STATE];
+  const running = AGENT_STATE === "running";
+  // animate "Running." → "Running.." → "Running..." while the agent is acting
+  const [dots, setDots] = useState(".");
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(
+      () => setDots((d) => (d.length >= 3 ? "." : d + ".")),
+      450,
+    );
+    return () => clearInterval(id);
+  }, [running]);
+  return (
+    <motion.div
+      variants={BENTO_ITEM}
+      className="flex flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5"
+    >
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-dim">
+            Your Agent
+          </p>
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${state.dot}`} />
+            <span className="text-[0.6875rem] font-medium text-dim">
+              {state.label}
+              {running ? dots : ""}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[0.625rem] uppercase tracking-[0.08em] text-faint">
+            Risk
+          </p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">Medium</p>
+        </div>
+        <div className="flex-1 rounded-xl bg-panel px-4 py-3">
+          <p className="text-[0.625rem] uppercase tracking-[0.08em] text-faint">
+            Next run
+          </p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">
+            in 18 min
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-2">
+        {ACTIVITY.slice(0, 3).map((a, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-3 py-2.5 ${i < 2 ? "border-b border-edge" : ""}`}
+          >
+            <span
+              className={`w-20 shrink-0 rounded-md px-2 py-0.5 text-center text-[0.625rem] font-semibold uppercase tracking-wider ${ACT_TAG[a.type]}`}
+            >
+              {a.type}
+            </span>
+            <span className="flex-1 truncate text-[0.8125rem] text-ink">
+              {a.desc}
+            </span>
+            <span className="shrink-0 text-[0.6875rem] tabular-nums text-faint">
+              {a.time}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href="/preview/activity"
+        className="mt-1 flex items-center justify-center gap-1 border-t border-edge pt-3 text-xs font-medium text-dim transition-colors hover:text-ink"
+      >
+        See more
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Link>
+    </motion.div>
+  );
+}
+
+// ─── Page ───────────────────────────────────────────────────
+
+export default function OverviewPreview() {
+  const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
+  return (
+    <>
+      <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
+        {/* title row — actions live up here now */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="hidden md:block">
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
+              Overview
+            </h1>
+            <p className="mt-1 text-sm text-dim">
+              Where your money sits today.
+            </p>
+          </div>
+          <div className="hidden shrink-0 gap-2 md:flex">
+            <button
+              onClick={() => setModal("withdraw")}
+              className="rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink"
+            >
+              Withdraw
+            </button>
+            <button
+              onClick={() => setModal("deposit")}
+              className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Deposit
+            </button>
+          </div>
+        </div>
+
+        {/* three sections: portfolio (full) · holdings + agent.
+              two cards in the same grid row stay equal height automatically. */}
+        <motion.div
+          className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2"
+          initial="hidden"
+          animate="show"
+          variants={BENTO_CONTAINER}
+        >
+          <PortfolioCard />
+          {/* mobile-only money actions — full width, right under the portfolio card */}
+          <div className="flex gap-3 md:hidden">
+            <button
+              onClick={() => setModal("withdraw")}
+              className="flex-1 rounded-full border-[1.25px] border-edge bg-card py-3 text-sm font-medium text-dim transition-colors hover:text-ink"
+            >
+              Withdraw
+            </button>
+            <button
+              onClick={() => setModal("deposit")}
+              className="flex-1 rounded-full bg-brand py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Deposit
+            </button>
+          </div>
+          <Holdings />
+          <AgentCard />
+        </motion.div>
+      </div>
+      <DepositModal open={modal === "deposit"} onClose={() => setModal(null)} />
+      <WithdrawModal
+        open={modal === "withdraw"}
+        onClose={() => setModal(null)}
+      />
+    </>
+  );
+}
