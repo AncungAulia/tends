@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Sparkles,
   History,
-  Map,
+  SlidersHorizontal,
   User,
   Wallet,
   LogOut,
@@ -22,7 +22,7 @@ const NAV = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/agent",    label: "Agent",    icon: Sparkles },
   { href: "/activity", label: "Activity", icon: History },
-  { href: "/plan",     label: "Plan",     icon: Map },
+  { href: "/setup",    label: "Setup",    icon: SlidersHorizontal },
   { href: "/account",  label: "Account",  icon: User },
 ];
 

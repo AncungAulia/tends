@@ -3,7 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Sparkles, History, Map } from "lucide-react";
+import {
+  LayoutDashboard,
+  Sparkles,
+  History,
+  SlidersHorizontal,
+} from "lucide-react";
 
 /* Mobile bottom navigation (md:hidden). A plain, conventional tab bar — a white
    bar pinned to the bottom with a hairline top border; four icon + label tabs
@@ -15,7 +20,7 @@ const TABS = [
   { label: "Overview", href: "/overview", icon: LayoutDashboard },
   { label: "Agent", href: "/agent", icon: Sparkles },
   { label: "Activity", href: "/activity", icon: History },
-  { label: "Plan", href: "/plan", icon: Map },
+  { label: "Setup", href: "/setup", icon: SlidersHorizontal },
 ];
 
 // hide the bar while a text field is focused (keyboard up) so it never rides
@@ -37,6 +42,10 @@ function useKeyboardOpen() {
       document.documentElement.classList.toggle("kb-open", v);
     };
     const onIn = (e: FocusEvent) => {
+      // desktop has no bottom nav and no on-screen keyboard — skip. Locking
+      // <html> scroll here would jolt the sticky sidebar when a field is
+      // focused after scrolling down.
+      if (window.matchMedia("(min-width: 768px)").matches) return;
       if (isField(e.target)) sync(true);
     };
     const onOut = (e: FocusEvent) => {

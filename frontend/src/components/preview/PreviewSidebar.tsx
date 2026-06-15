@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Sparkles,
   History,
-  Map,
+  SlidersHorizontal,
   User,
   PanelLeftClose,
 } from "lucide-react";
@@ -23,7 +23,7 @@ const NAV = [
   { label: "Overview", href: "/preview/overview", icon: LayoutDashboard },
   { label: "Agent", href: "/preview/agent", icon: Sparkles },
   { label: "Activity", href: "/preview/activity", icon: History },
-  { label: "Plan", href: "/preview/plan", icon: Map },
+  { label: "Setup", href: "/preview/setup", icon: SlidersHorizontal },
   { label: "Account", href: "/preview/account", icon: User },
 ];
 
