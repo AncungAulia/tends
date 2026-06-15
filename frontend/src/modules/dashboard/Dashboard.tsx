@@ -7,6 +7,7 @@ import { useAccount } from "wagmi";
 import { Spinner } from "@/components/elements/Spinner";
 import { useUserVault } from "@/hooks/useUserVault";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useHoldings } from "@/hooks/useHoldings";
 import { ConnectPrompt } from "./component/ConnectPrompt";
 import { PausedBanner } from "./component/PausedBanner";
 import { PortfolioCard } from "./component/PortfolioCard";
@@ -27,12 +28,16 @@ export function Dashboard() {
   const { address } = useAccount();
   const { hasVault, vaultAddress, initialDeposit, refetch: refetchVault } = useUserVault();
   const {
-    totalAssetsUSDC,
     lastRebalanceTime,
     paused,
     isLoading,
     refetch: refetchPortfolio,
   } = usePortfolio(vaultAddress, address);
+
+  const { holdings, isLoading: holdingsLoading } = useHoldings();
+  // Sum per-token values from BE (getPriceUnsafe per token) — more accurate than
+  // totalAssets() which only counts vault's allowedTokens list.
+  const totalAssetsUSDC = holdings.reduce((s, h) => s + Number(h.valueUsd), 0);
 
   const depositUSDC = initialDeposit ? Number(initialDeposit) / 1e6 : 0;
   const deltaPct =
@@ -105,9 +110,9 @@ export function Dashboard() {
           <PortfolioCard
             totalAssetsUSDC={totalAssetsUSDC}
             delta={deltaPct}
-            isLoading={isLoading && !!hasVault}
+            isLoading={(isLoading || holdingsLoading) && !!hasVault}
           />
-          <Holdings vaultAddress={vaultAddress} />
+          <Holdings />
           <AgentCard />
         </motion.div>
       </div>

@@ -4,6 +4,7 @@ import { childLogger } from "../lib/logger.js";
 import { env } from "../config/env.js";
 import {
   mainnetPublicClient,
+  publicClient,
   getAgentWallet,
   activeChain,
 } from "../chain/index.js";
@@ -66,10 +67,12 @@ export interface RelayerDeps {
   fetchRedstoneRaw: (sourceIds: string[]) => Promise<Record<string, number>>;
   /** USDY price (18-dec) from the Ondo mainnet oracle. */
   fetchUsdyWad: () => Promise<bigint>;
-  /** Push a batch to MockOracle; resolves to the tx hash. */
+  /** Push a batch to MockOracle; resolves to the tx hash. Nonce is explicit so
+   *  multi-chunk relays don't all fetch the same "latest" nonce from DRPC. */
   pushPrices: (
     ids: readonly `0x${string}`[],
     values: readonly bigint[],
+    nonce?: number,
   ) => Promise<`0x${string}`>;
 }
 
@@ -111,7 +114,7 @@ export const defaultRelayerDeps: RelayerDeps = {
       functionName: "getPrice",
     });
   },
-  async pushPrices(ids, values) {
+  async pushPrices(ids, values, nonce) {
     const wallet = getAgentWallet();
     return wallet.writeContract({
       address: as0x(addresses.mockOracle),
@@ -120,9 +123,13 @@ export const defaultRelayerDeps: RelayerDeps = {
       args: [ids as `0x${string}`[], values as bigint[]],
       chain: activeChain,
       account: wallet.account!,
+      ...(nonce !== undefined ? { nonce } : {}),
     });
   },
 };
+
+/** Materiality threshold: 200bps = 2% price move triggers band sweep. */
+const MATERIAL_BPS = 200n;
 
 /**
  * Price relayer (handed off to the backend — RELAYER-HANDOFF.md). Mirrors real
@@ -133,7 +140,26 @@ export const defaultRelayerDeps: RelayerDeps = {
  * the scheduler (RELAYER_ENABLED), or one-shot with `pnpm relayer:once`.
  */
 export class RelayerService {
+  private lastPrices = new Map<string, bigint>();
+
   constructor(private readonly deps: RelayerDeps = defaultRelayerDeps) {}
+
+  /**
+   * Returns token ids that moved ≥ MATERIAL_BPS since last relay, then updates cache.
+   * First-ever relay for a token is always treated as non-material (no prior price to diff).
+   */
+  private updateAndFindMaterial(entries: FeedEntry[]): string[] {
+    const moved: string[] = [];
+    for (const { id, wad } of entries) {
+      const prev = this.lastPrices.get(id);
+      if (prev !== undefined && prev > 0n) {
+        const delta = wad > prev ? wad - prev : prev - wad;
+        if (delta * 10_000n >= prev * MATERIAL_BPS) moved.push(id);
+      }
+      this.lastPrices.set(id, wad);
+    }
+    return moved;
+  }
 
   /** Collect all feed entries (USDY + RedStone) without sending. */
   async collectEntries(): Promise<FeedEntry[]> {
@@ -150,8 +176,16 @@ export class RelayerService {
     return [usdy, ...buildRedstoneEntries(raw)];
   }
 
-  /** One relay cycle: collect all sources, push batch to MockOracle. */
-  async relayOnce(): Promise<`0x${string}` | null> {
+  /**
+   * One relay cycle: collect all sources, push to MockOracle in chunks of 10.
+   * Chunking keeps each tx gas cost ~250k vs ~1M for 43 entries at once.
+   * Nonce is fetched once and incremented manually to avoid DRPC returning a
+   * stale "latest" nonce for each chunk (which would cause same-nonce collisions).
+   *
+   * Returns `{ hashes, materialTokens }`: callers use `materialTokens.length > 0`
+   * to decide whether to run a band sweep — avoids sweeping when prices are flat.
+   */
+  async relayOnce(chunkSize = 10): Promise<{ hashes: `0x${string}`[]; materialTokens: string[] } | null> {
     if (!addresses.mockOracle) {
       log.warn("MOCK_ORACLE_ADDRESS not set, skip");
       return null;
@@ -159,12 +193,31 @@ export class RelayerService {
     const entries = await this.collectEntries();
     if (entries.length === 0) return null;
 
-    const hash = await this.deps.pushPrices(
-      entries.map((e) => feedKey(e.id)),
-      entries.map((e) => e.wad),
-    );
-    log.info({ hash, count: entries.length }, "relayed prices → MockOracle");
-    return hash;
+    const materialTokens = this.updateAndFindMaterial(entries);
+    if (materialTokens.length > 0) {
+      log.info({ materialTokens }, "material price move detected");
+    }
+
+    // Fetch pending nonce once so sequential chunks don't clobber each other.
+    let nonce = await publicClient.getTransactionCount({
+      address: getAgentWallet().account!.address,
+      blockTag: "pending",
+    });
+
+    const hashes: `0x${string}`[] = [];
+    for (let i = 0; i < entries.length; i += chunkSize) {
+      const chunk = entries.slice(i, i + chunkSize);
+      const hash = await this.deps.pushPrices(
+        chunk.map((e) => feedKey(e.id)),
+        chunk.map((e) => e.wad),
+        nonce,
+      );
+      hashes.push(hash);
+      log.info({ hash, chunk: Math.floor(i / chunkSize) + 1, count: chunk.length, nonce }, "relayed prices chunk → MockOracle");
+      nonce++;
+    }
+    log.info({ total: entries.length, txs: hashes.length, materialTokens: materialTokens.length }, "relay complete");
+    return { hashes, materialTokens };
   }
 }
 

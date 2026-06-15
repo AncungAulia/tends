@@ -292,6 +292,44 @@ export const USER_VAULT_ABI = [
     outputs: [{ type: "bool" }],
   },
   {
+    name: "setMinRebalanceInterval",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "interval", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "MinRebalanceIntervalUpdated",
+    type: "event",
+    inputs: [
+      { name: "oldInterval", type: "uint256", indexed: false },
+      { name: "newInterval", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "CooldownNotElapsed",
+    type: "error",
+    inputs: [{ name: "availableAt", type: "uint256" }],
+  },
+  {
+    name: "setAllowedToken",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "allowed", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "AllowedTokenUpdated",
+    type: "event",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+      { name: "allowed", type: "bool", indexed: false },
+    ],
+  },
+  {
     name: "rebalance",
     type: "function",
     stateMutability: "nonpayable",

@@ -234,7 +234,7 @@ const scanStep = createStep({
     const userNotes = contextParts.join("\n\n");
 
     log.info({ vault, riskPreference: meta.riskPreference, riskLevel }, "[scan] proceed");
-    emitScan("done", `Vault ready — ${riskLevel} risk mode`, { riskLevel, hasUserNotes: userNotes.length > 0 });
+    emitScan("done", `Vault online: ${riskLevel} strategy active`, { riskLevel, hasUserNotes: userNotes.length > 0 });
     return {
       vaultAddress: inputData.vaultAddress,
       riskPreference: meta.riskPreference,
@@ -269,7 +269,7 @@ const signalStep = createStep({
     const fresh = await defaultRebalancerDeps.arePricesFresh();
     if (!fresh) {
       log.warn({ vault }, "[signal] price feeds stale — skip");
-      emitSignal("skip", "Price feeds are stale — cannot plan safely");
+      emitSignal("skip", "Price feeds stale. Skipping to avoid stale-price trades.");
       return { ...empty, proceed: false, skipReason: "stale" };
     }
 
@@ -314,7 +314,7 @@ const signalStep = createStep({
 
     const liveCount = Object.keys(prices).length;
     log.info({ vault, tokens: liveCount, totalValueUsd: totalValueUsd.toFixed(2) }, "[signal] market data loaded");
-    emitSignal("done", `Loaded ${liveCount} live prices — portfolio $${totalValueUsd.toFixed(2)}`, { liveCount, totalValueUsd });
+    emitSignal("done", `Got ${liveCount} prices. Portfolio value: $${totalValueUsd.toFixed(2)}`, { liveCount, totalValueUsd });
 
     return {
       ...inputData,
@@ -380,7 +380,7 @@ const decideStep = createStep({
         : userPrompt;
 
       if (attempt > 1) {
-        emitDecide("running", `Attempt ${attempt}/${MAX_ATTEMPTS} — fixing validation errors...`);
+        emitDecide("running", `Attempt ${attempt}/${MAX_ATTEMPTS}: correcting allocation...`);
       }
 
       try {
@@ -524,7 +524,7 @@ const execStep = createStep({
     const simOk = await defaultRebalancerDeps.simulateRebalance(vault, instructions);
     if (!simOk) {
       log.warn({ vault, swaps: instructions.length }, "[exec] rebalance would revert (sim) — skip");
-      emitExec("error", "Swap simulation failed — aborting to save gas");
+      emitExec("error", "Swap simulation reverted. Skipping to save gas.");
       return { ...base, outcome: { action: "skip", reason: "unsafe" } };
     }
 
@@ -541,7 +541,7 @@ const execStep = createStep({
           log.warn({ vault, dropBps: dropBps.toString() }, "[exec] stop-loss triggered — liquidating");
           const hash = await defaultRebalancerDeps.sendLiquidate(vault);
           await defaultRebalancerDeps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch(() => {});
-          emitExec("done", `Stop-loss triggered (-${config.stopLossPct}%) — all positions liquidated`, { hash });
+          emitExec("done", `Stop-loss hit (-${config.stopLossPct}%). Exiting all positions.`, { hash });
           return { ...base, outcome: { action: "liquidated", hash } };
         }
       }

@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useAccount, useReadContract } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useActiveWallet } from "./useActiveWallet";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useBackendTx } from "@/hooks/useBackendTx";
@@ -27,7 +28,9 @@ interface Position {
  */
 export function useUserVault() {
   const { getAccessToken, authenticated } = usePrivy();
-  const { address } = useAccount();
+  // The ACTIVE wallet the user selected (Sidebar / Privy modal) — same wallet that
+  // signs txs in useBackendTx, so the vault we detect always matches the signer.
+  const { address } = useActiveWallet();
   const setVaultAddress = useVaultStore((s) => s.setVaultAddress);
 
   const {

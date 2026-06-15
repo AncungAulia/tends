@@ -69,13 +69,9 @@ export function makeChatV2Router(
     const requestContext = new RequestContext<AgentRequestContext>();
     requestContext.set("walletAddress", walletAddress);
 
-    const grounded = walletAddress
-      ? `(I'm signed in${vaultAddress ? " with a deployed vault" : " but have no vault yet"}.)\n\n${parsed.data.message}`
-      : parsed.data.message;
-
     return streamSSE(c, async (s) => {
       try {
-        const stream = await agent.stream(grounded, {
+        const stream = await agent.stream(parsed.data.message, {
           memory: { resource, thread },
           requestContext,
         });

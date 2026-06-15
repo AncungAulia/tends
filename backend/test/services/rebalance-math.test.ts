@@ -4,6 +4,7 @@ import {
   computeSwapInstructions,
   resolveTargetBps,
   applyAllocationCaps,
+  applyExclusions,
   tokensOutOfBand,
   valueUsd,
   type TokenState,
@@ -300,4 +301,38 @@ test("applyAllocationCaps: a band's max edge acts as a hard cap", () => {
     perTokenBandsBps: { cmETH: { min: 2000, max: 3000 } },
   });
   assert.ok((out.get(tsym("cmETH")) ?? 0) <= 3000);
+});
+
+// ── applyExclusions ────────────────────────────────────────────────────────────
+
+test("applyExclusions: empty list is a no-op (same map back)", () => {
+  const target = new Map<TokenSymbol, number>([["mUSD", 4000], ["mETH", 3000], ["cmETH", 3000]]);
+  assert.equal(applyExclusions(target, []), target);
+  assert.equal(applyExclusions(target, null), target);
+  assert.equal(applyExclusions(target, undefined), target);
+});
+
+test("applyExclusions: drops excluded token and renormalizes others to 10000 bps", () => {
+  const target = new Map<TokenSymbol, number>([["mUSD", 4000], ["mETH", 3000], ["cmETH", 3000]]);
+  const out = applyExclusions(target, ["mETH"]);
+  assert.equal(out.has("mETH" as TokenSymbol), false);
+  // remaining 4000 + 3000 = 7000 → mUSD ≈ 4000/7000*10000 ≈ 5714, cmETH ≈ 4286
+  assert.equal(out.get("mUSD" as TokenSymbol), 5714);
+  assert.equal(out.get("cmETH" as TokenSymbol), 4286);
+  let total = 0;
+  for (const v of out.values()) total += v;
+  assert.equal(total, 10_000, "must conserve to exactly 10000 bps");
+});
+
+test("applyExclusions: excluding everything returns empty map (caller treats as USDC)", () => {
+  const target = new Map<TokenSymbol, number>([["mUSD", 5000], ["mETH", 5000]]);
+  const out = applyExclusions(target, ["mUSD", "mETH"]);
+  assert.equal(out.size, 0);
+});
+
+test("applyExclusions: excluding a token NOT in the target is a no-op shape (no renorm)", () => {
+  const target = new Map<TokenSymbol, number>([["mUSD", 9000], ["USDY", 1000]]);
+  const out = applyExclusions(target, ["mETH"]); // not present
+  assert.equal(out.get("mUSD" as TokenSymbol), 9000);
+  assert.equal(out.get("USDY" as TokenSymbol), 1000);
 });

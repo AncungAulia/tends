@@ -10,12 +10,20 @@ const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "invalid address");
 export type UpsertUser = (privyId: string, walletAddress: string) => Promise<void>;
 
 export const prismaUpsertUser: UpsertUser = async (privyId, walletAddress) => {
+  // Case-insensitive lookup so we link the privyId to an existing record even
+  // when the incoming address case (lower/checksummed) differs from how it was
+  // first stored (e.g. legacy users created via on-chain detection in EIP-55).
+  const existing = await prisma.user.findFirst({
+    where: { walletAddress: { equals: walletAddress, mode: "insensitive" } },
+    select: { walletAddress: true },
+  });
+  const target = existing?.walletAddress ?? walletAddress;
   await prisma.$transaction([
     // A Privy account can only belong to one wallet — clear it from any other record first.
-    prisma.user.updateMany({ where: { privyId, NOT: { walletAddress } }, data: { privyId: null } }),
+    prisma.user.updateMany({ where: { privyId, NOT: { walletAddress: target } }, data: { privyId: null } }),
     prisma.user.upsert({
-      where: { walletAddress },
-      create: { walletAddress, privyId },
+      where: { walletAddress: target },
+      create: { walletAddress: target, privyId },
       update: { privyId },
     }),
   ]);

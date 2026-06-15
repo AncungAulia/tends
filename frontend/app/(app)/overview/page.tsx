@@ -12,11 +12,13 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useUserVault } from "@/hooks/useUserVault";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { useVaultHoldings } from "@/hooks/useVaultHoldings";
+import { useHoldings } from "@/hooks/useHoldings";
 import { useActivity, type ActivityEntry } from "@/hooks/useActivityLog";
 import { useStrategies } from "@/hooks/useStrategies";
 import { useVaultStore } from "@/hooks/useVaultStore";
 import { apiFetch } from "@/lib/api";
+import { ConnectPrompt } from "@/modules/dashboard/component/ConnectPrompt";
+import { Spinner } from "@/components/elements/Spinner";
 
 /* ──────────────────────────────────────────────────────────
    Overview page — Tends
@@ -209,12 +211,21 @@ function PortfolioChart({
       <svg
         width="100%"
         height={CHART_H}
-        className="block"
+        className="block touch-pan-y"
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           setHoverX(Math.max(pts[0].x, Math.min(pts[nn - 1].x, e.clientX - rect.left)));
         }}
         onMouseLeave={() => setHoverX(null)}
+        onTouchStart={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setHoverX(Math.max(pts[0].x, Math.min(pts[nn - 1].x, e.touches[0].clientX - rect.left)));
+        }}
+        onTouchMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setHoverX(Math.max(pts[0].x, Math.min(pts[nn - 1].x, e.touches[0].clientX - rect.left)));
+        }}
+        onTouchEnd={() => setHoverX(null)}
       >
         <defs>
           <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
@@ -284,7 +295,7 @@ function PortfolioCard() {
   const { getAccessToken } = usePrivy();
   const { vaultAddress, initialDeposit } = useUserVault();
   const { totalAssetsUSDC, riskPreference } = usePortfolio(vaultAddress, address);
-  const { totalValueUSD } = useVaultHoldings(vaultAddress);
+  const { totalValueUSD } = useHoldings();
   const { strategies } = useStrategies();
   const { activities } = useActivity();
   const [range, setRange] = useState("30D");
@@ -366,7 +377,7 @@ function PortfolioCard() {
 
       <div className="grid gap-6 md:grid-cols-[210px_1fr]">
         <div className="flex flex-col justify-center">
-          <p className="text-xs text-dim">Total Portfolio Value</p>
+          <p className="hidden text-xs text-dim md:block">Total Portfolio Value</p>
           <div className="flex items-end gap-2">
             <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-ink">
               <span>$</span>
@@ -381,17 +392,19 @@ function PortfolioCard() {
               </p>
             )}
           </div>
-          <div className="my-5 h-px bg-edge" />
-          <p className="text-xs text-dim">Estimated APY</p>
-          <p className="flex items-center text-2xl font-semibold tracking-[-0.03em] text-ink">
-            {apy != null ? (
-              <><SlidingNumber number={apy} decimalPlaces={1} />%</>
-            ) : (
-              <span className="text-faint">—</span>
-            )}
-          </p>
+          <div className="my-5 hidden h-px bg-edge md:block" />
+          <div className="mt-4 flex items-end justify-start gap-2 md:mt-0 md:block md:gap-0">
+            <p className="flex items-center text-2xl font-semibold tracking-[-0.03em] text-ink">
+              {apy != null ? (
+                <><SlidingNumber number={apy} decimalPlaces={1} />%</>
+              ) : (
+                <span className="text-faint">—</span>
+              )}
+            </p>
+            <p className="mb-[2px] text-xs text-dim">Estimated APY</p>
+          </div>
         </div>
-        <div className="pl-6">
+        <div className="md:pl-6">
           <AnimatePresence mode="wait">
             <PortfolioChart key={range} data={chartData} range={range} />
           </AnimatePresence>
@@ -404,21 +417,20 @@ function PortfolioCard() {
 // ─── Holdings ────────────────────────────────────────────
 
 function Holdings() {
-  const vaultAddress = useVaultStore((s) => s.vaultAddress);
-  const { holdings, totalValueUSD, isLoading } = useVaultHoldings(vaultAddress);
+  const { holdings, isLoading } = useHoldings();
   const [hover, setHover] = useState<number | null>(null);
   const [unit, setUnit] = useState<"usd" | "token">("usd");
   const [page, setPage] = useState(0);
   const [dir, setDir] = useState(1);
 
   const allHoldings = holdings
-    .filter((h) => (h.valueUSD ?? 0) >= 0.01)
+    .filter((h) => Number(h.valueUsd) >= 0.01)
     .map((h) => ({
       sym: h.symbol,
-      pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 1000) / 10 : 0,
-      val: h.valueUSD ?? 0,
-      qty: h.balanceHuman,
-      qDec: h.decimals === 6 ? 2 : 4,
+      pct: h.allocationPct,
+      val: Number(h.valueUsd),
+      qty: Number(h.balance),
+      qDec: 4,
     }));
 
   const PER = 3;
@@ -428,6 +440,17 @@ function Holdings() {
   function go(next: number) {
     setDir(next > page ? 1 : -1);
     setPage(next);
+  }
+
+  // which segment sits under a pointer/touch x (drives the bar tooltip on touch)
+  function segAt(clientX: number, rect: DOMRect) {
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let acc = 0;
+    for (let i = 0; i < allHoldings.length; i++) {
+      acc += allHoldings[i].pct / 100;
+      if (frac <= acc) return i;
+    }
+    return allHoldings.length - 1;
   }
 
   const centerPct =
@@ -447,7 +470,7 @@ function Holdings() {
           <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-dim">
             Your Holdings
           </p>
-          <div className="flex items-center justify-center gap-0">
+          <div className="hidden items-center md:flex">
             <button
               onClick={() => go(Math.max(0, page - 1))}
               disabled={page === 0}
@@ -456,15 +479,15 @@ function Holdings() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
+            <button
+              onClick={() => go(Math.min(pages - 1, page + 1))}
+              disabled={page === pages - 1}
+              aria-label="Next holdings"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-app disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={() => go(Math.min(pages - 1, page + 1))}
-            disabled={page === pages - 1}
-            aria-label="Next holdings"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-dim transition-colors hover:bg-app disabled:opacity-30 disabled:hover:bg-transparent"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
         </div>
         <div className="flex shrink-0 gap-0.5 rounded-lg bg-app p-0.5 text-[11px] font-medium">
           {(["usd", "token"] as const).map((u) => (
@@ -491,7 +514,16 @@ function Holdings() {
         <>
           {/* segmented allocation bar — all holdings, not just this page */}
           <div className="relative">
-            <div className="flex h-6 md:h-3.5">
+            <div
+              className="flex h-6 touch-pan-y md:h-3.5"
+              onTouchStart={(e) =>
+                setHover(segAt(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()))
+              }
+              onTouchMove={(e) =>
+                setHover(segAt(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()))
+              }
+              onTouchEnd={() => setHover(null)}
+            >
               {allHoldings.map((h, i) => (
                 <div
                   key={h.sym}
@@ -526,8 +558,39 @@ function Holdings() {
             </AnimatePresence>
           </div>
 
-          {/* paged legend */}
-          <div className="relative mt-3 flex-1 overflow-hidden">
+          {/* mobile: every holding at once, no pagination */}
+          <div className="mt-3 md:hidden">
+            {allHoldings.map((h, i) => (
+              <div
+                key={h.sym}
+                className={`flex items-center gap-3 py-2.5 ${i < allHoldings.length - 1 ? "border-b border-edge" : ""}`}
+              >
+                <TokenIcon sym={h.sym} color={tokenColor(h.sym)} />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-ink">{h.sym}</p>
+                </div>
+                <span className="w-10 text-right text-xs font-medium text-dim">
+                  {h.pct.toFixed(1)}%
+                </span>
+                <div className="w-24 text-right">
+                  {unit === "usd" ? (
+                    <p className="flex items-center justify-end text-sm font-semibold text-ink">
+                      <span>$</span>
+                      <SlidingNumber number={h.val} decimalPlaces={2} />
+                    </p>
+                  ) : (
+                    <p className="flex items-center justify-end gap-1 text-sm font-semibold text-ink">
+                      <SlidingNumber number={h.qty} decimalPlaces={h.qDec} />
+                      <span className="text-[10px] font-medium text-faint">{h.sym}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* desktop: paged carousel */}
+          <div className="relative mt-3 hidden flex-1 overflow-hidden md:block">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
                 key={page}
@@ -683,16 +746,34 @@ function AgentCard() {
 // ─── Page ────────────────────────────────────────────────
 
 export default function OverviewPage() {
+  const { ready, authenticated, login } = usePrivy();
+  const { address } = useAccount();
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // Privy authenticated but wallet not connected → still gate the dashboard.
+  // BE serves vault data based on Privy ID, so without an active wallet the
+  // numbers shown would be misleading (and the user can't sign tx anyway).
+  if (!authenticated || !address) {
+    return <ConnectPrompt onConnect={login} />;
+  }
+
   return (
     <>
       <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
+          <div className="hidden md:block">
             <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">Overview</h1>
             <p className="mt-1 text-sm text-dim">Where your money sits today.</p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="hidden shrink-0 gap-2 md:flex">
             <button
               onClick={() => setModal("withdraw")}
               className="rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink"
@@ -715,6 +796,21 @@ export default function OverviewPage() {
           variants={BENTO_CONTAINER}
         >
           <PortfolioCard />
+          {/* mobile-only money actions — full width, right under the portfolio card */}
+          <div className="flex gap-3 md:hidden">
+            <button
+              onClick={() => setModal("withdraw")}
+              className="flex-1 rounded-full border-[1.25px] border-edge bg-card py-3 text-sm font-medium text-dim transition-colors hover:text-ink"
+            >
+              Withdraw
+            </button>
+            <button
+              onClick={() => setModal("deposit")}
+              className="flex-1 rounded-full bg-brand py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Deposit
+            </button>
+          </div>
           <Holdings />
           <AgentCard />
         </motion.div>

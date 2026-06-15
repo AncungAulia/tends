@@ -14,6 +14,7 @@ import {
   computeSwapInstructions,
   resolveTargetBps,
   applyAllocationCaps,
+  applyExclusions,
   tokensOutOfBand,
   driftFloorWad,
   valueUsd,
@@ -28,11 +29,50 @@ import {
 import { prisma } from "../db/client.js";
 import { agentLogEmitter } from "./agent-log-emitter.js";
 import { readHoldings } from "./holdings.js";
+import { wsHub } from "../ws/hub.js";
+
+// ── AgentRun logging ─────────────────────────────────────────────────────────
+
+type RunKind = "MONITOR" | "REBALANCE" | "LIQUIDATED";
+type RunOutcome =
+  | "BALANCED" | "COOLDOWN" | "PAUSED" | "DISABLED" | "STALE"
+  | "DAILY_LIMIT" | "UNSAFE" | "REBALANCED" | "LIQUIDATED";
+
+function outcomeFromVaultOutcome(o: VaultOutcome): { kind: RunKind; outcome: RunOutcome } {
+  if (o.action === "rebalanced") return { kind: "REBALANCE", outcome: "REBALANCED" };
+  if (o.action === "liquidated") return { kind: "LIQUIDATED", outcome: "LIQUIDATED" };
+  const map: Record<typeof o.reason, RunOutcome> = {
+    balanced: "BALANCED", cooldown: "COOLDOWN", paused: "PAUSED",
+    disabled: "DISABLED", stale: "STALE", daily_limit: "DAILY_LIMIT", unsafe: "UNSAFE",
+  };
+  return { kind: "MONITOR", outcome: map[o.reason] };
+}
+
+async function writeAgentRun(
+  vault: string,
+  outcome: VaultOutcome,
+  startedAt: Date,
+  holdings: { symbol: string; allocationPct: number }[],
+  extra?: { swaps?: number; txHash?: string },
+): Promise<void> {
+  const { kind, outcome: outcomeStr } = outcomeFromVaultOutcome(outcome);
+  await prisma.agentRun.create({
+    data: {
+      vaultAddress: vault,
+      kind,
+      outcome: outcomeStr,
+      driftBps: null,
+      details: { holdings, ...(extra ?? {}) },
+      startedAt,
+      finishedAt: new Date(),
+    },
+  }).catch(() => {}); // non-critical — never let logging break the rebalancer
+}
 
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
   AgentConfigValue,
-  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps" | "maxPerAssetPct"
+  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps" | "maxPerAssetPct" | "excludedTokens"
 >;
 
 const log = childLogger("rebalancer");
@@ -101,7 +141,24 @@ export async function defaultBuildInstructions(
   risk: number,
   guardrails: Guardrails = DEFAULT_AGENT_CONFIG,
 ): Promise<SwapInstruction[]> {
-  const tokenList = Object.values(TOKENS).filter((t) => t.address);
+  // Only plan swaps for tokens the vault actually allows — prevents TokenNotAllowed revert
+  // on vaults that haven't had addAllowedTokens called yet (e.g. old implementations).
+  const allTokens = Object.values(TOKENS).filter((t) => t.address);
+  const IS_ALLOWED_ABI = [
+    { name: "isAllowedToken", type: "function", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "bool" }] },
+  ] as const;
+  const allowedFlags = await Promise.all(
+    allTokens.map((t) =>
+      publicClient.readContract({
+        address: vault,
+        abi: IS_ALLOWED_ABI,
+        functionName: "isAllowedToken",
+        args: [as0x(t.address)],
+      }).catch(() => false),
+    ),
+  );
+  // USDC is always included — it's the vault asset and implicitly tradeable, not in isAllowedToken
+  const tokenList = allTokens.filter((t, i) => t.symbol === "USDC" || allowedFlags[i]);
 
   const states: TokenState[] = await Promise.all(
     tokenList.map(async (t) => {
@@ -140,6 +197,10 @@ export async function defaultBuildInstructions(
   }
 
   let targetBps = resolveTargetBps(risk as 0 | 1 | 2 | 3, custom);
+
+  // Honor the user's "Avoid" list FIRST — those tokens never enter the plan.
+  // Caps are applied AFTER so the renormalized weights are the ones being clamped.
+  targetBps = applyExclusions(targetBps, guardrails.excludedTokens);
 
   // Clamp to the user's per-asset ceiling + per-token caps (shared with executeDirectSwap).
   targetBps = applyAllocationCaps(targetBps, guardrails);
@@ -296,6 +357,9 @@ export const defaultRebalancerDeps: RebalancerDeps = {
  * allocation, build SwapInstruction[] off-chain, then call vault.rebalance().
  */
 export class RebalancerService {
+  /** Per-vault timestamp of last sweepBands trigger (ms). */
+  private vaultLastSwept = new Map<string, number>();
+
   constructor(private readonly deps: RebalancerDeps = defaultRebalancerDeps) {}
 
   listVaults(): Promise<`0x${string}`[]> {
@@ -304,6 +368,34 @@ export class RebalancerService {
 
   /** Decide + (maybe) execute a rebalance for one vault. */
   async processVault(vault: `0x${string}`): Promise<VaultOutcome> {
+    const startedAt = new Date();
+    wsHub.broadcast({ type: "agent_run_start", vault });
+
+    const outcome = await this._processVaultInner(vault);
+
+    const { kind, outcome: outcomeStr } = outcomeFromVaultOutcome(outcome);
+    wsHub.broadcast({
+      type: "agent_run_done",
+      vault,
+      kind,
+      outcome: outcomeStr,
+      ...(outcome.action === "rebalanced" ? { txHash: outcome.hash, swaps: outcome.swaps } : {}),
+      ...(outcome.action === "liquidated" ? { txHash: outcome.hash } : {}),
+    });
+
+    // Log every cycle (HOLD/SKIP/REBALANCE) — best-effort, never throws.
+    const { holdings } = await this.deps.readHoldings(vault).catch(() => ({ holdings: [] }));
+    const extra = outcome.action === "rebalanced"
+      ? { swaps: outcome.swaps, txHash: outcome.hash }
+      : outcome.action === "liquidated"
+        ? { txHash: outcome.hash }
+        : undefined;
+    void writeAgentRun(vault, outcome, startedAt, holdings, extra);
+
+    return outcome;
+  }
+
+  private async _processVaultInner(vault: `0x${string}`): Promise<VaultOutcome> {
     const [meta, config] = await Promise.all([
       this.deps.readVaultMeta(vault),
       this.deps.readAgentConfig(vault),
@@ -320,6 +412,10 @@ export class RebalancerService {
     const now = this.deps.now();
     if (config.cadenceSec != null && now < meta.lastRebalanceTime + BigInt(config.cadenceSec)) {
       log.info({ vault }, "off-chain cadence not elapsed, skip");
+      return { action: "skip", reason: "cooldown" };
+    }
+    if (meta.minRebalanceInterval > 0n && now < meta.lastRebalanceTime + meta.minRebalanceInterval) {
+      log.info({ vault }, "on-chain minRebalanceInterval not elapsed, skip");
       return { action: "skip", reason: "cooldown" };
     }
     if (!(await this.deps.arePricesFresh())) {
@@ -363,12 +459,12 @@ export class RebalancerService {
     );
     if (instructions.length === 0) {
       log.info({ vault }, "already balanced, skip");
-      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "skip", message: "Portfolio already at target — no swaps needed" });
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "skip", message: "Portfolio on target. No trades needed." });
       return { action: "skip", reason: "balanced" };
     }
     if (!(await this.deps.simulateRebalance(vault, instructions))) {
       log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip — no gas spent");
-      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Swap simulation failed — aborting" });
+      agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Simulation reverted. No trades sent." });
       return { action: "skip", reason: "unsafe" };
     }
 
@@ -443,21 +539,29 @@ export class RebalancerService {
    * target. processVault keeps all the usual guards (pause/stale/caps/daily-limit/simulate).
    */
   async sweepBands(): Promise<void> {
+    const DEBOUNCE_MS = 30_000;
+    const now = Date.now();
     const vaults = await this.deps.listVaults();
     for (const vault of vaults) {
       try {
+        const lastSwept = this.vaultLastSwept.get(vault) ?? 0;
+        if (now - lastSwept < DEBOUNCE_MS) {
+          log.debug({ vault, msSinceLastSweep: now - lastSwept }, "band sweep debounced");
+          continue;
+        }
         const config = await this.deps.readAgentConfig(vault);
         if (!config.autoRebalanceEnabled || !config.perTokenBandsBps) continue;
         const { holdings } = await this.deps.readHoldings(vault);
         const breached = tokensOutOfBand(holdings, config.perTokenBandsBps);
         if (breached.length === 0) continue;
+        this.vaultLastSwept.set(vault, now);
         log.info({ vault, breached }, "token(s) out of band after price update — rebalancing");
         agentLogEmitter.log({
           vaultAddress: vault,
           workflow: "deterministic",
           step: "band-sweep",
           status: "running",
-          message: `Out-of-band after price move: ${breached.join(", ")} — rebalancing to target`,
+          message: `Price shift moved ${breached.join(", ")} out of band. Rebalancing.`,
           data: { breached },
         });
         await this.processVault(vault);
