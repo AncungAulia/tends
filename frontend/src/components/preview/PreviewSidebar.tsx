@@ -72,16 +72,16 @@ export function PreviewSidebar() {
               no theme-dependent JS / hydration flash) */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/icon/tends-black.svg"
+            src="/icon/Black-Tends.svg"
             alt="Tends"
-            className="h-4 w-4 shrink-0 dark:hidden"
+            className="h-4 w-auto shrink-0 dark:hidden"
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/icon/tends-white.svg"
+            src="/icon/White-Tends.svg"
             alt=""
             aria-hidden
-            className="hidden h-4 w-4 shrink-0 dark:block"
+            className="hidden h-4 w-auto shrink-0 dark:block"
           />
           {!collapsed && (
             <span className="whitespace-nowrap text-lg font-bold tracking-tight text-ink">

@@ -570,7 +570,7 @@ export function AgentChat() {
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-6 w-auto" />
+                <img src="/icon/White-Tends.svg" alt="Tends Agent" className="h-6 w-auto" />
               </div>
               <p className="mt-4 text-base font-semibold text-ink">
                 Watching the market for you. Ask me anything.
@@ -604,7 +604,7 @@ export function AgentChat() {
                   <div key={m.id} className="flex gap-2.5">
                     <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
+                      <img src="/icon/White-Tends.svg" alt="Tends Agent" className="h-3.5 w-auto" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <AgentMessage
@@ -621,7 +621,7 @@ export function AgentChat() {
                 <div className="flex gap-2.5">
                   <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
+                    <img src="/icon/White-Tends.svg" alt="Tends Agent" className="h-3.5 w-auto" />
                   </div>
                   <div className="flex items-center gap-2 rounded-2xl bg-panel px-3 py-3">
                     {status ? (
