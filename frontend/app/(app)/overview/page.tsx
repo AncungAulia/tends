@@ -12,11 +12,13 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useUserVault } from "@/hooks/useUserVault";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { useVaultHoldings } from "@/hooks/useVaultHoldings";
+import { useHoldings } from "@/hooks/useHoldings";
 import { useActivity, type ActivityEntry } from "@/hooks/useActivityLog";
 import { useStrategies } from "@/hooks/useStrategies";
 import { useVaultStore } from "@/hooks/useVaultStore";
 import { apiFetch } from "@/lib/api";
+import { ConnectPrompt } from "@/modules/dashboard/component/ConnectPrompt";
+import { Spinner } from "@/components/elements/Spinner";
 
 /* ──────────────────────────────────────────────────────────
    Overview page — Tends
@@ -284,7 +286,7 @@ function PortfolioCard() {
   const { getAccessToken } = usePrivy();
   const { vaultAddress, initialDeposit } = useUserVault();
   const { totalAssetsUSDC, riskPreference } = usePortfolio(vaultAddress, address);
-  const { totalValueUSD } = useVaultHoldings(vaultAddress);
+  const { totalValueUSD } = useHoldings();
   const { strategies } = useStrategies();
   const { activities } = useActivity();
   const [range, setRange] = useState("30D");
@@ -404,21 +406,20 @@ function PortfolioCard() {
 // ─── Holdings ────────────────────────────────────────────
 
 function Holdings() {
-  const vaultAddress = useVaultStore((s) => s.vaultAddress);
-  const { holdings, totalValueUSD, isLoading } = useVaultHoldings(vaultAddress);
+  const { holdings, isLoading } = useHoldings();
   const [hover, setHover] = useState<number | null>(null);
   const [unit, setUnit] = useState<"usd" | "token">("usd");
   const [page, setPage] = useState(0);
   const [dir, setDir] = useState(1);
 
   const allHoldings = holdings
-    .filter((h) => (h.valueUSD ?? 0) >= 0.01)
+    .filter((h) => Number(h.valueUsd) >= 0.01)
     .map((h) => ({
       sym: h.symbol,
-      pct: totalValueUSD > 0 ? Math.round(((h.valueUSD ?? 0) / totalValueUSD) * 1000) / 10 : 0,
-      val: h.valueUSD ?? 0,
-      qty: h.balanceHuman,
-      qDec: h.decimals === 6 ? 2 : 4,
+      pct: h.allocationPct,
+      val: Number(h.valueUsd),
+      qty: Number(h.balance),
+      qDec: 4,
     }));
 
   const PER = 3;
@@ -683,7 +684,25 @@ function AgentCard() {
 // ─── Page ────────────────────────────────────────────────
 
 export default function OverviewPage() {
+  const { ready, authenticated, login } = usePrivy();
+  const { address } = useAccount();
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // Privy authenticated but wallet not connected → still gate the dashboard.
+  // BE serves vault data based on Privy ID, so without an active wallet the
+  // numbers shown would be misleading (and the user can't sign tx anyway).
+  if (!authenticated || !address) {
+    return <ConnectPrompt onConnect={login} />;
+  }
+
   return (
     <>
       <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
