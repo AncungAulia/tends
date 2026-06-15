@@ -86,7 +86,13 @@ export default function OnboardingPage() {
       )}
 
       {step === 4 && (
-        <OnboardingResult name={answers.name} risk={risk} stopLoss={stopLoss} ctaHref="/overview" />
+        <OnboardingResult
+          name={answers.name}
+          goal={answers.goal}
+          dips={answers.dips}
+          risk={risk}
+          stopLoss={stopLoss}
+        />
       )}
     </OnboardingShell>
   );
