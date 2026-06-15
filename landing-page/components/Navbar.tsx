@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useIsMobile } from "@/lib/useIsMobile";
 
+const APP_URL = "https://app.tends.fun";
+
 export default function Navbar() {
   const navRef  = useRef<HTMLElement>(null);
   const logoRef = useRef<HTMLSpanElement>(null);
@@ -94,7 +96,7 @@ export default function Navbar() {
         }}
       >
         <a
-          href="/app"
+          href={APP_URL}
           onMouseEnter={() => setBtnHovered(true)}
           onMouseLeave={() => setBtnHovered(false)}
           style={{

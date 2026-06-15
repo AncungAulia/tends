@@ -82,7 +82,28 @@ export default function HeroSection() {
         entryDone.current = true;
       });
 
+    const restoreFromHistory = (event: PageTransitionEvent) => {
+      const navEntry = performance.getEntriesByType("navigation")[0] as
+        | PerformanceNavigationTiming
+        | undefined;
+      if (!event.persisted && navEntry?.type !== "back_forward") return;
+
+      tl.progress(1).kill();
+      entryDone.current = true;
+      gsap.set(loadOverlayRef.current, { autoAlpha: 0 });
+      gsap.set(videoBgRef.current, { scale: 1, autoAlpha: 1 });
+      gsap.set(videoInnerRef.current, { borderRadius: "20px" });
+      gsap.set(
+        [line1Ref.current, line2Ref.current, subRef.current, btnsRef.current],
+        { yPercent: 0 },
+      );
+      window.scrollTo(0, 0);
+    };
+
+    window.addEventListener("pageshow", restoreFromHistory);
+
     return () => {
+      window.removeEventListener("pageshow", restoreFromHistory);
       tl.kill();
     };
   }, []);
