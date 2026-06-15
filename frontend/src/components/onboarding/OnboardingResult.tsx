@@ -38,7 +38,7 @@ type Phase = "idle" | "deploying" | "saving" | "strategy" | "error";
  */
 export function OnboardingResult({ name, goal, dips, risk }: Props) {
   const router = useRouter();
-  const { getAccessToken, connectWallet } = usePrivy();
+  const { getAccessToken } = usePrivy();
   const { address: activeAddress } = useActiveWallet();
   const { deployVault, vaultAddress, hasVault, error: deployError } = useUserVault();
   const { setStrategy } = useRiskLevel(vaultAddress);
@@ -140,36 +140,21 @@ export function OnboardingResult({ name, goal, dips, risk }: Props) {
 
       <VaultCard name={name} risk={risk} />
 
-      {/* Which wallet will deploy — let the user pick BEFORE signing (they may have
-          several: Rabby / MetaMask / Phantom / …). "Change" opens the same Privy
-          connect flow as the Sidebar; the chosen wallet becomes active and signs. */}
-      <div className="mt-4 flex items-center justify-between rounded-xl border border-[#E8EAEC] px-3.5 py-2.5">
-        <span className="truncate text-sm text-[#5B7490]">
-          {activeAddress ? (
-            <>
-              Using <span className="font-medium text-ink">{shortAddr(activeAddress)}</span>
-            </>
-          ) : (
-            "No wallet connected"
-          )}
-        </span>
-        <button
-          type="button"
-          onClick={() => connectWallet()}
-          disabled={busy}
-          className="ml-3 shrink-0 text-sm font-semibold text-[#1591DC] transition-opacity hover:opacity-80 disabled:opacity-50"
-        >
-          {activeAddress ? "Change" : "Connect Wallet"}
-        </button>
-      </div>
+      {/* The wallet was already connected at step 0 (single connect point) and persists
+          here via useActiveWallet — no second connect. Just show which one will deploy. */}
+      {activeAddress && (
+        <p className="mt-3 text-center text-xs text-[#5B7490]">
+          Deploying with {shortAddr(activeAddress)}
+        </p>
+      )}
 
-      {errMsg && <p className="mt-3 text-center text-sm text-red-500">{errMsg}</p>}
+      {errMsg && <p className="mt-2 text-center text-sm text-red-500">{errMsg}</p>}
 
       <button
         type="button"
         onClick={start}
         disabled={busy || !activeAddress}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
       >
         {label}
       </button>
