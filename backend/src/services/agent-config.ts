@@ -17,10 +17,16 @@ export interface AgentConfigValue {
   dailyLimitPerDay: number | null;
   stopLossEnabled: boolean;
   stopLossPct: number | null;
+  /** Tokens the agent must NOT hold — dropped from target & redistributed. */
+  excludedTokens: TokenSymbol[];
 }
 
-/** A partial patch the user submits (every field optional). */
-export type AgentConfigPatch = Partial<Omit<AgentConfigValue, "vaultAddress">>;
+/** A partial patch the user submits (every field optional). `excludedTokens` is a
+ *  raw string list at the API boundary — validateAgentConfig narrows it to known
+ *  TokenSymbols and rejects unknowns + USDC. */
+export type AgentConfigPatch = Partial<
+  Omit<AgentConfigValue, "vaultAddress" | "excludedTokens">
+> & { excludedTokens?: string[] };
 
 export const DEFAULT_AGENT_CONFIG: Omit<AgentConfigValue, "vaultAddress"> = {
   autoRebalanceEnabled: true,
@@ -34,6 +40,7 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfigValue, "vaultAddress"> = {
   dailyLimitPerDay: null,
   stopLossEnabled: false,
   stopLossPct: null,
+  excludedTokens: [],
 };
 
 const intIn = (v: unknown, lo: number, hi: number, name: string): number => {
@@ -91,6 +98,20 @@ export function validateAgentConfig(input: AgentConfigPatch): AgentConfigPatch {
     out.stopLossEnabled = Boolean(input.stopLossEnabled);
   if (input.stopLossPct !== undefined)
     out.stopLossPct = input.stopLossPct === null ? null : intIn(input.stopLossPct, 1, 100, "stopLossPct");
+  if (input.excludedTokens !== undefined) {
+    if (!Array.isArray(input.excludedTokens))
+      throw new Error("excludedTokens must be an array of token symbols");
+    // USDC is the vault's unit of account — refuse to exclude it (no routing medium).
+    const seen = new Set<TokenSymbol>();
+    for (const sym of input.excludedTokens) {
+      if (typeof sym !== "string" || !(sym in TOKENS))
+        throw new Error(`unknown token in excludedTokens: ${sym}`);
+      if (sym === "USDC")
+        throw new Error("USDC cannot be excluded — it's the vault's base asset");
+      seen.add(sym as TokenSymbol);
+    }
+    out.excludedTokens = [...seen];
+  }
   return out;
 }
 
@@ -115,6 +136,9 @@ export async function getAgentConfig(vaultAddress: string): Promise<AgentConfigV
     dailyLimitPerDay: row.dailyLimitPerDay,
     stopLossEnabled: row.stopLossEnabled,
     stopLossPct: row.stopLossPct,
+    excludedTokens: (row.excludedTokens ?? []).filter(
+      (s): s is TokenSymbol => s in TOKENS,
+    ),
   };
 }
 
@@ -141,6 +165,7 @@ export async function upsertAgentConfig(
       dailyLimitPerDay: c.dailyLimitPerDay ?? null,
       stopLossEnabled: c.stopLossEnabled ?? false,
       stopLossPct: c.stopLossPct ?? null,
+      excludedTokens: c.excludedTokens ?? [],
     },
     update: {
       ...(c.autoRebalanceEnabled !== undefined && { autoRebalanceEnabled: c.autoRebalanceEnabled }),
@@ -154,6 +179,7 @@ export async function upsertAgentConfig(
       ...(c.dailyLimitPerDay !== undefined && { dailyLimitPerDay: c.dailyLimitPerDay }),
       ...(c.stopLossEnabled !== undefined && { stopLossEnabled: c.stopLossEnabled }),
       ...(c.stopLossPct !== undefined && { stopLossPct: c.stopLossPct }),
+      ...(c.excludedTokens !== undefined && { excludedTokens: c.excludedTokens }),
     },
   });
   return getAgentConfig(vaultAddress);

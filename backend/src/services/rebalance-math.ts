@@ -85,6 +85,47 @@ export function resolveTargetBps(
 }
 
 /**
+ * Drop excluded tokens from the target and renormalize the remaining weights
+ * back to 10_000 bps (proportional split). If everything is excluded, returns
+ * an empty map → caller treats that as "100% USDC", the safe fallback.
+ *
+ * Pure. Used by projection (preview the user's "Avoid" choice) AND the
+ * planner (so live rebalances actually honor the same exclusions).
+ */
+export function applyExclusions(
+  target: Map<TokenSymbol, number>,
+  excluded: readonly string[] | null | undefined,
+): Map<TokenSymbol, number> {
+  if (!excluded || excluded.length === 0) return target;
+  const drop = new Set(excluded);
+  const kept = new Map<TokenSymbol, number>();
+  let keptSum = 0;
+  for (const [token, bps] of target) {
+    if (drop.has(token)) continue;
+    kept.set(token, bps);
+    keptSum += bps;
+  }
+  if (keptSum === 0 || keptSum === 10_000) return kept;
+  // Renormalize proportionally; track rounding residual so total stays at 10_000.
+  const out = new Map<TokenSymbol, number>();
+  let assigned = 0;
+  for (const [token, bps] of kept) {
+    const scaled = Math.round((bps * 10_000) / keptSum);
+    out.set(token, scaled);
+    assigned += scaled;
+  }
+  // Push the rounding diff into the largest weight so the sum is exactly 10_000.
+  const diff = 10_000 - assigned;
+  if (diff !== 0 && out.size > 0) {
+    let top: TokenSymbol | null = null;
+    let topBps = -1;
+    for (const [t, b] of out) if (b > topBps) { topBps = b; top = t; }
+    if (top !== null) out.set(top, (out.get(top) ?? 0) + diff);
+  }
+  return out;
+}
+
+/**
  * Pure guardrail: clamp each token's target to its cap (bps), redistributing the
  * removed weight to under-cap tokens proportional to their headroom. Any residual
  * that can't fit (all caps saturated) is dropped → effectively raises USDC's implicit

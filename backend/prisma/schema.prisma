@@ -129,6 +129,9 @@ model AgentConfig {
   dailyLimitPerDay     Int? // max rebalances per day (null = no limit)
   stopLossEnabled      Boolean  @default(false)
   stopLossPct          Int? // e.g. 10 = exit if -10%; null when disabled
+  /// Token symbols the agent must NOT allocate to ("Avoid"). Honored by the planner
+  /// + chat exec — those tokens are dropped from the target and weight redistributed.
+  excludedTokens       String[] @default([])
   updatedAt            DateTime @updatedAt
 }
 

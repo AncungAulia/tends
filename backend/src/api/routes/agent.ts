@@ -116,6 +116,7 @@ const configBody = z.object({
   dailyLimitPerDay: z.number().int().min(1).max(100).nullable().optional(),
   stopLossEnabled: z.boolean().optional(),
   stopLossPct: z.number().int().min(1).max(100).nullable().optional(),
+  excludedTokens: z.array(z.string().min(1).max(20)).max(50).optional(),
 });
 
 /**
