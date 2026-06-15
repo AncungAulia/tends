@@ -771,13 +771,7 @@ function AgentLog({
 
 // read-only mirror of the Guardrails tab, so the user can glance at what the
 // agent is operating under before they hit Run / Pause.
-function OperatingCard({
-  config,
-  onEdit,
-}: {
-  config: AgentConfig;
-  onEdit: () => void;
-}) {
+function OperatingCard({ config }: { config: AgentConfig }) {
   const risk = RISK_COPY[config.risk];
   const mix = RISK_MIX[config.risk];
   const [mixHover, setMixHover] = useState<number | null>(null);
@@ -808,7 +802,7 @@ function OperatingCard({
         {/* Risk level → set in Plan */}
         <div className="mb-2.5 flex items-center justify-between">
           <p className={heading}>Risk level</p>
-          <Link href="/preview/plan" className={link}>
+          <Link href="/preview/setup" className={link}>
             Change
           </Link>
         </div>
@@ -895,9 +889,9 @@ function OperatingCard({
         {/* Guardrails → edit in the Guardrails tab */}
         <div className="mb-2.5 mt-5 flex items-center justify-between border-t border-edge pt-4">
           <p className={heading}>Guardrails</p>
-          <button onClick={onEdit} className={link}>
+          <Link href="/preview/setup" className={link}>
             Edit
-          </button>
+          </Link>
         </div>
         <div className="space-y-2.5">
           {rows.map((r) => (
@@ -927,7 +921,6 @@ function ControlTab({
   setRunning,
   countdown,
   config,
-  onEditGuardrails,
 }: {
   on: boolean;
   setOn: (f: (v: boolean) => boolean) => void;
@@ -935,7 +928,6 @@ function ControlTab({
   setRunning: (v: boolean) => void;
   countdown: number;
   config: AgentConfig;
-  onEditGuardrails: () => void;
 }) {
   return (
     <div className="space-y-6">
@@ -1012,7 +1004,7 @@ function ControlTab({
           </div>
         </div>
 
-        <OperatingCard config={config} onEdit={onEditGuardrails} />
+        <OperatingCard config={config} />
       </div>
 
       {/* Agent log — persistent terminal, streams live when running */}
@@ -1045,114 +1037,11 @@ function ChatTab() {
   return <AgentChat />;
 }
 
-// ExclusionField + avoid-token UI moved to Plan (composition lives with strategy);
-// the shared picker is @/components/preview/ExclusionField.
-
-// ─── Tab 3: Guardrails ──────────────────────────────────────
-
-function GuardrailsTab({
-  config,
-  setConfig,
-}: {
-  config: AgentConfig;
-  setConfig: (f: (c: AgentConfig) => AgentConfig) => void;
-}) {
-  const set = (patch: Partial<AgentConfig>) =>
-    setConfig((c) => ({ ...c, ...patch }));
-  const num = (v: string) =>
-    Math.max(0, parseInt(v.replace(/[^0-9]/g, ""), 10) || 0);
-
-  return (
-    <div className="space-y-6">
-      {/* Limits */}
-      <div>
-        <SectionLabel right={<></>}>Limits</SectionLabel>
-        <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
-          <GuardrailRow
-            label="Running frequency"
-            hint="How often the agent runs"
-          >
-            <Dropdown
-              value={config.checkEvery}
-              options={FREQ_PRESETS}
-              onChange={(v) => set({ checkEvery: v })}
-              minW="min-w-[11rem]"
-            />
-          </GuardrailRow>
-          <GuardrailRow
-            label="Max per asset"
-            hint="Cap allocation to any single token"
-          >
-            <NumInput
-              value={config.maxPerAsset}
-              suffix="%"
-              onChange={(v) => set({ maxPerAsset: num(v) })}
-            />
-          </GuardrailRow>
-          <GuardrailRow
-            label="Daily rebalance limit"
-            hint="Max rebalances per day, caps gas"
-          >
-            <NumInput
-              value={config.dailyLimit}
-              suffix="/ day"
-              onChange={(v) => set({ dailyLimit: num(v) })}
-            />
-          </GuardrailRow>
-        </div>
-      </div>
-
-      {/* Advanced */}
-      <div>
-        <SectionLabel>Advanced</SectionLabel>
-        <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
-          <GuardrailRow
-            label="Min drift to act"
-            hint="Only rebalance if off target by this much"
-          >
-            <NumInput
-              value={config.minDrift}
-              suffix="%"
-              onChange={(v) => set({ minDrift: num(v) })}
-            />
-          </GuardrailRow>
-          <GuardrailRow
-            label="Stop-loss"
-            hint="Exit an asset if it drops this much (0 = off)"
-          >
-            <NumInput
-              value={config.stopLoss}
-              suffix="%"
-              onChange={(v) => set({ stopLoss: num(v) })}
-            />
-          </GuardrailRow>
-        </div>
-      </div>
-
-      {/* Agent notes */}
-      <div>
-        <SectionLabel right={<></>}>Personal Preference</SectionLabel>
-        <textarea
-          rows={4}
-          value={config.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          className="w-full resize-none rounded-xl border border-edge bg-card p-4 text-sm leading-relaxed text-ink outline-none focus:border-brand focus:ring-1 focus:ring-[#1591DC]/20"
-        />
-        <p className="mt-1.5 text-xs text-dim">
-          Write instructions in plain language. The agent reads this before
-          deciding any action.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ─── Page ───────────────────────────────────────────────────
 
 const TABS = [
   { id: "control", label: "Control" },
   { id: "chat", label: "Chat" },
-  { id: "guardrails", label: "Guardrails" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -1161,7 +1050,7 @@ export default function AgentPreview() {
   const [on, setOn] = useState(true);
   const [running, setRunning] = useState(false);
   const [countdown, setCountdown] = useState(18 * 60);
-  const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
+  const [config] = useState<AgentConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
     if (!on || running) return;
@@ -1179,7 +1068,7 @@ export default function AgentPreview() {
           Agent
         </h1>
         <p className="mt-1 text-sm text-dim">
-          Run the agent and set how it works.
+          Run the agent and watch what it does.
         </p>
       </div>
 
@@ -1199,13 +1088,9 @@ export default function AgentPreview() {
             setRunning={setRunning}
             countdown={countdown}
             config={config}
-            onEditGuardrails={() => setTab("guardrails")}
           />
         )}
         {tab === "chat" && <ChatTab />}
-        {tab === "guardrails" && (
-          <GuardrailsTab config={config} setConfig={setConfig} />
-        )}
 
         {tab !== "chat" && <div className="h-12" />}
       </div>

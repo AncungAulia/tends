@@ -11,9 +11,9 @@ import {
   MessageSquare,
   Plus,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
+  History,
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useChat } from "@/hooks/useChat";
 
@@ -40,10 +40,10 @@ const SLASH = [
 ];
 
 const SUGGESTIONS = [
-  "How's my portfolio doing?",
-  "Move 30% of cmETH into sUSDe",
-  "Explain my strategy",
-  "/holdings",
+  "How's my money doing?",
+  "Which strategy fits me?",
+  "Explain what you're doing",
+  "Move some cmETH into stable yield",
 ];
 
 // ─── Rich cards ─────────────────────────────────────────────
@@ -206,10 +206,12 @@ function SlashMenu({
 function AgentMessage({
   text,
   card,
+  streaming,
   onTick,
 }: {
   text: string;
   card?: Msg["card"];
+  streaming?: boolean;
   onTick?: () => void;
 }) {
   useEffect(() => {
@@ -220,6 +222,9 @@ function AgentMessage({
     <>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
         {text}
+        {streaming && (
+          <span className="ml-0.5 inline-block h-3.5 w-0.5 translate-y-0.5 animate-pulse rounded-[1px] bg-brand align-middle" />
+        )}
       </p>
       {card && (
         <div style={{ animation: "fadeIn .3s ease" }}>
@@ -250,34 +255,29 @@ function formatRelativeTime(date: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function SessionsSidebar({
+function SessionsList({
   sessions,
   activeId,
   onSelect,
-  onNew,
   onDelete,
   deletingId,
 }: {
   sessions: Session[];
   activeId: string | null;
   onSelect: (s: Session) => void;
-  onNew: () => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
   deletingId: string | null;
 }) {
   return (
-    <div className="flex w-52 shrink-0 flex-col gap-2 pr-1">
-      <button
-        onClick={onNew}
-        className="flex items-center gap-2 rounded-xl border border-edge bg-card px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-brand hover:text-brand"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New Chat
-      </button>
-
-      <div className="flex-1 space-y-0.5 overflow-y-auto">
+    <div className="flex flex-col">
+      <p className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-widest text-faint">
+        History
+      </p>
+      <div className="max-h-72 space-y-0.5 overflow-y-auto">
         {sessions.length === 0 && (
-          <p className="px-3 py-2 text-[11px] text-faint">No history yet.</p>
+          <p className="px-3 py-2 text-[11px] text-faint">
+            No past chats yet. Start one above.
+          </p>
         )}
         {sessions.map((s) => (
           <div
@@ -325,7 +325,7 @@ export function AgentChat() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -506,37 +506,64 @@ export function AgentChat() {
   // ── Render ─────────────────────────────────────────────────
 
   return (
-    <div ref={wrapRef} className="flex min-h-[calc(100dvh-17rem)] gap-4">
-      {/* Sessions sidebar — hidden on mobile, collapsible on desktop */}
-      {sidebarOpen && (
-        <div className="hidden md:flex">
-          <SessionsSidebar
-            sessions={sessions}
-            activeId={activeSession}
-            onSelect={(s) => void handleSelectSession(s)}
-            onNew={handleNewChat}
-            onDelete={(id, e) => void handleDeleteSession(id, e)}
-            deletingId={deletingId}
-          />
-        </div>
-      )}
-
-      {/* Main chat area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Sidebar toggle — desktop only */}
-        <div className="mb-2 hidden md:flex">
+    <div ref={wrapRef} className="relative flex min-h-[calc(100dvh-17rem)] flex-col">
+      {/* Sticky top bar: New chat + History stay reachable in a long conversation
+          (mirrors the sticky composer at the bottom). The bg-app strip masks
+          messages scrolling underneath. History floats OVER the chat from here,
+          so it never steals body width AND follows the bar on scroll. */}
+      <div className="sticky top-0 z-30 mb-2 hidden bg-app md:block">
+        <div className="relative flex items-center gap-1.5 py-1">
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-faint transition-colors hover:bg-panel hover:text-dim"
+            onClick={handleNewChat}
+            className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-2.5 py-1 text-[11px] font-medium text-ink transition-colors hover:border-brand hover:text-brand"
           >
-            {sidebarOpen ? (
-              <><ChevronLeft className="h-3.5 w-3.5" /> Hide history</>
-            ) : (
-              <><ChevronRight className="h-3.5 w-3.5" /> Show history</>
-            )}
+            <Plus className="h-3.5 w-3.5" /> New chat
           </button>
-        </div>
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] transition-colors ${
+              sidebarOpen
+                ? "bg-panel text-dim"
+                : "text-faint hover:bg-panel hover:text-dim"
+            }`}
+          >
+            <History className="h-3.5 w-3.5" /> History
+          </button>
 
+          <AnimatePresence>
+            {sidebarOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setSidebarOpen(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.14, ease: "easeOut" }}
+                  style={{ transformOrigin: "top left" }}
+                  className="absolute left-0 top-full z-20 mt-1 w-64 rounded-2xl border-[1.25px] border-edge bg-card p-1.5 shadow-xl shadow-[#0C1A2B]/10"
+                >
+                  <SessionsList
+                    sessions={sessions}
+                    activeId={activeSession}
+                    onSelect={(s) => {
+                      void handleSelectSession(s);
+                      setSidebarOpen(false);
+                    }}
+                    onDelete={(id, e) => void handleDeleteSession(id, e)}
+                    deletingId={deletingId}
+                  />
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Main chat area — always full width */}
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* messages — flow with the page, no inner scrollbar */}
         <div className="flex-1">
           {empty ? (
@@ -546,11 +573,11 @@ export function AgentChat() {
                 <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-6 w-auto" />
               </div>
               <p className="mt-4 text-base font-semibold text-ink">
-                How can I help with your portfolio?
+                Watching the market for you. Ask me anything.
               </p>
               <p className="mt-1 text-xs text-dim">
-                Ask a question, or tell me to move funds. Type{" "}
-                <span className="font-mono text-brand">/</span> for commands.
+                Ask about your money, or tell me to make a move. Type{" "}
+                <span className="font-mono text-brand">/</span> for shortcuts.
               </p>
               <div className="mt-5 flex max-w-md flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (
@@ -566,7 +593,7 @@ export function AgentChat() {
             </div>
           ) : (
             <div className="space-y-4 pb-6">
-              {messages.map((m) =>
+              {messages.map((m, idx) =>
                 m.role === "user" ? (
                   <div key={m.id} className="flex justify-end">
                     <div className="max-w-[80%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-white dark:bg-white/10">
@@ -583,6 +610,7 @@ export function AgentChat() {
                       <AgentMessage
                         text={typeof m.text === "string" ? m.text : ""}
                         card={m.card}
+                        streaming={streaming && idx === messages.length - 1}
                         onTick={() => endRef.current?.scrollIntoView({ block: "end" })}
                       />
                     </div>
@@ -596,13 +624,18 @@ export function AgentChat() {
                     <img src="/icon/tends-white.svg" alt="Tends Agent" className="h-3.5 w-auto" />
                   </div>
                   <div className="flex items-center gap-2 rounded-2xl bg-panel px-3 py-3">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.3s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint" />
-                    {status && (
-                      <span className="ml-1 text-[11px] text-faint">
-                        {status}...
+                    {status ? (
+                      // a tool is running — show what it's doing instead of the dots
+                      <span className="text-xs text-dim">
+                        {status}
+                        <span className="ml-0.5 inline-block animate-pulse">…</span>
                       </span>
+                    ) : (
+                      <>
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.3s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint [animation-delay:-0.15s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint" />
+                      </>
                     )}
                   </div>
                 </div>
@@ -630,7 +663,7 @@ export function AgentChat() {
                 }}
                 onKeyDown={onKey}
                 rows={1}
-                placeholder="Message Tends Agent, or type / for commands"
+                placeholder="Ask anything, or type / for commands"
                 className="max-h-32 flex-1 resize-none bg-transparent py-1.5 text-sm text-ink outline-none placeholder:text-faint"
               />
               <button

@@ -1,4 +1,5 @@
 import { usePrivy } from "@privy-io/react-auth";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 
 export interface ChatMessage {
@@ -8,22 +9,23 @@ export interface ChatMessage {
 
 const TOOL_LABELS: Record<string, string> = {
   getUserProfile: "Reading your profile",
-  getHoldings: "Fetching holdings",
-  getAgentSettings: "Loading guardrails",
-  readUserPosition: "Checking vault",
-  getRecentActivity: "Reviewing activity",
-  listStrategies: "Checking strategies",
-  computeProjection: "Computing projection",
-  getApyHistory: "Loading APY history",
-  setAgentGuardrails: "Updating guardrails",
-  triggerRebalance: "Triggering rebalance",
-  executeDirectSwap: "Executing swap",
+  getHoldings: "Looking at your holdings",
+  getAgentSettings: "Checking your guardrails",
+  readUserPosition: "Checking your vault",
+  getRecentActivity: "Looking back at recent moves",
+  listStrategies: "Comparing strategies",
+  computeProjection: "Crunching the numbers",
+  getApyHistory: "Checking yield history",
+  setAgentGuardrails: "Updating your guardrails",
+  triggerRebalance: "Starting a rebalance",
+  executeDirectSwap: "Making the swap",
 };
 
 /** Chat with Tends Agent via SSE (POST /api/chat-v2). Streams reply token by token.
  *  Manages thread IDs for multi-session chat history. */
 export function useChat() {
   const { getAccessToken } = usePrivy();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -86,6 +88,9 @@ export function useChat() {
             if (type === "done") {
               setStatus(null);
               setStreaming(false);
+              // the agent may have changed guardrails / pause / holdings —
+              // refetch so the rest of the UI reflects it
+              queryClient.invalidateQueries();
               return;
             }
             if (type === "error") {
@@ -125,7 +130,7 @@ export function useChat() {
         setStreaming(false);
       }
     },
-    [getAccessToken, streaming, threadId],
+    [getAccessToken, streaming, threadId, queryClient],
   );
 
   /** Start a fresh conversation — new thread ID, clear messages. */

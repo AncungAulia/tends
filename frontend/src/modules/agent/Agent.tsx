@@ -11,6 +11,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useAgentActions } from "@/hooks/useAgentActions";
 import { useAgentConfig } from "@/hooks/useAgentConfig";
 import type { AgentConfig } from "@/hooks/useAgentConfig";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAgentLogStream } from "@/hooks/useAgentLogStream";
 import type { AgentLogEntry } from "@/hooks/useAgentLogStream";
 import { useAgentLog } from "@/hooks/useAgentLog";
@@ -528,11 +529,9 @@ function AgentLogFeed({ checkEvery, liveEntries = [] }: { checkEvery: string; li
 
 function OperatingCard({
   riskName,
-  onEdit,
   agentConfig,
 }: {
   riskName: string;
-  onEdit: () => void;
   agentConfig?: AgentConfig;
 }) {
   const risk = RISK_COPY[riskName] ?? RISK_COPY.Medium;
@@ -562,7 +561,7 @@ function OperatingCard({
       <div className="flex flex-1 flex-col rounded-2xl border-[1.25px] border-edge bg-card p-5">
         <div className="mb-2.5 flex items-center justify-between">
           <p className={heading}>Risk level</p>
-          <Link href="/plan" className={link}>Change</Link>
+          <Link href="/setup" className={link}>Change</Link>
         </div>
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${risk.dot}`} />
@@ -587,7 +586,7 @@ function OperatingCard({
             <AnimatePresence>
               {mh && (
                 <motion.div
-                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-left shadow-lg"
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
                   style={{ left: `${mhCenter}%`, transformOrigin: "bottom center" }}
                   initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
                   animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
@@ -610,9 +609,8 @@ function OperatingCard({
           </div>
         </div>
 
-        <div className="mb-2.5 mt-5 flex items-center justify-between border-t border-edge pt-4">
+        <div className="mb-2.5 mt-5 border-t border-edge pt-4">
           <p className={heading}>Guardrails</p>
-          <button onClick={onEdit} className={link}>Edit</button>
         </div>
         <div className="space-y-2.5">
           {rows.map((r) => (
@@ -622,6 +620,16 @@ function OperatingCard({
             </div>
           ))}
         </div>
+
+        {/* User's note — what personalizes the agent (read-only mirror) */}
+        {agentConfig?.notes && (
+          <div className="mt-5 border-t border-edge pt-4">
+            <p className={`mb-1.5 ${heading}`}>Personal Preference</p>
+            <p className="line-clamp-3 text-xs leading-relaxed text-dim">
+              {agentConfig.notes}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -633,7 +641,6 @@ function ControlTab({
   paused,
   riskName,
   activityCount,
-  onEditGuardrails,
   onPause,
   onResume,
   isPausing,
@@ -645,7 +652,6 @@ function ControlTab({
   paused: boolean;
   riskName: string;
   activityCount: number;
-  onEditGuardrails: () => void;
   onPause: () => void;
   onResume: () => void;
   isPausing: boolean;
@@ -688,26 +694,30 @@ function ControlTab({
               </button>
             </div>
 
-            <div className="mt-auto grid w-full max-w-sm grid-cols-3 gap-3 border-t border-edge pt-5 text-center">
+            <div className="mt-auto grid w-full max-w-sm grid-cols-3 gap-3 pt-5 text-center">
               <div>
-                <p className="flex justify-center text-lg font-semibold text-ink">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
                   <SlidingNumber number={activityCount} />
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Runs</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-ink">{riskName}</p>
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
+                  {riskName}
+                </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Strategy</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-ink">Active</p>
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
+                  Active
+                </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Status</p>
               </div>
             </div>
           </div>
         </div>
 
-        <OperatingCard riskName={riskName} onEdit={onEditGuardrails} agentConfig={agentConfig} />
+        <OperatingCard riskName={riskName} agentConfig={agentConfig} />
       </div>
 
       <div>
@@ -759,144 +769,13 @@ function cadenceToFreq(secs: number | null | undefined): string {
   return "24h";
 }
 
-function freqToCadence(val: string): number {
-  return parseInt(val, 10) * 3600;
-}
-
-function GuardrailsTab({
-  config,
-  onSave,
-  isSaving,
-  isLoading,
-}: {
-  config: AgentConfig | undefined;
-  onSave: (patch: Partial<AgentConfig>) => Promise<unknown>;
-  isSaving: boolean;
-  isLoading: boolean;
-}) {
-  const [advanced, setAdvanced] = useState(false);
-  const [local, setLocal] = useState<LocalGuardrailState>(DEFAULT_LOCAL);
-
-  // Sync local state when remote config loads
-  useEffect(() => {
-    if (!config) return;
-    setLocal({
-      cadenceSec: config.cadenceSec ?? DEFAULT_LOCAL.cadenceSec,
-      maxPerAssetPct: config.maxPerAssetPct ?? DEFAULT_LOCAL.maxPerAssetPct,
-      dailyLimitPerDay: config.dailyLimitPerDay ?? DEFAULT_LOCAL.dailyLimitPerDay,
-      driftThresholdBps: config.driftThresholdBps ?? DEFAULT_LOCAL.driftThresholdBps,
-      stopLossEnabled: config.stopLossEnabled ?? DEFAULT_LOCAL.stopLossEnabled,
-      stopLossPct: config.stopLossPct ?? DEFAULT_LOCAL.stopLossPct,
-      notes: config.notes ?? DEFAULT_LOCAL.notes,
-    });
-  }, [config]);
-
-  const set = (patch: Partial<LocalGuardrailState>) => setLocal((c) => ({ ...c, ...patch }));
-  const num = (v: string) => Math.max(0, parseInt(v.replace(/[^0-9]/g, ""), 10) || 0);
-
-  const freqValue = cadenceToFreq(local.cadenceSec);
-
-  async function handleSave() {
-    await onSave({
-      cadenceSec: local.cadenceSec,
-      maxPerAssetPct: local.maxPerAssetPct,
-      dailyLimitPerDay: local.dailyLimitPerDay,
-      driftThresholdBps: local.driftThresholdBps,
-      stopLossEnabled: local.stopLossEnabled,
-      stopLossPct: local.stopLossEnabled ? local.stopLossPct : null,
-      notes: local.notes,
-    });
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-sm text-dim">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading guardrails…
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <SectionLabel right={<></>}>Limits</SectionLabel>
-        <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
-          <GuardrailRow label="Check frequency" hint="How often the agent reviews the market">
-            <Dropdown
-              value={freqValue}
-              options={FREQ_PRESETS}
-              onChange={(v) => set({ cadenceSec: freqToCadence(v) })}
-              minW="min-w-[11rem]"
-            />
-          </GuardrailRow>
-          <GuardrailRow label="Max per asset" hint="Cap allocation to any single token">
-            <NumInput value={local.maxPerAssetPct} suffix="%" onChange={(v) => set({ maxPerAssetPct: num(v) })} />
-          </GuardrailRow>
-          <GuardrailRow label="Daily rebalance limit" hint="Max rebalances per day, caps gas">
-            <NumInput value={local.dailyLimitPerDay} suffix="/ day" onChange={(v) => set({ dailyLimitPerDay: num(v) })} />
-          </GuardrailRow>
-        </div>
-      </div>
-
-      <div>
-        <SectionLabel
-          right={
-            <div className="flex items-center gap-2">
-              {!advanced && <span className="text-[10px] text-dim">Toggle to change</span>}
-              <Toggle sm on={advanced} onClick={() => setAdvanced((v) => !v)} />
-            </div>
-          }
-        >
-          Advanced
-        </SectionLabel>
-        <div className={`divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5 ${advanced ? "" : "pointer-events-none select-none opacity-50"}`}>
-          <GuardrailRow label="Min drift to act" hint="Only rebalance if off target by this much (bps)">
-            <NumInput value={local.driftThresholdBps} suffix="bps" onChange={(v) => set({ driftThresholdBps: num(v) })} />
-          </GuardrailRow>
-          <GuardrailRow label="Stop-loss" hint="Exit an asset if it drops this much">
-            <div className="flex items-center gap-2">
-              {local.stopLossEnabled && (
-                <NumInput value={local.stopLossPct} suffix="%" onChange={(v) => set({ stopLossPct: num(v) })} />
-              )}
-              <Toggle sm on={local.stopLossEnabled} onClick={() => set({ stopLossEnabled: !local.stopLossEnabled })} />
-            </div>
-          </GuardrailRow>
-        </div>
-      </div>
-
-      <div>
-        <SectionLabel right={<></>}>Personal Preferences</SectionLabel>
-        <textarea
-          rows={4}
-          value={local.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          className="w-full resize-none rounded-xl border border-edge bg-card p-4 text-sm leading-relaxed text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand/20"
-        />
-        <p className="mt-1.5 text-xs text-dim">
-          Write instructions in plain language. The agent reads this before deciding any action.
-        </p>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSaving ? "Saving…" : "Save"}
-        </button>
-      </div>
-    </div>
-  );
-}
+// GuardrailsTab removed — guardrails now live on /setup (single source).
 
 // ─── Page ─────────────────────────────────────────────────────
 
 const TABS = [
   { id: "control", label: "Control" },
   { id: "chat", label: "Chat" },
-  { id: "guardrails", label: "Guardrails" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -904,11 +783,24 @@ export function Agent() {
   const { address } = useAccount();
   const { vaultAddress } = useUserVault();
   const { currentLevel } = useRiskLevel(vaultAddress);
-  const { paused } = usePortfolio(vaultAddress, address);
   const { activities } = useActivity();
   const { pause, resume, runHermes, isPausing, isRunning } = useAgentActions();
-  const { config: agentConfig, isLoading: configLoading, save: saveConfig, isSaving } = useAgentConfig();
+  const { config: agentConfig } = useAgentConfig();
   const { liveEntries } = useAgentLogStream(vaultAddress);
+  const queryClient = useQueryClient();
+
+  // "paused" = auto-rebalance disabled (the off-chain flag that the Pause button +
+  // chat actually toggle), NOT the on-chain emergency-pause. Reading this is what
+  // makes the dial reflect a pause from either the button or the chat.
+  const paused = agentConfig?.autoRebalanceEnabled === false;
+  const handlePause = async () => {
+    await pause();
+    queryClient.invalidateQueries({ queryKey: ["agent-config"] });
+  };
+  const handleResume = async () => {
+    await resume();
+    queryClient.invalidateQueries({ queryKey: ["agent-config"] });
+  };
 
   const riskName = RISK_LABELS[currentLevel ?? 1] ?? "Medium";
 
@@ -936,9 +828,8 @@ export function Agent() {
             paused={paused}
             riskName={riskName}
             activityCount={activities.length}
-            onEditGuardrails={() => setTab("guardrails")}
-            onPause={pause}
-            onResume={resume}
+            onPause={handlePause}
+            onResume={handleResume}
             isPausing={isPausing}
             onRunNow={runHermes}
             isRunning={isRunning}
@@ -947,14 +838,6 @@ export function Agent() {
           />
         )}
         {tab === "chat" && <AgentChat />}
-        {tab === "guardrails" && (
-          <GuardrailsTab
-            config={agentConfig}
-            onSave={saveConfig}
-            isSaving={isSaving}
-            isLoading={configLoading}
-          />
-        )}
         {tab !== "chat" && <div className="h-12" />}
       </div>
     </div>
