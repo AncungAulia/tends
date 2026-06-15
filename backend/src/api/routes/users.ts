@@ -11,7 +11,7 @@ const PNL_RANGES: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "1y"
 /** Data access for the authenticated user. Injectable so routes test without a DB. */
 export interface UserReader {
   getPosition(privyId: string): Promise<unknown>;
-  getActivity(privyId: string, limit?: number): Promise<unknown>;
+  getActivity(privyId: string, limit?: number, cursor?: bigint, type?: string): Promise<unknown>;
   /** Vault value/PnL time-series for the FE chart, over the last `days`. */
   getPnl(privyId: string, days: number): Promise<unknown>;
 }
@@ -25,18 +25,25 @@ export const prismaUserReader: UserReader = {
     });
     return { vault: user?.vault ?? null };
   },
-  async getActivity(privyId, limit = 50) {
-    const user = await prisma.user.findUnique({
-      where: { privyId },
-      include: { vault: true },
-    });
-    if (!user?.vault) return { activities: [] };
-    const activities = await prisma.agentActivity.findMany({
-      where: { vaultAddress: user.vault.address },
+  async getActivity(privyId, limit = 20, cursor?: bigint, type?: string) {
+    const user = await prisma.user.findUnique({ where: { privyId }, include: { vault: true } });
+    if (!user?.vault) return { activities: [], nextCursor: null };
+    const take = Math.min(limit, 200);
+    const rows = await prisma.agentActivity.findMany({
+      where: {
+        vaultAddress: user.vault.address,
+        ...(cursor != null ? { id: { lt: cursor } } : {}),
+        ...(type ? { action: type } : {}),
+      },
       orderBy: { timestamp: "desc" },
-      take: Math.min(limit, 200),
+      take: take + 1,
     });
-    return { activities };
+    const hasMore = rows.length > take;
+    const items = hasMore ? rows.slice(0, take) : rows;
+    return {
+      activities: items.map((a) => ({ ...a, id: a.id.toString(), blockNumber: a.blockNumber?.toString() ?? null })),
+      nextCursor: hasMore ? items[items.length - 1]!.id.toString() : null,
+    };
   },
   async getPnl(privyId, days) {
     const user = await prisma.user.findUnique({
@@ -67,8 +74,11 @@ export function makeUsersRouter(
   r.use("*", auth);
   r.get("/position", async (c) => c.json(await reader.getPosition(c.get("privyId"))));
   r.get("/activity", async (c) => {
-    const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
-    return c.json(await reader.getActivity(c.get("privyId"), limit));
+    const limit = Math.min(Math.max(Number(c.req.query("limit")) || 20, 1), 200);
+    const cursorStr = c.req.query("cursor");
+    const cursor = cursorStr ? BigInt(cursorStr) : undefined;
+    const type = c.req.query("type") || undefined;
+    return c.json(await reader.getActivity(c.get("privyId"), limit, cursor, type));
   });
 
   // ── Onboarding + profile ──────────────────────────────────────────────────
