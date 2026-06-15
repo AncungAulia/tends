@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { MessageSquare, ChevronDown, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -500,9 +500,141 @@ function DurationDropdown({
   );
 }
 
+// ─── Guardrails (advanced) ──────────────────────────────────
+
+type Guardrails = {
+  checkEvery: string;
+  maxPerAsset: number;
+  dailyLimit: number;
+  minDrift: number;
+  stopLoss: number;
+  notes: string;
+};
+
+const DEFAULT_GUARDRAILS: Guardrails = {
+  checkEvery: "4h",
+  maxPerAsset: 50,
+  dailyLimit: 3,
+  minDrift: 5,
+  stopLoss: 0,
+  notes:
+    "Prefer stable yield on weekends. Don't touch my cmETH position unless volatility spikes above 20%. Lean conservative near month-end.",
+};
+
+const FREQ_PRESETS = [
+  { value: "1h", label: "Every 1 hour" },
+  { value: "2h", label: "Every 2 hours" },
+  { value: "4h", label: "Every 4 hours" },
+  { value: "12h", label: "Every 12 hours" },
+  { value: "24h", label: "Every 24 hours" },
+];
+
+function GuardrailRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{label}</p>
+        {hint && <p className="text-xs text-dim">{hint}</p>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function NumInput({
+  value,
+  suffix,
+  onChange,
+}: {
+  value: string | number;
+  suffix?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5">
+      <input
+        value={String(value)}
+        onChange={(e) => onChange(e.target.value)}
+        inputMode="numeric"
+        className="w-10 bg-transparent text-right text-sm font-semibold text-ink outline-none"
+      />
+      {suffix && <span className="text-xs text-dim">{suffix}</span>}
+    </div>
+  );
+}
+
+function FreqDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+  const current = FREQ_PRESETS.find((f) => f.value === value);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-dim"
+      >
+        {current?.label ?? value}
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-dim transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            style={{ transformOrigin: "top right" }}
+            className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border-[1.25px] border-edge bg-card p-1 shadow-lg shadow-[#0C1A2B]/8"
+          >
+            {FREQ_PRESETS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => {
+                  onChange(f.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-panel ${
+                  f.value === value ? "font-semibold text-brand" : "text-dim"
+                }`}
+              >
+                {f.label}
+                {f.value === value && <Check className="h-3 w-3" />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────
 
-export default function PlanPreview() {
+export default function SetupPreview() {
   const [selectedId, setSelectedId] = useState(CURRENT);
   const [capital, setCapital] = useState(12430);
   const [duration, setDuration] = useState(DURATIONS[2]);
@@ -510,6 +642,10 @@ export default function PlanPreview() {
   const [chartMode, setChartMode] = useState("all");
   const [customW, setCustomW] = useState({ Low: 40, Medium: 40, High: 20 });
   const [avoid, setAvoid] = useState<string[]>([]);
+  const [gr, setGr] = useState<Guardrails>(DEFAULT_GUARDRAILS);
+  const [advOpen, setAdvOpen] = useState(false);
+  const num = (v: string) =>
+    Math.max(0, parseInt(v.replace(/[^0-9]/g, ""), 10) || 0);
 
   const strat = STRATEGIES.find((s) => s.id === selectedId)!;
   const isCurrent = selectedId === CURRENT;
@@ -563,16 +699,16 @@ export default function PlanPreview() {
   const primaryLabel = isCustom
     ? "Set custom mix"
     : isCurrent
-      ? "Current plan"
+      ? "Current strategy"
       : `Switch to ${strat.id}`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="hidden md:block">
-          <h1 className="text-3xl font-semibold tracking-[-0.03em]">Plan</h1>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">Setup</h1>
           <p className="mt-1 text-sm text-dim">
-            Compare strategies and project forward.
+            Choose your strategy and set how the agent runs.
           </p>
         </div>
         {/* desktop: actions stay top-right (mobile shows them under the card) */}
@@ -1089,6 +1225,107 @@ export default function PlanPreview() {
           />
         </div>
       )}
+
+      {/* Advanced — guardrails, tucked away; most people never open it */}
+      <div className="mt-5">
+        <button
+          onClick={() => setAdvOpen((o) => !o)}
+          className="flex w-full items-center justify-between rounded-2xl border-[1.25px] border-edge bg-card px-5 py-4 text-left transition-colors hover:border-edge2"
+        >
+          <div>
+            <p className="text-sm font-medium text-ink">Advanced</p>
+            <p className="text-xs text-dim">
+              Fine-tune how the agent runs. Most people never need to.
+            </p>
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-faint transition-transform ${advOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        <AnimatePresence initial={false}>
+          {advOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 32 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-6 pt-4">
+                <div className="divide-y divide-edge rounded-2xl border-[1.25px] border-edge bg-card px-5">
+                  <GuardrailRow
+                    label="Running frequency"
+                    hint="How often the agent runs"
+                  >
+                    <FreqDropdown
+                      value={gr.checkEvery}
+                      onChange={(v) => setGr((c) => ({ ...c, checkEvery: v }))}
+                    />
+                  </GuardrailRow>
+                  <GuardrailRow
+                    label="Max per asset"
+                    hint="Cap allocation to any single token"
+                  >
+                    <NumInput
+                      value={gr.maxPerAsset}
+                      suffix="%"
+                      onChange={(v) => setGr((c) => ({ ...c, maxPerAsset: num(v) }))}
+                    />
+                  </GuardrailRow>
+                  <GuardrailRow
+                    label="Daily rebalance limit"
+                    hint="Max rebalances per day, caps gas"
+                  >
+                    <NumInput
+                      value={gr.dailyLimit}
+                      suffix="/ day"
+                      onChange={(v) => setGr((c) => ({ ...c, dailyLimit: num(v) }))}
+                    />
+                  </GuardrailRow>
+                  <GuardrailRow
+                    label="Min drift to act"
+                    hint="Only rebalance if off target by this much"
+                  >
+                    <NumInput
+                      value={gr.minDrift}
+                      suffix="%"
+                      onChange={(v) => setGr((c) => ({ ...c, minDrift: num(v) }))}
+                    />
+                  </GuardrailRow>
+                  <GuardrailRow
+                    label="Stop-loss"
+                    hint="Exit an asset if it drops this much (0 = off)"
+                  >
+                    <NumInput
+                      value={gr.stopLoss}
+                      suffix="%"
+                      onChange={(v) => setGr((c) => ({ ...c, stopLoss: num(v) }))}
+                    />
+                  </GuardrailRow>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-widest text-dim">
+                    Personal preference
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={gr.notes}
+                    onChange={(e) =>
+                      setGr((c) => ({ ...c, notes: e.target.value }))
+                    }
+                    className="w-full resize-none rounded-xl border border-edge bg-card p-4 text-sm leading-relaxed text-ink outline-none focus:border-brand focus:ring-1 focus:ring-[#1591DC]/20"
+                  />
+                  <p className="mt-1.5 text-xs text-dim">
+                    Write instructions in plain language. The agent reads this
+                    before deciding any action.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <div className="h-12" />
     </div>
