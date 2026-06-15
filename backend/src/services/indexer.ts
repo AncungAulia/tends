@@ -295,10 +295,24 @@ export class IndexerService {
       return acc;
     };
 
-    const [depositLogs, withdrawLogs] = await Promise.all([
+    const base = { address: vault, abi: USER_VAULT_ABI } as const;
+    const [depositLogs, withdrawLogs, riskOnChain] = await Promise.all([
       getLogsPaged(DEPOSIT_EVENT),
       getLogsPaged(WITHDRAW_EVENT),
+      publicClient.readContract({ ...base, functionName: "riskPreference" }).catch(() => null),
     ]);
+
+    // Sync riskPreference from on-chain — DB default (1=MEDIUM) can be wrong if the
+    // vault was deployed with a different initial value or switched before indexer started.
+    if (riskOnChain != null) {
+      const level = Number(riskOnChain);
+      let lowBps = 0, medBps = 0, highBps = 0;
+      if (level === 3) {
+        const alloc = await publicClient.readContract({ ...base, functionName: "customAllocation" }).catch(() => null);
+        if (alloc) { [lowBps, medBps, highBps] = alloc as [number, number, number]; }
+      }
+      await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
+    }
 
     let totalDepositedAssets = 0n;
     let totalDepositedShares = 0n;
@@ -314,7 +328,7 @@ export class IndexerService {
     }
 
     if (totalDepositedShares === 0n) {
-      log.info({ vault, owner }, "vault backfilled (no deposits)");
+      log.info({ vault, owner, riskOnChain }, "vault backfilled (no deposits)");
       return;
     }
 
@@ -326,7 +340,7 @@ export class IndexerService {
       data: { shares: currentShares.toString(), initialDeposit: initialDeposit.toString() },
     });
     log.info(
-      { vault, owner, currentShares: currentShares.toString(), initialDeposit: initialDeposit.toString() },
+      { vault, owner, riskOnChain, currentShares: currentShares.toString(), initialDeposit: initialDeposit.toString() },
       "vault backfilled",
     );
   }
