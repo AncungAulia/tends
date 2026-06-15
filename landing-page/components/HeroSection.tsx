@@ -6,6 +6,18 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useIsMobile } from "@/lib/useIsMobile";
 import LineWaves from "./LineWaves";
 import LogoMarquee from "./LogoMarquee";
+import ChooseYourAgentHeadline, {
+  type ChooseYourAgentHeadlineHandle,
+} from "./ChooseYourAgentHeadline";
+import BotPrism from "./BotPrism";
+import StrategyAccordion from "./StrategyAccordion";
+
+// Phase split thresholds for the slidesOuterRef ScrollTrigger (total 1400vh).
+// Exported to module scope so the headline's click callback can compute the
+// auto-scroll target without duplicating constants.
+const SLIDE_END = 0.5;
+const REVEAL_END = 0.64;
+const FALL_TRIGGER = 0.78;
 
 const SLIDES = [
   {
@@ -34,12 +46,32 @@ export default function HeroSection() {
   const btnsRef = useRef<HTMLDivElement>(null);
   const slidesOuterRef = useRef<HTMLDivElement>(null);
   const slidesOverRef = useRef<HTMLDivElement>(null);
+  // Three stacked masks for the staggered ripple reveal at end of slides.
+  // mask1 (deepest blue) expands first, mask2 (mid) follows, mask3 (white)
+  // closes — concentric rings before all merge into pure white.
+  const mask1Ref = useRef<HTMLDivElement>(null);
+  const mask2Ref = useRef<HTMLDivElement>(null);
+  const mask3Ref = useRef<HTMLDivElement>(null);
+  const headlineRef = useRef<ChooseYourAgentHeadlineHandle>(null);
+  // Cross-effect refs for headline trigger sync + scroll-direction tracking.
+  // didTriggerFallRef is shared between the ScrollTrigger onUpdate (which sets
+  // it on forward-scroll trigger) AND the headline's onFallStart callback
+  // (which sets it on click-triggered fall). Either path now lets the
+  // reverse-scroll recovery logic fire correctly.
+  const didTriggerFallRef = useRef(false);
+  const lastPRef = useRef(-1);
+  const recoveryStartedAtRef = useRef<number | null>(null);
   const progressFillRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const textRefs = useRef<(HTMLDivElement | null)[]>([]);
   const activeIdx  = useRef(-1);
   const entryDone  = useRef(false);
   const [hovered, setHovered] = useState(false);
+  // Tends bot: mounted only while the interactive phase is on screen (so the
+  // R3F canvas isn't running elsewhere), and faded/scaled in once the headline
+  // falls — they appear together.
+  const [botMounted, setBotMounted] = useState(false);
+  const [botShown, setBotShown] = useState(false);
   const isMobile    = useIsMobile();
   const isMobileRef = useRef(isMobile);
 
@@ -82,28 +114,7 @@ export default function HeroSection() {
         entryDone.current = true;
       });
 
-    const restoreFromHistory = (event: PageTransitionEvent) => {
-      const navEntry = performance.getEntriesByType("navigation")[0] as
-        | PerformanceNavigationTiming
-        | undefined;
-      if (!event.persisted && navEntry?.type !== "back_forward") return;
-
-      tl.progress(1).kill();
-      entryDone.current = true;
-      gsap.set(loadOverlayRef.current, { autoAlpha: 0 });
-      gsap.set(videoBgRef.current, { scale: 1, autoAlpha: 1 });
-      gsap.set(videoInnerRef.current, { borderRadius: "20px" });
-      gsap.set(
-        [line1Ref.current, line2Ref.current, subRef.current, btnsRef.current],
-        { yPercent: 0 },
-      );
-      window.scrollTo(0, 0);
-    };
-
-    window.addEventListener("pageshow", restoreFromHistory);
-
     return () => {
-      window.removeEventListener("pageshow", restoreFromHistory);
       tl.kill();
     };
   }, []);
@@ -161,10 +172,35 @@ export default function HeroSection() {
     if (!slidesOuterRef.current) return;
 
     gsap.set(slidesOverRef.current, { autoAlpha: 0 });
-    SLIDES.forEach((_, i) => {
-      gsap.set(slideRefs.current[i], { autoAlpha: 0 });
-      gsap.set(textRefs.current[i], { yPercent: 110 });
-    });
+
+    // Phase thresholds (SLIDE_END / REVEAL_END / FALL_TRIGGER) live at
+    // module scope — see top of file. Layout:
+    //   [0.00, 0.014)   PRE         — section hasn't entered yet
+    //   [0.014, 0.50)   SLIDE       — slide carousel (3 cards, ~233vh each)
+    //   [0.50, 0.64)    REVEAL      — staggered 3-layer circle reveal
+    //   [0.64, 0.78)    INTERACT/C  — headline, hover color shifts
+    //   [0.78, 1.00]    INTERACT/F  — fall fires, recovery hold on scroll-up
+
+    // Phase tracker (closure) — lets us run entry/exit logic only on phase
+    // transitions, not on every scroll tick.
+    let phase: "pre" | "slide" | "reveal" | "interactive" = "pre";
+
+    // Navbar tint follows the WHITE reveal circle reaching the top-left logo
+    // (scroll-tied) — not a flip at the phase boundary, which left the logo
+    // white-on-white for a moment before snapping dark.
+    let navDark = false;
+    const setNavDark = (v: boolean) => {
+      if (v === navDark) return;
+      navDark = v;
+      window.dispatchEvent(
+        new CustomEvent("tends:whitephase", { detail: v }),
+      );
+    };
+
+    // Holds the section "paused" on scroll-up while the exit plays out: bot
+    // pops away, the accordion slides out (reverse), then the headline fades
+    // back in (delayed). Long enough to cover the whole sequence.
+    const RECOVERY_MS = 1250;
 
     const ctx = gsap.context(() => {
       ScrollTrigger.create({
@@ -174,29 +210,211 @@ export default function HeroSection() {
         onUpdate: (self) => {
           const p = self.progress;
 
-          if (p < 0.02) {
-            if (activeIdx.current !== -1) {
-              activeIdx.current = -1;
+          // Recovery lock — same as before, but reads/writes through refs
+          // so click-triggered falls can participate too.
+          const now = performance.now();
+          const inRecovery =
+            recoveryStartedAtRef.current !== null &&
+            now - recoveryStartedAtRef.current < RECOVERY_MS;
+          if (recoveryStartedAtRef.current !== null && !inRecovery) {
+            recoveryStartedAtRef.current = null;
+            didTriggerFallRef.current = false;
+          }
+
+          // Scroll-direction detection — required so recovery only fires
+          // when the user is actually moving up, not the instant they click
+          // (which can sync didTriggerFallRef before any scroll happens).
+          const goingBackward =
+            lastPRef.current !== -1 && p < lastPRef.current;
+          lastPRef.current = p;
+
+          const naturalPhase: typeof phase =
+            p < 0.014
+              ? "pre"
+              : p < SLIDE_END
+                ? "slide"
+                : p < REVEAL_END
+                  ? "reveal"
+                  : "interactive";
+          let nextPhase: typeof phase = inRecovery
+            ? "interactive"
+            : naturalPhase;
+
+          // ── Boundary intercept: interactive → reveal backward ─────────
+          // Without this, a click that fires the fall while the user is
+          // sitting NEAR REVEAL_END (e.g., they just barely entered the
+          // interactive phase) leads to the user scrolling up past
+          // REVEAL_END in one tick — the interactive block never gets a
+          // chance to run its restore branch, and the circle transition
+          // kicks in with no text fade-in. We catch the crossing here.
+          if (
+            !inRecovery &&
+            phase === "interactive" &&
+            nextPhase === "reveal" &&
+            didTriggerFallRef.current &&
+            goingBackward
+          ) {
+            headlineRef.current?.restore();
+            setBotShown(false);
+            recoveryStartedAtRef.current = now;
+            nextPhase = "interactive"; // lock for this tick (and onwards)
+          }
+
+          // ─── Phase transitions ─────────────────────────────────────
+          if (nextPhase !== phase) {
+            const fromPhase = phase;
+            phase = nextPhase;
+
+            // Pre: hide whole slide overlay
+            if (nextPhase === "pre") {
+              if (activeIdx.current !== -1) {
+                textRefs.current[activeIdx.current]?.classList.remove(
+                  "visible",
+                );
+                activeIdx.current = -1;
+              }
               gsap.to(slidesOverRef.current, {
                 autoAlpha: 0,
                 duration: 0.2,
                 overwrite: true,
               });
             }
+
+            // Slide: section enters from above OR scrolling back from reveal
+            if (nextPhase === "slide") {
+              if (fromPhase === "pre") {
+                gsap.to(slidesOverRef.current, {
+                  autoAlpha: 1,
+                  duration: 0.4,
+                  overwrite: true,
+                });
+              } else {
+                // Snap back from reveal — no fade, slides immediately visible
+                if (slidesOverRef.current) {
+                  slidesOverRef.current.style.opacity = "1";
+                  slidesOverRef.current.style.visibility = "visible";
+                }
+              }
+            }
+
+            // Leaving reveal (forward to interactive OR backward to slide) —
+            // collapse the staggered ripple circles. NOTE: when entering
+            // interactive, we then re-pin mask3 at full coverage right after.
+            if (fromPhase === "reveal") {
+              if (mask1Ref.current)
+                mask1Ref.current.style.clipPath = "circle(0px at 50% 50%)";
+              if (mask2Ref.current)
+                mask2Ref.current.style.clipPath = "circle(0px at 50% 50%)";
+              if (mask3Ref.current)
+                mask3Ref.current.style.clipPath = "circle(0px at 50% 50%)";
+            }
+
+            // Mount the bot canvas as early as the REVEAL phase so its WebGL
+            // context + shaders are warm before the fall. Otherwise the very
+            // first scroll-down hits a cold canvas and the accordion (plain
+            // DOM) shows before the bot. It only unmounts when we leave the
+            // section entirely (slide/pre), so re-scrolls stay warm too.
+            if (nextPhase === "reveal" || nextPhase === "interactive") {
+              setBotMounted(true);
+            }
+            if (nextPhase === "slide" || nextPhase === "pre") {
+              setBotMounted(false);
+              setBotShown(false);
+            }
+
+            // Entering interactive: pin mask3 to full coverage and remove its
+            // clip-path entirely so falling letters can render past the
+            // viewport's diagonal radius (clip otherwise eats them mid-fall).
+            if (nextPhase === "interactive" && mask3Ref.current) {
+              mask3Ref.current.style.clipPath = "none";
+            }
+
+            // Leaving interactive backward (scroll-up) → reset headline + hide
+            // the bot. Stay mounted (we're going to reveal, still in section).
+            if (fromPhase === "interactive") {
+              headlineRef.current?.reset();
+              didTriggerFallRef.current = false;
+              recoveryStartedAtRef.current = null;
+              setBotShown(false);
+            }
+          }
+
+          // ─── Per-tick updates ──────────────────────────────────────
+          if (phase === "pre") {
+            setNavDark(false);
             if (progressFillRef.current)
               progressFillRef.current.style.width = "0%";
             return;
           }
 
-          if (activeIdx.current === -1) {
-            gsap.to(slidesOverRef.current, {
-              autoAlpha: 1,
-              duration: 0.4,
-              overwrite: true,
-            });
+          if (phase === "reveal") {
+            // Reveal phase: scroll-tied circle grow + slides fade
+            const revealRaw = (p - SLIDE_END) / (REVEAL_END - SLIDE_END);
+
+            // Slides + eyebrow fade out in the FIRST 40% of reveal, so they're
+            // already gone before the circle reaches their bounding rectangle.
+            const slideOpacity = Math.max(0, Math.min(1, 1 - revealRaw * 2.5));
+            if (slidesOverRef.current) {
+              slidesOverRef.current.style.opacity = String(slideOpacity);
+            }
+
+            // ─ Staggered ripple: 3 concentric circles ─────────────────
+            const STAGGER = 0.06;
+            const SPAN = 0.62;
+            const tFor = (i: number) =>
+              Math.max(0, Math.min(1, (revealRaw - i * STAGGER) / SPAN));
+            const ease = (t: number) => t * t * (3 - 2 * t);
+
+            const halfDiag =
+              Math.sqrt(
+                window.innerWidth * window.innerWidth +
+                  window.innerHeight * window.innerHeight,
+              ) / 2;
+            const maxR = halfDiag * 1.06;
+
+            if (mask1Ref.current)
+              mask1Ref.current.style.clipPath = `circle(${ease(tFor(0)) * maxR}px at 50% 50%)`;
+            if (mask2Ref.current)
+              mask2Ref.current.style.clipPath = `circle(${ease(tFor(1)) * maxR}px at 50% 50%)`;
+            const m3r = ease(tFor(2)) * maxR;
+            if (mask3Ref.current)
+              mask3Ref.current.style.clipPath = `circle(${m3r}px at 50% 50%)`;
+
+            // The logo (top-left corner) sits ~0.86·halfDiag from the center;
+            // flip the navbar dark the moment the white circle edge sweeps
+            // over it — so it tracks the scroll instead of snapping at 0.64.
+            setNavDark(m3r >= halfDiag * 0.86);
+            return;
           }
 
-          const slideP = (p - 0.02) / 0.98;
+          if (phase === "interactive") {
+            setNavDark(true); // full-white screen → dark logo
+            // Hold off any new triggers while the restore animation is
+            // playing — the section is "paused" for that window.
+            if (inRecovery) return;
+
+            // Forward: cross FALL_TRIGGER → fire fall (one shot) + reveal bot.
+            if (p >= FALL_TRIGGER) {
+              if (!didTriggerFallRef.current) {
+                headlineRef.current?.triggerFall();
+                didTriggerFallRef.current = true;
+                setBotShown(true);
+              }
+            } else if (didTriggerFallRef.current && goingBackward) {
+              // Reverse + actually scrolling backward (not just sitting
+              // there after a click). Fire one-shot restore and lock the
+              // phase via recovery. Hide the bot again.
+              headlineRef.current?.restore();
+              setBotShown(false);
+              recoveryStartedAtRef.current = now;
+            }
+            return;
+          }
+
+          // phase === "slide" — blue slides bg, logo stays white
+          setNavDark(false);
+          // Map p ∈ [0.014, SLIDE_END) onto the 3 slides
+          const slideP = (p - 0.014) / (SLIDE_END - 0.014);
           const raw = slideP * SLIDES.length;
           const next = Math.min(SLIDES.length - 1, Math.floor(raw));
 
@@ -212,33 +430,12 @@ export default function HeroSection() {
           const prev = activeIdx.current;
           activeIdx.current = next;
 
-
+          // Apple-style class-toggle: outgoing slide loses `.visible` (animates
+          // out via CSS transition); incoming slide gains it (animates in).
           if (prev >= 0) {
-            const dir = next > prev ? -110 : 110;
-            gsap.to(textRefs.current[prev], {
-              yPercent: dir,
-              duration: 0.4,
-              ease: "power3.in",
-              overwrite: true,
-            });
-            gsap.to(slideRefs.current[prev], {
-              autoAlpha: 0,
-              duration: 0.3,
-              delay: 0.1,
-              overwrite: true,
-            });
+            textRefs.current[prev]?.classList.remove("visible");
           }
-
-          gsap.set(textRefs.current[next], {
-            yPercent: next > prev ? 110 : -110,
-          });
-          gsap.set(slideRefs.current[next], { autoAlpha: 1 });
-          gsap.to(textRefs.current[next], {
-            yPercent: 0,
-            duration: 0.7,
-            ease: "power3.out",
-            overwrite: true,
-          });
+          textRefs.current[next]?.classList.add("visible");
         },
       });
     });
@@ -520,10 +717,14 @@ export default function HeroSection() {
       {/* ── Transition strip: infinite logo marquee (partners + stack) ── */}
       <LogoMarquee />
 
-      {/* ── Section 2: Slides — section terpisah di bawah hero ───── */}
+      {/* ── Section 2: Slides + Circle reveal + Interactive headline ──
+          Section height 1400vh = ~700vh slide phase + ~200vh reveal phase
+          + ~500vh interactive (color change + headline fall + hold). Sticky
+          child stays pinned the whole time; phase is decided by ScrollTrigger
+          progress in the effect above. */}
       <div
         ref={slidesOuterRef}
-        style={{ height: "720vh", position: "relative", zIndex: 2 }}
+        style={{ height: "1400vh", position: "relative", zIndex: 2 }}
       >
         <div style={{ position: "sticky", top: 0, height: "100vh" }}>
           <div
@@ -603,13 +804,12 @@ export default function HeroSection() {
                       top: 0,
                       left: 0,
                       right: 0,
-                      opacity: 0,
-                      visibility: "hidden",
                     }}
                   >
                     <div
                       style={{
-                        overflow: "hidden",
+                        // No more overflow:hidden — Apple-style reveal uses
+                        // blur + scale (no Y translate), so no clipping needed.
                         paddingBottom: "0.05em",
                       }}
                     >
@@ -617,6 +817,7 @@ export default function HeroSection() {
                         ref={(el) => {
                           textRefs.current[i] = el;
                         }}
+                        className="apple-reveal-text"
                         style={{
                           color: "#ffffff",
                           fontFamily: "var(--font-sans)",
@@ -640,6 +841,117 @@ export default function HeroSection() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* ── Staggered ripple reveal — 3 stacked mask layers ─────────
+              Each is a full-bleed solid clipped to a growing circle. They
+              expand at staggered times, so the user sees a concentric ring
+              of colors collapse inward → outward. Bottom (deepest blue)
+              expands first; top (white) is delayed and holds the headline.
+              All sit ABOVE slidesOverRef during the reveal phase. */}
+          {/* Layer 1: first ripple — primary brand blue */}
+          <div
+            ref={mask1Ref}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "#1591DC",
+              clipPath: "circle(0px at 50% 50%)",
+              willChange: "clip-path",
+              zIndex: 3,
+              pointerEvents: "none",
+            }}
+          />
+          {/* Layer 2: middle ripple — lighter blue (transition tone) */}
+          <div
+            ref={mask2Ref}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "#4BB8FA",
+              clipPath: "circle(0px at 50% 50%)",
+              willChange: "clip-path",
+              zIndex: 4,
+              pointerEvents: "none",
+            }}
+          />
+          {/* Layer 3: final mask — white, masks in "Choose Your Agent".
+              Headline is an interactive component: hover → color shift,
+              click → letters fall. Scroll within interactive phase drives
+              the same color shift, and at FALL_TRIGGER auto-fires the fall. */}
+          <div
+            ref={mask3Ref}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "#F7F9FC",
+              clipPath: "circle(0px at 50% 50%)",
+              willChange: "clip-path",
+              zIndex: 5,
+              // pointer-events here is "none" so the layer doesn't block
+              // mouse events on slides during the reveal — the headline
+              // itself opts back in via its own inline style.
+              pointerEvents: "none",
+            }}
+          >
+            {/* Headline owns its own layout (centering + physics container).
+                Click-to-fall + autoscroll were removed — the fall is driven
+                purely by scroll (triggerFall() at FALL_TRIGGER). */}
+            <ChooseYourAgentHeadline ref={headlineRef} isMobile={isMobile} />
+
+            {/* Bot (left) pops in first; the accordion cards (right) then slide
+                in from the right one by one. Each hides via its own animation
+                (bot scale 0, cards slid off-screen) so no overlay opacity is
+                needed. overflow:hidden clips the off-screen cards. */}
+            {botMounted && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  overflow: "hidden",
+                  pointerEvents: "none",
+                  display: "flex",
+                  flexDirection: isMobile ? "column" : "row",
+                  alignItems: "flex-start",
+                  justifyContent: "center",
+                  gap: isMobile ? "12px" : "4%",
+                  // Pushed down so it clears the navbar.
+                  padding: isMobile ? "96px 18px 24px" : "140px 5% 24px",
+                }}
+              >
+                {/* Bot — left */}
+                <div
+                  style={{
+                    flex: "0 0 38%",
+                    width: isMobile ? "100%" : undefined,
+                    height: isMobile ? "38vh" : "min(70vh, 520px)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <BotPrism
+                    variant="glossy"
+                    morphMode="bend"
+                    revealed={botShown}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                </div>
+
+                {/* Accordion — right */}
+                <div
+                  style={{
+                    flex: isMobile ? "1 1 auto" : "0 0 54%",
+                    width: isMobile ? "100%" : undefined,
+                    pointerEvents: botShown ? "auto" : "none",
+                  }}
+                >
+                  <StrategyAccordion
+                    show={botShown}
+                    height={isMobile ? "min(46vh, 360px)" : "min(70vh, 520px)"}
+                    maxWidth="100%"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
