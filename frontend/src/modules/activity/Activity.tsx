@@ -420,13 +420,14 @@ export function Activity() {
           </div>
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3">
+          {/* filters — horizontal scroll on mobile, wrap on desktop */}
+          <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {FILTERS.map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full border-[1.25px] px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap rounded-full border-[1.25px] px-3 py-1.5 text-xs font-medium transition-colors ${
                   filter === f
                     ? "border-brand bg-brand-soft text-brand"
                     : "border-edge bg-card text-dim hover:text-ink"
@@ -436,13 +437,14 @@ export function Activity() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 rounded-full border-[1.25px] border-edge bg-card px-3 py-1.5 focus-within:border-brand">
-            <Search className="h-3.5 w-3.5 text-faint" />
+          {/* search — full width on mobile, fixed on desktop */}
+          <div className="flex w-full items-center gap-2 rounded-full border-[1.25px] border-edge bg-card px-3 py-1.5 focus-within:border-brand md:w-auto">
+            <Search className="h-3.5 w-3.5 shrink-0 text-faint" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search activity"
-              className="w-36 bg-transparent text-xs text-ink outline-none placeholder:text-faint"
+              className="w-full bg-transparent text-xs text-ink outline-none placeholder:text-faint md:w-36"
             />
           </div>
         </div>

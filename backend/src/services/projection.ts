@@ -1,5 +1,6 @@
 import {
   resolveTargetBps,
+  applyExclusions,
   type CustomAllocation,
 } from "./rebalance-math.js";
 import { TOKENS, type RiskLevel, type TokenSymbol } from "../chain/tokens.js";
@@ -122,14 +123,19 @@ export function computeProjection(
   };
 }
 
-/** End-to-end projection for a risk preset (or CUSTOM blend). */
+/** End-to-end projection for a risk preset (or CUSTOM blend).
+ *  `excludedTokens` (the user's "Avoid" list) is dropped from the target and the
+ *  remaining weights renormalized — so the projected APY reflects the user's
+ *  actual constraint, not the unconstrained preset. */
 export function projectForRisk(
   risk: RiskLevel,
   capital: number,
   durationDays: number,
   apyByToken: ApyByToken = currentApy(),
   custom?: CustomAllocation,
+  excludedTokens?: readonly string[] | null,
 ): Projection {
-  const target = resolveTargetBps(risk, custom);
+  let target = resolveTargetBps(risk, custom);
+  if (excludedTokens?.length) target = applyExclusions(target, excludedTokens);
   return computeProjection(capital, durationDays, blendedApy(target, apyByToken));
 }

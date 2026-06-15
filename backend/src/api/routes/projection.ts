@@ -13,6 +13,9 @@ export const projectionBodySchema = z.object({
   customAllocation: z
     .object({ lowBps: bpsField, medBps: bpsField, highBps: bpsField })
     .optional(),
+  /** Token symbols to drop from the preset before projecting — preview of the
+   *  user's "Avoid" list. Unknown symbols are silently ignored downstream. */
+  excludedTokens: z.array(z.string().min(1).max(20)).max(50).optional(),
 });
 
 export const projectionRouter = new Hono();
@@ -23,14 +26,14 @@ projectionRouter.post("/", async (c) => {
   if (!parsed.success) {
     return c.json({ error: "invalid body", details: parsed.error.flatten() }, 400);
   }
-  const { strategyId, capital, durationDays, customAllocation } = parsed.data;
+  const { strategyId, capital, durationDays, customAllocation, excludedTokens } = parsed.data;
   if (strategyId === "CUSTOM" && !customAllocation) {
     return c.json({ error: "customAllocation required for CUSTOM" }, 400);
   }
   const risk = riskLevelFromId(strategyId)!;
   try {
     const apy = await apyService.getApyMap(); // derived where available, else estimate
-    return c.json(projectForRisk(risk, capital, durationDays, apy, customAllocation));
+    return c.json(projectForRisk(risk, capital, durationDays, apy, customAllocation, excludedTokens));
   } catch (e) {
     // e.g. custom bps don't sum to 10000
     return c.json({ error: (e as Error).message }, 400);

@@ -14,6 +14,7 @@ import {
   computeSwapInstructions,
   resolveTargetBps,
   applyAllocationCaps,
+  applyExclusions,
   tokensOutOfBand,
   driftFloorWad,
   valueUsd,
@@ -71,7 +72,7 @@ async function writeAgentRun(
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
   AgentConfigValue,
-  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps" | "maxPerAssetPct"
+  "perTokenCapsBps" | "driftThresholdBps" | "maxSlippageBps" | "maxPerAssetPct" | "excludedTokens"
 >;
 
 const log = childLogger("rebalancer");
@@ -196,6 +197,10 @@ export async function defaultBuildInstructions(
   }
 
   let targetBps = resolveTargetBps(risk as 0 | 1 | 2 | 3, custom);
+
+  // Honor the user's "Avoid" list FIRST — those tokens never enter the plan.
+  // Caps are applied AFTER so the renormalized weights are the ones being clamped.
+  targetBps = applyExclusions(targetBps, guardrails.excludedTokens);
 
   // Clamp to the user's per-asset ceiling + per-token caps (shared with executeDirectSwap).
   targetBps = applyAllocationCaps(targetBps, guardrails);

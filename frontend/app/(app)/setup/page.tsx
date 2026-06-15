@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
-import { MessageSquare, ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   TokenIcon,
@@ -10,9 +10,14 @@ import {
 } from "@/components/preview/TokenIcon";
 import ExclusionField from "@/components/preview/ExclusionField";
 import SlidingNumber from "@/components/preview/SlidingNumber";
+import { useAccount } from "wagmi";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { useUserVault } from "@/hooks/useUserVault";
 import { useAgentConfig, type AgentConfig } from "@/hooks/useAgentConfig";
 import { useRiskLevel } from "@/hooks/useRiskLevel";
+import { useStrategies } from "@/hooks/useStrategies";
+import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 
 /* ──────────────────────────────────────────────────────────
    Plan page mock — Tends
@@ -118,6 +123,38 @@ function fmtUSD(n: number) {
   return "$" + Math.round(n).toLocaleString("en-US");
 }
 
+// ─── Backend wiring helpers ─────────────────────────────────
+
+// Backend's strategy allocation strings use "MNT"; the FE token catalog uses
+// "WMNT" (the wrapped token actually held). Reconcile here until backend aligns.
+const SYMBOL_FIX: Record<string, string> = { MNT: "WMNT" };
+
+/** "40% cmETH + 30% sUSDe" (from /api/strategies) → [{ sym:"cmETH", pct:40 }, ...] */
+function parseBackendAllocation(raw: string): Alloc[] {
+  return raw
+    .split("+")
+    .map((part) => {
+      const m = part.trim().match(/^(\d+)%\s+(.+)$/);
+      if (!m) return null;
+      const sym = m[2].trim();
+      return { sym: SYMBOL_FIX[sym] ?? sym, pct: Number(m[1]) };
+    })
+    .filter(Boolean) as Alloc[];
+}
+
+// Shape returned by POST /api/projection (server-computed, real APY-driven).
+interface ProjectionResult {
+  capital: number;
+  durationDays: number;
+  blendedApyPct: number;
+  base: number;
+  best: number;
+  worst: number;
+}
+
+// FE id ("Low") → backend StrategyId ("LOW").
+const toStrategyId = (id: string) => id.toUpperCase() as "LOW" | "MEDIUM" | "HIGH" | "CUSTOM";
+
 // projection: expected / best / worst end value.
 // uncertainty widens with sqrt(time) and is capped, so worst-case can dip below
 // the starting amount short-term (esp. higher vol) but heals over long horizons.
@@ -168,14 +205,20 @@ function strSeed(s: string) {
 
 function GrowthChart({
   capital,
-  apy,
+  base,
+  best,
+  worst,
   vol,
   years,
   mode,
   seed,
 }: {
   capital: number;
-  apy: number;
+  // End-of-horizon values come from the backend projection (real, APY-driven).
+  // The in-between wiggle is illustrative volatility only — see disclaimer below.
+  base: number;
+  best: number;
+  worst: number;
   vol: number;
   years: number;
   mode: string;
@@ -191,9 +234,8 @@ function GrowthChart({
     return () => ro.disconnect();
   }, []);
 
-  const proj = project(capital, apy, vol, years);
   const targetFor = (k: string) =>
-    k === "best" ? proj.best : k === "worst" ? proj.worst : proj.base;
+    k === "best" ? best : k === "worst" ? worst : base;
 
   // deterministic simulated path per scenario: capital → that scenario's end value.
   // the END is the real projected figure; the wiggle in between is illustrative volatility.
@@ -639,7 +681,8 @@ function FreqDropdown({
 
 export default function SetupPreview() {
   const [selectedId, setSelectedId] = useState(CURRENT);
-  const [capital, setCapital] = useState(12430);
+  const [capital, setCapital] = useState(0);
+  const [capitalEdited, setCapitalEdited] = useState(false);
   const [duration, setDuration] = useState(DURATIONS[2]);
   const [allocHover, setAllocHover] = useState<number | null>(null);
   const [chartMode, setChartMode] = useState("all");
@@ -725,9 +768,28 @@ export default function SetupPreview() {
     }
   };
 
+  // ── Wiring: wallet balance + live strategy APY/allocation ──────────────
+  const { address } = useAccount();
+  const { balance } = useUSDCBalance(address);
+  const { strategies: backendStrategies } = useStrategies();
+
+  // Default the capital field to the user's actual USDC balance (once, until
+  // they type). "From your balance" should reflect real funds, not a mock number.
+  useEffect(() => {
+    const b = Math.floor(Number(balance));
+    if (!capitalEdited && b > 0) setCapital(b);
+  }, [balance, capitalEdited]);
+
   const strat = STRATEGIES.find((s) => s.id === selectedId)!;
   const isCurrent = selectedId === currentTier;
   const isCustom = strat.apy === null;
+
+  // Backend overlay: real blended APY + allocation per preset. Falls back to the
+  // local copy while /api/strategies loads (or for metadata the API doesn't carry).
+  const backendCur = backendStrategies.find((s) => s.id === toStrategyId(selectedId));
+  const backendApy = backendCur?.blendedApyPct ?? null;
+  const backendAlloc =
+    backendCur && !isCustom ? parseBackendAllocation(backendCur.allocation) : null;
 
   // custom = blend the three preset strategies by the user's weights
   const customTotal = customW.Low + customW.Medium + customW.High;
@@ -752,16 +814,53 @@ export default function SetupPreview() {
     return { apy: bApy, vol: bVol, alloc };
   })();
 
-  const apy = isCustom ? blended.apy : (strat.apy ?? 0);
+  // ── Wiring: server-computed projection (real, APY-driven) ──────────────
+  const durationDays = Math.round(duration.years * 365);
+  const projValid = capital > 0 && (!isCustom || customValid);
+  const lowBps = customW.Low * 100;
+  const medBps = customW.Medium * 100;
+  const { data: projData } = useQuery({
+    queryKey: [
+      "setup-projection",
+      toStrategyId(selectedId),
+      capital,
+      durationDays,
+      isCustom ? `${customW.Low}-${customW.Medium}-${customW.High}` : "",
+    ],
+    enabled: projValid,
+    queryFn: () =>
+      apiFetch<ProjectionResult>("/api/projection", null, {
+        method: "POST",
+        body: JSON.stringify({
+          strategyId: toStrategyId(selectedId),
+          capital,
+          durationDays,
+          ...(isCustom
+            ? { customAllocation: { lowBps, medBps, highBps: 10_000 - lowBps - medBps } }
+            : {}),
+        }),
+      }),
+  });
+
+  // APY: prefer the backend's blended figure; CUSTOM reads it off the projection
+  // (the only place the backend computes a custom blend). Local copy is fallback.
+  const apy = isCustom
+    ? (projData?.blendedApyPct ?? blended.apy)
+    : (backendApy ?? strat.apy ?? 0);
   const vol = isCustom ? blended.vol : strat.vol;
-  const baseAlloc = isCustom ? blended.alloc : strat.alloc;
+  const baseAlloc = isCustom ? blended.alloc : (backendAlloc ?? strat.alloc);
   // exclusions are a composition constraint: drop avoided tokens, renormalize the rest
   const alloc = (() => {
     const kept = baseAlloc.filter((a) => !avoid.includes(a.sym));
     const sum = kept.reduce((s, a) => s + a.pct, 0) || 1;
     return kept.map((a) => ({ ...a, pct: Math.round((a.pct / sum) * 100) }));
   })();
-  const { base, best, worst } = project(capital, apy, vol, duration.years);
+  // End values from the backend projection; local project() only bridges the gap
+  // while the request is in flight so the UI never flashes empty.
+  const localProj = project(capital, apy, vol, duration.years);
+  const base = projData?.base ?? localProj.base;
+  const best = projData?.best ?? localProj.best;
+  const worst = projData?.worst ?? localProj.worst;
 
   // hovered allocation segment → tooltip ($ derived from capital)
   const ah =
@@ -793,9 +892,6 @@ export default function SetupPreview() {
         </div>
         {/* desktop: actions stay top-right (mobile shows them under the card) */}
         <div className="hidden shrink-0 items-center gap-2.5 md:flex">
-          <button className="flex items-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-4 py-2 text-sm font-medium text-dim transition-colors hover:text-ink">
-            <MessageSquare className="h-4 w-4" /> Ask Agent
-          </button>
           <button
             onClick={onSwitch}
             disabled={primaryDisabled}
@@ -848,11 +944,7 @@ export default function SetupPreview() {
               </h2>
               <p className="mt-1.5 flex items-baseline gap-1.5">
                 <span className="text-3xl font-semibold tracking-[-0.03em] text-ink">
-                  {isCustom
-                    ? `${apy.toFixed(1)}%`
-                    : strat.apy != null
-                      ? `${strat.apy}%`
-                      : "—"}
+                  {`${apy.toFixed(1)}%`}
                 </span>
                 <span className="text-[0.625rem] tracking-wider text-faint">
                   estimated APY
@@ -995,15 +1087,12 @@ export default function SetupPreview() {
           </div>
           </div>
 
-          {/* apply / ask — mobile only; desktop keeps them in the header */}
-          <div className="flex gap-2.5 md:hidden">
-            <button className="flex flex-1 items-center justify-center gap-1.5 rounded-full border-[1.25px] border-edge bg-card px-4 py-2.5 text-sm font-medium text-dim transition-colors hover:text-ink">
-              <MessageSquare className="h-4 w-4" /> Ask Agent
-            </button>
+          {/* apply — mobile only; desktop keeps it in the header */}
+          <div className="md:hidden">
             <button
               onClick={onSwitch}
               disabled={primaryDisabled}
-              className="flex-1 rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {primaryLabel}
             </button>
@@ -1032,9 +1121,10 @@ export default function SetupPreview() {
                 <span className="text-sm text-dim">$</span>
                 <input
                   value={capital ? capital.toLocaleString("en-US") : ""}
-                  onChange={(e) =>
-                    setCapital(Number(e.target.value.replace(/\D/g, "")) || 0)
-                  }
+                  onChange={(e) => {
+                    setCapitalEdited(true);
+                    setCapital(Number(e.target.value.replace(/\D/g, "")) || 0);
+                  }}
                   inputMode="numeric"
                   className="w-24 bg-transparent text-sm font-semibold text-ink outline-none"
                 />
@@ -1295,7 +1385,9 @@ export default function SetupPreview() {
           </div>
           <GrowthChart
             capital={capital}
-            apy={apy}
+            base={base}
+            best={best}
+            worst={worst}
             vol={vol}
             years={duration.years}
             mode={chartMode}

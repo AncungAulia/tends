@@ -15,6 +15,7 @@ import { TOKENS, type TokenSymbol } from "../../chain/tokens.js";
 import {
   computeSwapInstructions,
   applyAllocationCaps,
+  applyExclusions,
   type TokenState,
 } from "../../services/rebalance-math.js";
 import {
@@ -357,10 +358,11 @@ const executeDirectSwapTool = createTool({
       }
     }
 
-    // GUARDRAIL: clamp the requested allocation to the user's per-asset ceiling +
-    // per-token caps — the SAME limits the auto-rebalancer enforces. A chat command
-    // can't push an asset past its cap; the excess parks in USDC.
-    const cappedTarget = applyAllocationCaps(targetMap, config);
+    // GUARDRAIL: same pipeline as the auto-rebalancer — drop "Avoid" tokens first,
+    // then clamp to per-asset ceiling + per-token caps. A chat command can't sneak
+    // past either limit; the excess parks in USDC.
+    const afterExclusion = applyExclusions(targetMap, config.excludedTokens);
+    const cappedTarget = applyAllocationCaps(afterExclusion, config);
 
     const slippageBps = config.maxSlippageBps ?? SLIPPAGE_BPS;
     const instructions = computeSwapInstructions(states, cappedTarget, {
