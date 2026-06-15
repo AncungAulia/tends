@@ -99,3 +99,290 @@ body {
   width: max-content;
   animation: marquee 22s linear infinite;
 }
+
+
+
+/* ─────────────────────────────────────────────────────────────
+   Apple-style text reveal — blur + scale + opacity
+   Targets: .apple-reveal-text (currently used by slide descriptions
+   in HeroSection's pinned slides). A `.visible` class added at the
+   right moment (here: by the scroll handler that activates each
+   slide) triggers the transition.
+   ───────────────────────────────────────────────────────────── */
+.apple-reveal-text {
+  opacity: 0;
+  filter: blur(10px);
+  /* Pure slide-up: 28px is large enough to read as motion at this text
+     scale (~80px line height). Scale was removed because at 0.96→1 (a 4%
+     growth visible on every edge of the text block) it visually
+     overwhelmed the smaller positional shift — the eye reads "growing"
+     instead of "rising." */
+  transform: translateY(28px);
+  will-change: opacity, filter, transform;
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.apple-reveal-text.visible {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .apple-reveal-text,
+  .apple-reveal-text.visible {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   Tends bot faces — idle "alive" animations for the accordion icons.
+   Parts are inlined SVG groups (see components/TendsBotFace.tsx). All
+   motion is gated behind `.tbf--active` so it ONLY plays on the expanded
+   card; collapsed icons stay perfectly still. Each personality is wired
+   per-variant. Bursts use long durations with the action in a small
+   window → a flicker of life every few seconds, calm in between.
+   ───────────────────────────────────────────────────────────── */
+.tbf-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.tbf-face,
+.tbf-eyes,
+.tbf-pupils,
+.tbf-gear,
+.tbf-flame-l,
+.tbf-flame-r {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+/* Jelly/breathe squash from the base of the triangle. */
+.tbf-face {
+  transform-origin: 50% 88%;
+}
+/* Flames lick upward from their base. */
+.tbf-flame-l,
+.tbf-flame-r {
+  transform-origin: 50% 92%;
+}
+
+/* Jelly — bouncier + bigger amplitude, with a few settle bounces so it reads
+   as squishy ("kenyal"). */
+@keyframes tbfJelly {
+  0%, 30%, 100% { transform: scale(1, 1); }
+  42% { transform: scale(1.14, 0.86); }
+  52% { transform: scale(0.87, 1.14); }
+  62% { transform: scale(1.09, 0.93); }
+  72% { transform: scale(0.95, 1.06); }
+  82% { transform: scale(1.03, 0.98); }
+  90% { transform: scale(1, 1); }
+}
+/* LOW breathe — clearer rise/fall than before. */
+@keyframes tbfBreathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.06, 0.95); }
+}
+/* Whole eye (sclera + pupil together) looks left/right AND blinks — one
+   keyframe so both ride the same group. */
+@keyframes tbfLook {
+  0%, 10% { transform: translateX(0) scaleY(1); }
+  20%, 32% { transform: translateX(14px) scaleY(1); }
+  38% { transform: translateX(14px) scaleY(0.1); }
+  43% { transform: translateX(14px) scaleY(1); }
+  54%, 66% { transform: translateX(-14px) scaleY(1); }
+  84% { transform: translateX(0) scaleY(1); }
+  90% { transform: translateX(0) scaleY(0.1); }
+  95%, 100% { transform: translateX(0) scaleY(1); }
+}
+/* LOW — sleepy: a clear blink of the whole eye. */
+@keyframes tbfBlinkOnly {
+  0%, 76%, 100% { transform: scaleY(1); }
+  86% { transform: scaleY(0.1); }
+  92% { transform: scaleY(1); }
+}
+/* Fire — bigger, faster flicker so the embers really dance. */
+@keyframes tbfFlicker {
+  0%, 100% { transform: scale(1, 1); }
+  20% { transform: scale(0.86, 1.18) translateY(-2px); }
+  40% { transform: scale(1.14, 0.89); }
+  60% { transform: scale(0.9, 1.13) translateY(-2px); }
+  80% { transform: scale(1.09, 0.93); }
+}
+@keyframes tbfSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Per-variant wiring — only when the card is expanded. Short cycles +
+   bigger amplitudes so the life is obvious. ── */
+.tbf--active.tbf--medium .tbf-face,
+.tbf--active.tbf--high .tbf-face,
+.tbf--active.tbf--custom .tbf-face {
+  animation: tbfJelly 2.5s ease-in-out infinite;
+}
+.tbf--active.tbf--low .tbf-face {
+  animation: tbfBreathe 2.6s ease-in-out infinite;
+}
+
+.tbf--active.tbf--medium .tbf-eyes,
+.tbf--active.tbf--custom .tbf-eyes {
+  animation: tbfLook 3s ease-in-out infinite;
+}
+.tbf--active.tbf--low .tbf-eyes {
+  animation: tbfBlinkOnly 2.8s ease-in-out infinite;
+}
+
+.tbf--active.tbf--high .tbf-flame-l {
+  animation: tbfFlicker 0.5s ease-in-out infinite;
+}
+.tbf--active.tbf--high .tbf-flame-r {
+  animation: tbfFlicker 0.6s ease-in-out infinite 0.12s;
+}
+
+.tbf--active.tbf--custom .tbf-gear {
+  animation: tbfSpin 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tbf-face,
+  .tbf-eyes,
+  .tbf-pupils,
+  .tbf-gear,
+  .tbf-flame-l,
+  .tbf-flame-r {
+    animation: none !important;
+  }
+}
+
+/* Generic spinner (chat ActionCard "Executing" state). */
+@keyframes tendsSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ConfirmFace body: cartoonish jelly wobble, but ONLY while asking. Once the
+   action is approved/denied the body holds still and only the eyes play. */
+.cf-wobble {
+  transform-box: fill-box;
+  transform-origin: 50% 86%;
+  animation: tbfJelly 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-wobble { animation: none; }
+}
+
+/* ConfirmFace question mark: gentle idle sway (tilts left/right) while asking.
+   It stays put, just rocks ~8deg around its base. */
+.confirm-q {
+  transform-box: fill-box;
+  transform-origin: 50% 88%;
+  animation: confirmQSway 2s ease-in-out infinite;
+}
+@keyframes confirmQSway {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confirm-q { animation: none; }
+}
+
+/* Relaxed idle for the chat-header avatar: slow the medium face down to ~5s so
+   the look + blink + jelly read as calm and unhurried. */
+.tbf--active.tbf--slow.tbf--medium .tbf-face {
+  animation-duration: 5s;
+}
+.tbf--active.tbf--slow.tbf--medium .tbf-eyes {
+  animation-duration: 5.4s;
+}
+
+
+/* Interactive chat showcase: pulse highlight for the call-to-action (send /
+   confirm) + a soft entry for each chat message. */
+.cta-pulse {
+  animation: ctaPulse 1.5s ease-in-out infinite;
+}
+@keyframes ctaPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(21,145,220,0.45); }
+  50% { box-shadow: 0 0 0 8px rgba(21,145,220,0); }
+}
+
+/* Each chat bubble eases in with a soft fade + blur so the conversation reads
+   as it streams in (used for both the agent and the visitor's own bubbles). */
+.chat-msg-in {
+  animation: chatMsgIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes chatMsgIn {
+  from { opacity: 0; transform: translateY(10px); filter: blur(10px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0px); }
+}
+
+/* Thinking indicator: three dots that bounce, matching the real app loader. */
+@keyframes chatDotBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* Send button: a breathing glow ring so it reads as the one thing to click. */
+.send-glow {
+  animation: sendGlow 1.8s ease-in-out infinite;
+}
+@keyframes sendGlow {
+  0%, 100% { box-shadow: 0 6px 16px rgba(21,145,220,0.40), 0 0 0 0 rgba(21,145,220,0.45); }
+  50% { box-shadow: 0 9px 24px rgba(21,145,220,0.55), 0 0 0 11px rgba(21,145,220,0); }
+}
+.send-btn { transition: transform 0.16s ease, filter 0.16s ease; }
+.send-btn:hover { transform: translateY(-2px) scale(1.06); filter: brightness(1.05); }
+.send-btn:active { transform: translateY(0) scale(0.9); filter: brightness(0.94); }
+
+/* Typing caret for the composer + the agent's streamed answer. */
+.caret-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: #1591DC;
+  animation: caretBlink 0.9s steps(1) infinite;
+}
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Gentle bob for the "tap send" nudge that sits above the button. */
+.nudge-bob { animation: nudgeBob 1.7s ease-in-out infinite; }
+@keyframes nudgeBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Click ripple emitted by the virtual cursor when it presses Approve. */
+.cursor-ripple { animation: cursorRipple 0.5s ease-out both; }
+@keyframes cursorRipple {
+  from { transform: scale(0.2); opacity: 0.5; }
+  to { transform: scale(1); opacity: 0; }
+}
+
+/* "Scroll to continue" chevron: bobs downward once the clip is over. */
+.scroll-hint-bob { animation: scrollHintBob 1.4s ease-in-out infinite; }
+@keyframes scrollHintBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-pulse,
+  .chat-msg-in,
+  .send-glow,
+  .nudge-bob,
+  .caret-blink,
+  .cursor-ripple,
+  .scroll-hint-bob { animation: none; }
+}
