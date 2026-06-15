@@ -52,9 +52,9 @@ export function Holdings({ vaultAddress }: HoldingsProps) {
 
       {isLoading ? (
         <div className="space-y-2">
-          <div className="h-3.5 w-full animate-pulse rounded bg-edge dark:bg-white/10" />
+          <div className="h-3.5 w-full tends-skeleton rounded" />
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-10 w-full animate-pulse rounded-lg bg-edge dark:bg-white/10" />
+            <div key={i} className="h-10 w-full tends-skeleton rounded-lg" />
           ))}
         </div>
       ) : shown.length === 0 ? (

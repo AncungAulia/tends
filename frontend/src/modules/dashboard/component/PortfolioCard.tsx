@@ -212,7 +212,7 @@ export function PortfolioCard({ totalAssetsUSDC, delta, isLoading }: PortfolioCa
           <p className="text-xs text-dim">Total Portfolio Value</p>
           <div className="flex items-end gap-2">
             {isLoading ? (
-              <div className="mt-1 h-8 w-32 animate-pulse rounded-lg bg-edge dark:bg-white/10" />
+              <div className="mt-1 h-8 w-32 tends-skeleton rounded-lg" />
             ) : (
               <p className="mt-1 flex items-center text-[2rem] font-semibold leading-none tracking-[-0.04em] text-ink">
                 <span>$</span>
@@ -232,7 +232,7 @@ export function PortfolioCard({ totalAssetsUSDC, delta, isLoading }: PortfolioCa
         </div>
         <div className="pl-6">
           {isLoading ? (
-            <div className="h-[150px] animate-pulse rounded-xl bg-edge dark:bg-white/10" />
+            <div className="h-[150px] tends-skeleton rounded-xl" />
           ) : (
             <PortfolioChart key={Math.round(totalAssetsUSDC)} data={data} />
           )}

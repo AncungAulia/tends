@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Check, Loader2, AlertCircle } from "lucide-react";
 import { useAccount } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
@@ -264,6 +264,9 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
   const [mode, setMode] = useState<"amount" | "percent">("amount");
   const [rawInput, setRawInput] = useState("");
   const [sellPct, setSellPct] = useState<Record<string, number>>({});
+  // tracks whether the last edit came from the amount field or a slider, so the
+  // two-way sync below doesn't fight itself
+  const editSrc = useRef<"amount" | "slider">("amount");
 
   const vaultBalance = totalAssetsUSDC;
   const parsedInput = parseFloat(rawInput.replace(/,/g, "")) || 0;
@@ -279,6 +282,12 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
   // Sync sliders to proportional whenever the USD amount or holdings list changes
   const nonUsdcKey = nonUsdcHoldings.map((h) => h.symbol).join(",");
   useEffect(() => {
+    // skip when the change came from a slider — don't flatten the user's
+    // per-token tweak back into a uniform proportional split
+    if (editSrc.current === "slider") {
+      editSrc.current = "amount";
+      return;
+    }
     if (!vaultBalance || !nonUsdcHoldings.length) return;
     const pct = Math.min(100, Math.round((num / vaultBalance) * 100)) || 0;
     const next: Record<string, number> = {};
@@ -302,6 +311,7 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
       const n = parseFloat(v);
       if (!isNaN(n) && n > 100) return;
     }
+    editSrc.current = "amount";
     setRawInput(v);
   }
 
@@ -466,7 +476,32 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                               <div className="mt-1.5">
                                 <TokenSlider
                                   value={pct}
-                                  onChange={(v) => setSellPct((prev) => ({ ...prev, [h.symbol]: v }))}
+                                  onChange={(v) => {
+                                    editSrc.current = "slider";
+                                    const next = { ...sellPct, [h.symbol]: v };
+                                    setSellPct(next);
+                                    // reflect the new slider config in the amount above
+                                    const tokenTotal = nonUsdcHoldings.reduce(
+                                      (s, x) =>
+                                        s +
+                                        (x.valueUSD ?? 0) * (next[x.symbol] ?? 0) / 100,
+                                      0,
+                                    );
+                                    const total =
+                                      (usdcHolding?.valueUSD ?? 0) + tokenTotal;
+                                    setRawInput(
+                                      mode === "amount"
+                                        ? USD(total)
+                                        : vaultBalance > 0
+                                          ? String(
+                                              Math.min(
+                                                100,
+                                                Math.round((total / vaultBalance) * 100),
+                                              ),
+                                            )
+                                          : "0",
+                                    );
+                                  }}
                                   color={accentColor}
                                 />
                               </div>

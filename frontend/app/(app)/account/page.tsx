@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useAccount } from "wagmi";
+import { useTheme } from "next-themes";
 import { usePrivy } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import VaultCard from "@/components/preview/VaultCard";
@@ -155,7 +156,7 @@ function Profile() {
 type Theme = "system" | "light" | "dark";
 
 function Preferences() {
-  const [theme, setTheme] = useState<Theme>("light");
+  const { theme, setTheme } = useTheme();
   const options: { key: Theme; label: string; icon: typeof Sun }[] = [
     { key: "system", label: "System", icon: Monitor },
     { key: "light", label: "Light", icon: Sun },

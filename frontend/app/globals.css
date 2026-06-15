@@ -133,11 +133,11 @@
 }
 
 html {
-  /* Fluid root size: scales the whole rem-based UI with viewport width so it
-     looks consistent across OS display scales (e.g. Windows 150% vs Mac 100%).
-     Anchored to 16px at ~1280px CSS viewport, so a 150%-scaled screen is
-     unchanged; wider 100% screens scale up. Tune 0.9vw / 21px cap as needed. */
-  font-size: clamp(16px, 0.9vw + 4.5px, 21px);
+  /* Fixed 16px root. OS display scaling (Windows 150% vs Mac 100%) is already
+     normalised by the browser: CSS px is a logical unit, so 16px renders at the
+     same *physical* size on both. Different screen widths are handled by
+     responsive layout (sm/md/lg breakpoints), not by scaling the root font. */
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

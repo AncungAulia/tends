@@ -292,7 +292,7 @@ function MobileDetailSheet({ act, onClose }: { act: DisplayAct | null; onClose: 
   return (
     <Vaul.Root open={!!act} onOpenChange={(o) => !o && onClose()}>
       <Vaul.Portal>
-        <Vaul.Overlay className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[1px]" />
+        <Vaul.Overlay className="fixed inset-0 z-50 bg-tip/40 backdrop-blur-[1px]" />
         <Vaul.Content
           aria-describedby={undefined}
           className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border-t border-edge bg-card outline-none"
@@ -338,7 +338,7 @@ function Drawer({ act, onClose }: { act: DisplayAct | null; onClose: () => void 
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-ink/25 backdrop-blur-[1px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-tip/40 backdrop-blur-[1px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
       />
       <div className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-card shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
         {act && (
@@ -451,7 +451,7 @@ export function Activity() {
           {isLoading ? (
             <div className="space-y-2 p-3">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 w-full animate-pulse rounded-lg bg-edge" />
+                <div key={i} className="h-10 w-full tends-skeleton rounded-lg" />
               ))}
             </div>
           ) : filtered.length === 0 ? (

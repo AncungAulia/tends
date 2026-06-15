@@ -254,7 +254,7 @@ function PortfolioChart({
       <AnimatePresence>
         {hv && (
           <motion.div
-            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-ink px-3 py-2 text-left shadow-lg"
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-tip px-3 py-2 text-left shadow-lg"
             style={{
               left: Math.max(56, Math.min(w - 56, hv.x)),
               top: hv.y - 12,
@@ -484,14 +484,14 @@ function Holdings() {
       </div>
 
       {isLoading ? (
-        <div className="h-3.5 animate-pulse rounded-full bg-edge" />
+        <div className="h-3.5 tends-skeleton rounded-full" />
       ) : allHoldings.length === 0 ? (
         <p className="text-xs text-faint">No holdings yet. Deposit to get started.</p>
       ) : (
         <>
           {/* segmented allocation bar — all holdings, not just this page */}
           <div className="relative">
-            <div className="flex h-3.5">
+            <div className="flex h-6 md:h-3.5">
               {allHoldings.map((h, i) => (
                 <div
                   key={h.sym}
@@ -510,7 +510,7 @@ function Holdings() {
             <AnimatePresence>
               {hover !== null && (
                 <motion.div
-                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-left shadow-lg"
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] z-10 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1.5 text-left shadow-lg"
                   style={{ left: `${centerPct}%`, transformOrigin: "bottom center" }}
                   initial={{ opacity: 0, scale: 0.9, y: 4, x: "-50%" }}
                   animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
@@ -649,7 +649,7 @@ function AgentCard() {
         {isLoading ? (
           <div className="space-y-2.5 py-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-4 animate-pulse rounded bg-edge" />
+              <div key={i} className="h-4 tends-skeleton rounded" />
             ))}
           </div>
         ) : activities.length === 0 ? (
@@ -686,7 +686,7 @@ export default function OverviewPage() {
   const [modal, setModal] = useState<null | "deposit" | "withdraw">(null);
   return (
     <>
-      <div className="mx-auto max-w-5xl px-8 py-8">
+      <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">Overview</h1>
