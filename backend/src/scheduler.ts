@@ -43,9 +43,11 @@ export function buildJobs(): ScheduledJob[] {
       enabled: env.RELAYER_ENABLED,
       intervalMs: env.RELAYER_INTERVAL_SEC * 1000,
       run: async () => {
-        await relayerService.relayOnce();
-        // prices just moved → enforce per-token drift bands (event-driven check)
-        await rebalancerService.sweepBands();
+        const result = await relayerService.relayOnce();
+        // Only sweep bands when at least one price moved ≥ 2% (materiality guard).
+        if (result && result.materialTokens.length > 0) {
+          await rebalancerService.sweepBands();
+        }
       },
     },
     {

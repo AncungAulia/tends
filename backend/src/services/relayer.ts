@@ -128,6 +128,9 @@ export const defaultRelayerDeps: RelayerDeps = {
   },
 };
 
+/** Materiality threshold: 200bps = 2% price move triggers band sweep. */
+const MATERIAL_BPS = 200n;
+
 /**
  * Price relayer (handed off to the backend — RELAYER-HANDOFF.md). Mirrors real
  * mainnet/RedStone prices into the testnet MockOracle so PriceFeed.getPrice serves
@@ -137,7 +140,26 @@ export const defaultRelayerDeps: RelayerDeps = {
  * the scheduler (RELAYER_ENABLED), or one-shot with `pnpm relayer:once`.
  */
 export class RelayerService {
+  private lastPrices = new Map<string, bigint>();
+
   constructor(private readonly deps: RelayerDeps = defaultRelayerDeps) {}
+
+  /**
+   * Returns token ids that moved ≥ MATERIAL_BPS since last relay, then updates cache.
+   * First-ever relay for a token is always treated as non-material (no prior price to diff).
+   */
+  private updateAndFindMaterial(entries: FeedEntry[]): string[] {
+    const moved: string[] = [];
+    for (const { id, wad } of entries) {
+      const prev = this.lastPrices.get(id);
+      if (prev !== undefined && prev > 0n) {
+        const delta = wad > prev ? wad - prev : prev - wad;
+        if (delta * 10_000n >= prev * MATERIAL_BPS) moved.push(id);
+      }
+      this.lastPrices.set(id, wad);
+    }
+    return moved;
+  }
 
   /** Collect all feed entries (USDY + RedStone) without sending. */
   async collectEntries(): Promise<FeedEntry[]> {
@@ -159,14 +181,22 @@ export class RelayerService {
    * Chunking keeps each tx gas cost ~250k vs ~1M for 43 entries at once.
    * Nonce is fetched once and incremented manually to avoid DRPC returning a
    * stale "latest" nonce for each chunk (which would cause same-nonce collisions).
+   *
+   * Returns `{ hashes, materialTokens }`: callers use `materialTokens.length > 0`
+   * to decide whether to run a band sweep — avoids sweeping when prices are flat.
    */
-  async relayOnce(chunkSize = 10): Promise<`0x${string}`[] | null> {
+  async relayOnce(chunkSize = 10): Promise<{ hashes: `0x${string}`[]; materialTokens: string[] } | null> {
     if (!addresses.mockOracle) {
       log.warn("MOCK_ORACLE_ADDRESS not set, skip");
       return null;
     }
     const entries = await this.collectEntries();
     if (entries.length === 0) return null;
+
+    const materialTokens = this.updateAndFindMaterial(entries);
+    if (materialTokens.length > 0) {
+      log.info({ materialTokens }, "material price move detected");
+    }
 
     // Fetch pending nonce once so sequential chunks don't clobber each other.
     let nonce = await publicClient.getTransactionCount({
@@ -186,8 +216,8 @@ export class RelayerService {
       log.info({ hash, chunk: Math.floor(i / chunkSize) + 1, count: chunk.length, nonce }, "relayed prices chunk → MockOracle");
       nonce++;
     }
-    log.info({ total: entries.length, txs: hashes.length }, "relay complete");
-    return hashes;
+    log.info({ total: entries.length, txs: hashes.length, materialTokens: materialTokens.length }, "relay complete");
+    return { hashes, materialTokens };
   }
 }
 

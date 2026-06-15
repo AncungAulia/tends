@@ -352,6 +352,9 @@ export const defaultRebalancerDeps: RebalancerDeps = {
  * allocation, build SwapInstruction[] off-chain, then call vault.rebalance().
  */
 export class RebalancerService {
+  /** Per-vault timestamp of last sweepBands trigger (ms). */
+  private vaultLastSwept = new Map<string, number>();
+
   constructor(private readonly deps: RebalancerDeps = defaultRebalancerDeps) {}
 
   listVaults(): Promise<`0x${string}`[]> {
@@ -531,14 +534,22 @@ export class RebalancerService {
    * target. processVault keeps all the usual guards (pause/stale/caps/daily-limit/simulate).
    */
   async sweepBands(): Promise<void> {
+    const DEBOUNCE_MS = 30_000;
+    const now = Date.now();
     const vaults = await this.deps.listVaults();
     for (const vault of vaults) {
       try {
+        const lastSwept = this.vaultLastSwept.get(vault) ?? 0;
+        if (now - lastSwept < DEBOUNCE_MS) {
+          log.debug({ vault, msSinceLastSweep: now - lastSwept }, "band sweep debounced");
+          continue;
+        }
         const config = await this.deps.readAgentConfig(vault);
         if (!config.autoRebalanceEnabled || !config.perTokenBandsBps) continue;
         const { holdings } = await this.deps.readHoldings(vault);
         const breached = tokensOutOfBand(holdings, config.perTokenBandsBps);
         if (breached.length === 0) continue;
+        this.vaultLastSwept.set(vault, now);
         log.info({ vault, breached }, "token(s) out of band after price update — rebalancing");
         agentLogEmitter.log({
           vaultAddress: vault,
