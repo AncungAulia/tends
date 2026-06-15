@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useAccount } from "wagmi";
 import makeBlockie from "ethereum-blockies-base64";
 
@@ -10,8 +10,29 @@ import makeBlockie from "ethereum-blockies-base64";
    colour holds opaque at the very top (under the notch) and melts to transparent
    below, so content scrolling up dissolves behind it instead of meeting a hard
    bar edge. The header is pointer-events-none so its transparent area never
-   blocks taps on the content beneath; only the avatar and bell capture taps.
-   It also auto-hides: slides up when you scroll down, back in when you scroll up. */
+   blocks taps on the content beneath; only the avatar captures taps.
+   It also auto-hides: slides up when you scroll down, back in when you scroll up.
+
+   Left = current page name (the mobile page indicator, since per-page <h1>s are
+   hidden on mobile). Right = avatar → /account (account lives here, not in the
+   bottom nav). */
+
+// page name shown on the left — keyed by route
+const PAGE_TITLES: Record<string, string> = {
+  "/overview": "Overview",
+  "/agent": "Agent",
+  "/activity": "Activity",
+  "/setup": "Setup",
+  "/account": "Account",
+};
+
+function titleFor(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const hit = Object.entries(PAGE_TITLES).find(([href]) =>
+    pathname.startsWith(href),
+  );
+  return hit?.[1] ?? "Tends";
+}
 
 // hide on scroll-down, reveal on scroll-up (past a small threshold)
 function useHideOnScroll() {
@@ -61,6 +82,8 @@ function BlockieFallback() {
 export function MobileTopBar() {
   const hidden = useHideOnScroll();
   const { address } = useAccount();
+  const pathname = usePathname();
+  const title = titleFor(pathname);
 
   return (
     <header
@@ -69,10 +92,17 @@ export function MobileTopBar() {
       }`}
     >
       <div className="flex items-center justify-between gap-3">
-        {/* identity */}
+        {/* current page name — the mobile "where am I" indicator */}
+        <p className="min-w-0 truncate text-xl font-semibold tracking-[-0.02em] text-ink">
+          {title}
+        </p>
+
+        {/* avatar → account */}
         <Link
           href="/account"
-          className="pointer-events-auto flex min-w-0 items-center gap-2.5"
+          aria-label="Account"
+          aria-current={pathname.startsWith("/account") ? "page" : undefined}
+          className="pointer-events-auto shrink-0 rounded-full"
         >
           {address ? (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -85,28 +115,7 @@ export function MobileTopBar() {
           ) : (
             <BlockieFallback />
           )}
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold text-ink">
-              {address
-                ? `${address.slice(0, 6)}...${address.slice(-4)}`
-                : "Connect Wallet"}
-            </p>
-            {address && (
-              <p className="text-[0.625rem] text-faint">
-                {address.slice(0, 6)}...{address.slice(-4)}
-              </p>
-            )}
-          </div>
         </Link>
-
-        {/* alerts */}
-        <button
-          aria-label="Notifications"
-          className="pointer-events-auto relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-edge bg-card text-dim transition-colors hover:text-ink"
-        >
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full bg-brand ring-2 ring-white" />
-        </button>
       </div>
     </header>
   );

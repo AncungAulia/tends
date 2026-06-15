@@ -18,7 +18,7 @@ import { useAgentLog } from "@/hooks/useAgentLog";
 import type { AgentLogRow } from "@/hooks/useAgentLog";
 import { useActivity } from "@/hooks/useActivityLog";
 import SlidingNumber from "@/components/elements/SlidingNumber";
-import { tokenColor } from "@/components/elements/TokenIcon";
+import { TokenIcon, tokenColor } from "@/components/elements/TokenIcon";
 import { AgentChat } from "@/modules/agent/component/AgentChat";
 
 /* ──────────────────────────────────────────────────────────
@@ -215,14 +215,14 @@ function UnderlineTabs({
   runningTab?: string;
 }) {
   return (
-    <div className="mb-6 mt-5 flex gap-6">
+    <div className="mb-6 mt-5 flex md:gap-6">
       {tabs.map((t) => {
         const on = active === t.id;
         return (
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className={`relative flex items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors ${
+            className={`relative flex flex-1 items-center justify-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors md:flex-none md:justify-start ${
               on
                 ? "border-brand text-brand"
                 : "border-transparent text-dim hover:text-ink"
@@ -572,7 +572,7 @@ function OperatingCard({
         <div className="mt-3">
           <p className="mb-1.5 text-[10px] text-faint">Agent targets this mix</p>
           <div className="relative">
-            <div className="flex h-2.5">
+            <div className="flex h-6 md:h-2.5">
               {mix.map((m, i) => (
                 <div
                   key={m.sym}
@@ -599,7 +599,21 @@ function OperatingCard({
               )}
             </AnimatePresence>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {/* mobile: icon list */}
+          <div className="mt-3 md:hidden">
+            {mix.map((m, i) => (
+              <div
+                key={m.sym}
+                className={`flex items-center gap-2.5 py-2 ${i < mix.length - 1 ? "border-b border-edge" : ""}`}
+              >
+                <TokenIcon sym={m.sym} color={tokenColor(m.sym)} size={24} />
+                <span className="flex-1 text-sm font-semibold text-ink">{m.sym}</span>
+                <span className="text-sm font-medium text-dim">{m.pct}%</span>
+              </div>
+            ))}
+          </div>
+          {/* desktop: dot + text */}
+          <div className="mt-2 hidden flex-wrap gap-x-3 gap-y-1 md:flex">
             {mix.map((m) => (
               <span key={m.sym} className="flex items-center gap-1 text-[10px] text-dim">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: tokenColor(m.sym) }} />
@@ -675,40 +689,40 @@ function ControlTab({
               {paused ? "agent is paused" : isRunning ? "running rebalance..." : "watching your portfolio"}
             </p>
 
-            <div className="mt-4 flex w-[80%] max-w-xs items-center gap-2">
+            <div className="mt-5 flex w-full max-w-xs items-center gap-2.5 md:mt-4 md:w-[80%] md:gap-2">
               <button
                 onClick={() => onRunNow()}
                 disabled={isRunning}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 md:py-2.5 md:text-xs"
               >
-                {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                {isRunning ? <Loader2 className="h-4 w-4 animate-spin md:h-3.5 md:w-3.5" /> : <Play className="h-4 w-4 md:h-3.5 md:w-3.5" />}
                 {isRunning ? "Running..." : "Run now"}
               </button>
               <button
                 onClick={paused ? onResume : onPause}
                 disabled={isPausing}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-edge bg-card px-4 py-2.5 text-xs font-medium text-dim transition-colors hover:border-dim hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-edge bg-card px-4 py-3 text-sm font-medium text-dim transition-colors hover:border-dim hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 md:py-2.5 md:text-xs"
               >
-                {isPausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {isPausing ? <Loader2 className="h-4 w-4 animate-spin md:h-3.5 md:w-3.5" /> : null}
                 {paused ? "Resume" : "Pause"}
               </button>
             </div>
 
-            <div className="mt-auto grid w-full max-w-sm grid-cols-3 gap-3 pt-5 text-center">
+            <div className="mt-auto grid w-full max-w-sm grid-cols-3 items-center gap-3 pt-5 text-center md:items-stretch md:border-t md:border-edge">
               <div>
-                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink md:h-auto md:items-stretch">
                   <SlidingNumber number={activityCount} />
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Runs</p>
               </div>
               <div>
-                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink md:h-auto">
                   {riskName}
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Strategy</p>
               </div>
               <div>
-                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink">
+                <p className="flex h-7 items-center justify-center text-lg font-semibold text-ink md:block md:h-auto">
                   Active
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.08em] text-dim">Status</p>
@@ -807,13 +821,15 @@ export function Agent() {
   const [tab, setTab] = useState<Tab>("control");
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
-        Agent
-      </h1>
-      <p className="mt-1 text-sm text-dim">
-        Run the agent and set how it works.
-      </p>
+    <div className="mx-auto max-w-5xl px-4 pb-2 md:px-8 md:py-8">
+      <div className="hidden md:block">
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
+          Agent
+        </h1>
+        <p className="mt-1 text-sm text-dim">
+          Run the agent and set how it works.
+        </p>
+      </div>
 
       <UnderlineTabs
         tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
