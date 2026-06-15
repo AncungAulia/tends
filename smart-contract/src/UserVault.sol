@@ -73,6 +73,8 @@ contract UserVault is
     event AgentExecutorUpdated(address indexed oldAgent, address indexed newAgent);
     event EmergencyPaused(address indexed by, string reason);
     event EmergencyUnpaused(address indexed by);
+    event MinRebalanceIntervalUpdated(uint256 oldInterval, uint256 newInterval);
+    event AllowedTokenUpdated(address indexed token, bool allowed);
 
     // === Errors ===
     error NotAuthorizedAgent();
@@ -80,6 +82,7 @@ contract UserVault is
     error TokenNotAllowed();
     error InvalidAllocationSum();
     error ZeroAmount();
+    error CooldownNotElapsed(uint256 availableAt);
 
     // === Modifiers ===
 
@@ -231,6 +234,13 @@ contract UserVault is
         emit RiskPreferenceUpdated(msg.sender, RiskLevel.CUSTOM, lowBps, medBps, highBps);
     }
 
+    /// @notice Set the minimum time (seconds) between rebalances. 0 = no on-chain cooldown.
+    function setMinRebalanceInterval(uint256 interval) external onlyOwner {
+        uint256 old = minRebalanceInterval;
+        minRebalanceInterval = interval;
+        emit MinRebalanceIntervalUpdated(old, interval);
+    }
+
     // === Agent: liquidate for withdrawal ===
 
     /// @notice Sell all non-USDC holdings to USDC so the user can immediately withdraw.
@@ -260,6 +270,11 @@ contract UserVault is
         whenNotPaused_
         nonReentrant
     {
+        if (minRebalanceInterval > 0) {
+            uint256 availableAt = lastRebalanceTime + minRebalanceInterval;
+            if (block.timestamp < availableAt) revert CooldownNotElapsed(availableAt);
+        }
+
         for (uint256 i = 0; i < instructions.length; i++) {
             SwapInstruction calldata inst = instructions[i];
 
@@ -313,6 +328,31 @@ contract UserVault is
                 isAllowedToken[t] = true;
             }
         }
+    }
+
+    /// @notice Add or remove a single token from the vault's tradeable allowlist.
+    ///         Removal uses swap-and-pop; does NOT check for existing token balance —
+    ///         caller should liquidate the token first.
+    function setAllowedToken(address token, bool allowed) external onlyOwner {
+        if (allowed) {
+            if (!isAllowedToken[token]) {
+                allowedTokens.push(token);
+                isAllowedToken[token] = true;
+            }
+        } else {
+            if (isAllowedToken[token]) {
+                isAllowedToken[token] = false;
+                uint256 len = allowedTokens.length;
+                for (uint256 i = 0; i < len; i++) {
+                    if (allowedTokens[i] == token) {
+                        allowedTokens[i] = allowedTokens[len - 1];
+                        allowedTokens.pop();
+                        break;
+                    }
+                }
+            }
+        }
+        emit AllowedTokenUpdated(token, allowed);
     }
 
     function _authorizeUpgrade(address) internal override {

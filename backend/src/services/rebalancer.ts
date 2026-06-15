@@ -406,6 +406,10 @@ export class RebalancerService {
       log.info({ vault }, "off-chain cadence not elapsed, skip");
       return { action: "skip", reason: "cooldown" };
     }
+    if (meta.minRebalanceInterval > 0n && now < meta.lastRebalanceTime + meta.minRebalanceInterval) {
+      log.info({ vault }, "on-chain minRebalanceInterval not elapsed, skip");
+      return { action: "skip", reason: "cooldown" };
+    }
     if (!(await this.deps.arePricesFresh())) {
       log.warn({ vault }, "price feeds stale — skip (won't plan/trade on stale prices)");
       return { action: "skip", reason: "stale" };

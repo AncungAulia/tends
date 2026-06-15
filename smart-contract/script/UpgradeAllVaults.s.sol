@@ -32,23 +32,26 @@ contract UpgradeAllVaultsScript is Script {
         UUPSUpgradeable(FACTORY).upgradeToAndCall(address(newFactoryImpl), "");
         console.log("VaultFactory proxy upgraded");
 
-        // 4. Upgrade deployer's vault proxy to new UserVault impl
-        //    (old impl is onlyOwner — only the vault owner can do this)
+        // 4. Upgrade ALL vault proxies to new UserVault impl.
+        //    Deployer is agentExecutor on new-style vaults (allows upgrade).
+        //    Old-style vaults only allow onlyOwner — skip those gracefully.
         VaultFactory factory = VaultFactory(FACTORY);
-        address deployerVault = factory.vaultOf(DEPLOYER);
-        if (deployerVault != address(0)) {
-            UUPSUpgradeable(deployerVault).upgradeToAndCall(address(newVaultImpl), "");
-            console.log("Deployer vault upgraded:", deployerVault);
-        } else {
-            console.log("Deployer has no vault - skip vault upgrade");
+        uint256 total = factory.totalVaults();
+        for (uint256 i = 0; i < total; i++) {
+            address vault = factory.allVaults(i);
+            try UUPSUpgradeable(vault).upgradeToAndCall(address(newVaultImpl), "") {
+                console.log("Vault upgraded:", vault);
+            } catch {
+                console.log("Vault skipped (old impl / not authorized):", vault);
+            }
         }
 
         // 5. Point factory at new UserVault impl for future deployVault() calls
         factory.setImplementation(address(newVaultImpl));
         console.log("Factory.implementation updated");
 
-        console.log("totalVaults:", factory.totalVaults());
-        console.log("=== Done. Run backend setup-vault-tokens to register all tokens. ===");
+        console.log("totalVaults:", total);
+        console.log("=== Done. ===");
 
         vm.stopBroadcast();
     }
