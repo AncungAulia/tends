@@ -5,6 +5,8 @@ import { z } from "zod";
 import { prisma } from "../../db/client.js";
 import { requireAuth, type AuthVars } from "../auth.js";
 import { as0x } from "../../chain/addresses.js";
+import { publicClient } from "../../chain/index.js";
+import { USER_VAULT_ABI } from "../../chain/abis.js";
 import {
   getAgentConfig,
   upsertAgentConfig,
@@ -34,6 +36,8 @@ export interface AgentDeps {
   savePrefs: (privyId: string, prefs: unknown) => Promise<unknown>;
   /** Run the LLM-driven Hermes rebalancer workflow for a vault. */
   runHermes: (vault: string) => Promise<unknown>;
+  /** Combined on-chain + DB guardrails view. */
+  getGuardrails: (vault: `0x${string}`) => Promise<unknown>;
   /** Fired (non-blocking) after a guardrail change → enforce new caps if violated. */
   onConfigChanged?: (vault: `0x${string}`) => void;
 }
@@ -60,6 +64,27 @@ export const prismaAgentDeps: AgentDeps = {
       take: limit,
     }),
   holdings: (vault) => readHoldings(vault),
+  getGuardrails: async (vault) => {
+    const base = { address: vault, abi: USER_VAULT_ABI } as const;
+    const [pausedOnChain, minRebalanceIntervalSec, lastRebalanceTimeSec, riskPreference, dbConfig] =
+      await Promise.all([
+        publicClient.readContract({ ...base, functionName: "paused" }).catch(() => null),
+        publicClient.readContract({ ...base, functionName: "minRebalanceInterval" }).catch(() => null),
+        publicClient.readContract({ ...base, functionName: "lastRebalanceTime" }).catch(() => null),
+        publicClient.readContract({ ...base, functionName: "riskPreference" }).catch(() => null),
+        getAgentConfig(vault),
+      ]);
+    const lastRebalanceSec = lastRebalanceTimeSec != null ? Number(lastRebalanceTimeSec) : null;
+    return {
+      pausedOnChain: pausedOnChain ?? null,
+      minRebalanceIntervalSec: minRebalanceIntervalSec != null ? Number(minRebalanceIntervalSec) : null,
+      lastRebalanceAt: lastRebalanceSec && lastRebalanceSec > 0
+        ? new Date(lastRebalanceSec * 1000).toISOString()
+        : null,
+      riskPreference: riskPreference != null ? Number(riskPreference) : null,
+      ...dbConfig,
+    };
+  },
   onConfigChanged: (vault) => {
     // enforce the just-saved guardrails (rebalance if a cap is now violated) — async
     void enforceGuardrails(vault).catch((err) => log.warn({ vault, err }, "guardrail enforce failed"));
@@ -110,6 +135,13 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
   };
 
   // ── Agent guardrails / config ──────────────────────────────────────────────
+
+  // BE-3: Combined on-chain + DB guardrails — single source of truth for the FE "Agent" page.
+  r.get("/guardrails", async (c) => {
+    const out = await withVault(c.get("privyId"), (v) => deps.getGuardrails(v));
+    return out === null ? c.json(NO_VAULT, 404) : c.json(out);
+  });
+
   r.get("/agent-config", async (c) => {
     const out = await withVault(c.get("privyId"), (v) => deps.getConfig(v));
     return out === null ? c.json(NO_VAULT, 404) : c.json(out);
