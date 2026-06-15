@@ -71,7 +71,39 @@ export function makeUsersRouter(
     return c.json(await reader.getActivity(c.get("privyId"), limit));
   });
 
-  // Save/update display name (called after onboarding step 1).
+  // ── Onboarding + profile ──────────────────────────────────────────────────
+
+  const patchMeBody = z.object({
+    displayName:   z.string().min(1).max(50).trim().optional(),
+    goal:          z.enum(["safe", "steady", "max"]).optional(),
+    riskTolerance: z.enum(["out", "wait", "add"]).optional(),
+  });
+
+  // PATCH /api/users/me — save onboarding answers + profile edits.
+  // Sets onboardedAt once (on first save that includes goal or riskTolerance).
+  r.patch("/", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = patchMeBody.safeParse(body);
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const privyId = c.get("privyId");
+    const user = await prisma.user.findUnique({ where: { privyId } });
+    if (!user) return c.json({ error: "user not found" }, 404);
+    const { displayName, goal, riskTolerance } = parsed.data;
+    const isFirstOnboard = !user.onboardedAt && (goal != null || riskTolerance != null);
+    const updated = await prisma.user.update({
+      where: { walletAddress: user.walletAddress },
+      data: {
+        ...(displayName != null ? { name: displayName } : {}),
+        ...(goal != null ? { goal } : {}),
+        ...(riskTolerance != null ? { riskTolerance } : {}),
+        ...(isFirstOnboard ? { onboardedAt: new Date() } : {}),
+      },
+      select: { walletAddress: true, name: true, goal: true, riskTolerance: true, onboardedAt: true },
+    });
+    return c.json(updated);
+  });
+
+  // PATCH /profile — kept for backward compat (name only).
   r.patch("/profile", async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = z.object({ name: z.string().min(1).max(50).trim() }).safeParse(body);
@@ -79,18 +111,24 @@ export function makeUsersRouter(
     const privyId = c.get("privyId");
     const user = await prisma.user.findUnique({ where: { privyId } });
     if (!user) return c.json({ error: "user not found" }, 404);
-    await prisma.user.update({
-      where: { walletAddress: user.walletAddress },
-      data: { name: parsed.data.name },
-    });
+    await prisma.user.update({ where: { walletAddress: user.walletAddress }, data: { name: parsed.data.name } });
     return c.json({ ok: true, name: parsed.data.name });
   });
 
-  // Get profile (name + wallet).
+  // GET /profile — returns full profile including onboarding fields.
   r.get("/profile", async (c) => {
     const privyId = c.get("privyId");
-    const user = await prisma.user.findUnique({ where: { privyId }, select: { walletAddress: true, name: true } });
-    return c.json({ walletAddress: user?.walletAddress ?? null, name: user?.name ?? null });
+    const user = await prisma.user.findUnique({
+      where: { privyId },
+      select: { walletAddress: true, name: true, goal: true, riskTolerance: true, onboardedAt: true },
+    });
+    return c.json({
+      walletAddress:  user?.walletAddress ?? null,
+      displayName:    user?.name ?? null,
+      goal:           user?.goal ?? null,
+      riskTolerance:  user?.riskTolerance ?? null,
+      onboardedAt:    user?.onboardedAt ?? null,
+    });
   });
 
   // PnL value-series for the chart. ?range=7d|30d|90d|1y (or ?days=N). Default 30d.

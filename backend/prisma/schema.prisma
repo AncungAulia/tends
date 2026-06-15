@@ -16,11 +16,14 @@ datasource db {
 }
 
 model User {
-  walletAddress String   @id
-  privyId       String?  @unique
-  name          String?
-  createdAt     DateTime @default(now())
-  lastActiveAt  DateTime @updatedAt
+  walletAddress String    @id
+  privyId       String?   @unique
+  name          String?   // display name / sapaan (editable di Account)
+  goal          String?   // 'safe' | 'steady' | 'max' — dari onboarding Q1
+  riskTolerance String?   // 'out' | 'wait' | 'add' — dari onboarding Q2 (jawaban "dips")
+  onboardedAt   DateTime? // di-set sekali saat onboarding selesai
+  createdAt     DateTime  @default(now())
+  lastActiveAt  DateTime  @updatedAt
   preferences   Json? // client UI prefs (theme, etc.) — cross-device sync
 
   vault        Vault?

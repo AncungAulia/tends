@@ -81,17 +81,22 @@ const getApyHistoryTool = createTool({
 
 const getUserProfileTool = createTool({
   id: "getUserProfile",
-  description: "Get the signed-in user's display name and wallet address. Call this at the start of any conversation to greet the user by name.",
+  description: "Get the signed-in user's display name, wallet address, and onboarding preferences (goal, riskTolerance). Call this at the start of any conversation to greet the user by name and understand their intent.",
   inputSchema: z.object({}),
   outputSchema: z.any(),
   execute: async (_input, context) => {
     const wallet = sessionWallet(context);
-    if (!wallet) return { name: null, walletAddress: null };
+    if (!wallet) return { name: null, walletAddress: null, goal: null, riskTolerance: null };
     const user = await prisma.user.findUnique({
       where: { walletAddress: wallet },
-      select: { name: true, walletAddress: true },
+      select: { name: true, walletAddress: true, goal: true, riskTolerance: true },
     });
-    return { name: user?.name ?? null, walletAddress: wallet };
+    return {
+      name: user?.name ?? null,
+      walletAddress: wallet,
+      goal: user?.goal ?? null,           // 'safe' | 'steady' | 'max'
+      riskTolerance: user?.riskTolerance ?? null, // 'out' | 'wait' | 'add'
+    };
   },
 });
 
