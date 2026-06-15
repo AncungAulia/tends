@@ -28,6 +28,7 @@ import {
 import { prisma } from "../db/client.js";
 import { agentLogEmitter } from "./agent-log-emitter.js";
 import { readHoldings } from "./holdings.js";
+import { wsHub } from "../ws/hub.js";
 
 // ── AgentRun logging ─────────────────────────────────────────────────────────
 
@@ -360,7 +361,19 @@ export class RebalancerService {
   /** Decide + (maybe) execute a rebalance for one vault. */
   async processVault(vault: `0x${string}`): Promise<VaultOutcome> {
     const startedAt = new Date();
+    wsHub.broadcast({ type: "agent_run_start", vault });
+
     const outcome = await this._processVaultInner(vault);
+
+    const { kind, outcome: outcomeStr } = outcomeFromVaultOutcome(outcome);
+    wsHub.broadcast({
+      type: "agent_run_done",
+      vault,
+      kind,
+      outcome: outcomeStr,
+      ...(outcome.action === "rebalanced" ? { txHash: outcome.hash, swaps: outcome.swaps } : {}),
+      ...(outcome.action === "liquidated" ? { txHash: outcome.hash } : {}),
+    });
 
     // Log every cycle (HOLD/SKIP/REBALANCE) — best-effort, never throws.
     const { holdings } = await this.deps.readHoldings(vault).catch(() => ({ holdings: [] }));
