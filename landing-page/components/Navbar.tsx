@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useIsMobile } from "@/lib/useIsMobile";
 
-const APP_URL = "https://app.tends.fun";
-
 export default function Navbar() {
   const navRef  = useRef<HTMLElement>(null);
   const logoRef = useRef<HTMLSpanElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
   const linkEls = useRef<(HTMLAnchorElement | null)[]>([]);
+  // Set by HeroSection's "tends:whitephase" event while the white interactive
+  // screen (bot + accordion) is on — that screen isn't a [data-white-section].
+  const whitePhaseRef = useRef(false);
   const [btnHovered, setBtnHovered] = useState(false);
   const isMobile = useIsMobile();
 
@@ -46,12 +47,35 @@ export default function Navbar() {
     const whiteSection = document.querySelector(
       "[data-white-section]",
     ) as HTMLElement | null;
+    const blueSection = document.querySelector(
+      "[data-blue-section]",
+    ) as HTMLElement | null;
     const footer = document.querySelector("footer") as HTMLElement | null;
+
+    // Sample point roughly behind the navbar — used to tell which section is
+    // currently under it.
+    const NAV_Y = 56;
 
     const onScroll = () => {
       const footerRect = footer?.getBoundingClientRect();
       if (footerRect && footerRect.top < 80) {
         setDark();
+        return;
+      }
+      // Blue band (StatsBand): it lives INSIDE the light wrapper, so it would
+      // otherwise read as light. While it sits behind the navbar, force white
+      // text for contrast against the blue.
+      if (blueSection) {
+        const b = blueSection.getBoundingClientRect();
+        if (b.top <= NAV_Y && b.bottom >= NAV_Y) {
+          setDark();
+          return;
+        }
+      }
+      // White interactive screen (bot + accordion) inside HeroSection — it
+      // isn't a [data-white-section], so HeroSection signals it via an event.
+      if (whitePhaseRef.current) {
+        setLight();
         return;
       }
       if (!whiteSection) return;
@@ -60,9 +84,21 @@ export default function Navbar() {
       else setDark();
     };
 
+    const onWhitePhase = (e: Event) => {
+      whitePhaseRef.current = (e as CustomEvent).detail === true;
+      onScroll();
+    };
+
     setDark();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("tends:whitephase", onWhitePhase as EventListener);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener(
+        "tends:whitephase",
+        onWhitePhase as EventListener,
+      );
+    };
   }, []);
 
   return (
@@ -82,8 +118,21 @@ export default function Navbar() {
         style={{
           cursor: "pointer",
           fontSize: isMobile ? "1.15rem" : "1.5rem",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: isMobile ? "0.16em" : "0.2em",
         }}
       >
+        {/* Logo mark — fill follows the text color (white over hero, navy over
+            the light sections) and scales with the font size via em units. */}
+        <svg
+          viewBox="0 0 354 244"
+          fill="currentColor"
+          aria-hidden="true"
+          style={{ height: "0.82em", width: "auto", display: "block", flexShrink: 0 }}
+        >
+          <path d="M251.597 49.8877L228.346 78.8623L353.148 240.017H253.68L176.355 143.653L96.4463 243.238L0 240.368L189.427 0L251.597 49.8877Z" />
+        </svg>
         Tends.
       </span>
 
@@ -96,7 +145,7 @@ export default function Navbar() {
         }}
       >
         <a
-          href={APP_URL}
+          href="/app"
           onMouseEnter={() => setBtnHovered(true)}
           onMouseLeave={() => setBtnHovered(false)}
           style={{
