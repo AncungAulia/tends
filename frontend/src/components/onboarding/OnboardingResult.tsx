@@ -6,6 +6,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import VaultCard from "@/components/elements/VaultCard";
 import { useUserVault } from "@/hooks/useUserVault";
 import { useRiskLevel } from "@/hooks/useRiskLevel";
+import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { apiFetch } from "@/lib/api";
 import type { Risk } from "./types";
 
@@ -37,7 +38,8 @@ type Phase = "idle" | "deploying" | "saving" | "strategy" | "error";
  */
 export function OnboardingResult({ name, goal, dips, risk }: Props) {
   const router = useRouter();
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken, connectWallet } = usePrivy();
+  const { address: activeAddress } = useActiveWallet();
   const { deployVault, vaultAddress, hasVault, error: deployError } = useUserVault();
   const { setStrategy } = useRiskLevel(vaultAddress);
 
@@ -47,6 +49,10 @@ export function OnboardingResult({ name, goal, dips, risk }: Props) {
 
   const start = async () => {
     setErrMsg("");
+    if (!activeAddress) {
+      setErrMsg("Connect a wallet first.");
+      return;
+    }
     finalizing.current = false;
     if (hasVault && vaultAddress) {
       void finalize(); // already deployed (retry / pre-existing) → just finish
@@ -134,18 +140,45 @@ export function OnboardingResult({ name, goal, dips, risk }: Props) {
 
       <VaultCard name={name} risk={risk} />
 
+      {/* Which wallet will deploy — let the user pick BEFORE signing (they may have
+          several: Rabby / MetaMask / Phantom / …). "Change" opens the same Privy
+          connect flow as the Sidebar; the chosen wallet becomes active and signs. */}
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-[#E8EAEC] px-3.5 py-2.5">
+        <span className="truncate text-sm text-[#5B7490]">
+          {activeAddress ? (
+            <>
+              Using <span className="font-medium text-ink">{shortAddr(activeAddress)}</span>
+            </>
+          ) : (
+            "No wallet connected"
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={() => connectWallet()}
+          disabled={busy}
+          className="ml-3 shrink-0 text-sm font-semibold text-[#1591DC] transition-opacity hover:opacity-80 disabled:opacity-50"
+        >
+          {activeAddress ? "Change" : "Connect Wallet"}
+        </button>
+      </div>
+
       {errMsg && <p className="mt-3 text-center text-sm text-red-500">{errMsg}</p>}
 
       <button
         type="button"
         onClick={start}
-        disabled={busy}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        disabled={busy || !activeAddress}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#1591DC] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
       >
         {label}
       </button>
     </div>
   );
+}
+
+function shortAddr(a: string): string {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
 function asMessage(e: unknown): string {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useActiveWallet } from "./useActiveWallet";
 import { createWalletClient, createPublicClient, custom, http } from "viem";
 import { mantleSepolia, RPC_URL } from "@/lib/chains";
 import { apiFetch } from "@/lib/api";
@@ -44,14 +45,13 @@ function verifyTx(tx: Tx, vaultAddress?: string): void {
  * 3. Sign each tx sequentially with the Privy embedded wallet
  */
 export function useBackendTx() {
-  const { wallets } = useWallets();
+  const { wallet } = useActiveWallet();
   const { getAccessToken } = usePrivy();
   const [state, setState] = useState<BackendTxState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [hashes, setHashes] = useState<`0x${string}`[]>([]);
 
   const signTx = async (tx: Tx): Promise<`0x${string}`> => {
-    const wallet = wallets[0];
     if (!wallet) throw new Error("No wallet connected");
 
     // Ensure the wallet is on Mantle Sepolia before signing (it may default to

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useReadContract } from "wagmi";
+import { useActiveWallet } from "./useActiveWallet";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useBackendTx } from "@/hooks/useBackendTx";
@@ -27,10 +28,9 @@ interface Position {
  */
 export function useUserVault() {
   const { getAccessToken, authenticated } = usePrivy();
-  // Address from the Privy wallet (works for embedded wallets) — wagmi's useAccount is
-  // empty unless an injected connector is active, which broke the on-chain vault fallback.
-  const { wallets } = useWallets();
-  const address = wallets[0]?.address as `0x${string}` | undefined;
+  // The ACTIVE wallet the user selected (Sidebar / Privy modal) — same wallet that
+  // signs txs in useBackendTx, so the vault we detect always matches the signer.
+  const { address } = useActiveWallet();
   const setVaultAddress = useVaultStore((s) => s.setVaultAddress);
 
   const {
