@@ -119,15 +119,18 @@ body {
      instead of "rising." */
   transform: translateY(28px);
   will-change: opacity, filter, transform;
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  /* No transition in the base state — when .visible is removed, the slide
+     hides INSTANTLY so there is never more than one slide on screen. */
 }
 .apple-reveal-text.visible {
   opacity: 1;
   filter: blur(0);
   transform: translateY(0);
+  /* Transition only when entering — smooth reveal, instant hide. */
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   .apple-reveal-text,
