@@ -29,6 +29,44 @@ import { prisma } from "../db/client.js";
 import { agentLogEmitter } from "./agent-log-emitter.js";
 import { readHoldings } from "./holdings.js";
 
+// ── AgentRun logging ─────────────────────────────────────────────────────────
+
+type RunKind = "MONITOR" | "REBALANCE" | "LIQUIDATED";
+type RunOutcome =
+  | "BALANCED" | "COOLDOWN" | "PAUSED" | "DISABLED" | "STALE"
+  | "DAILY_LIMIT" | "UNSAFE" | "REBALANCED" | "LIQUIDATED";
+
+function outcomeFromVaultOutcome(o: VaultOutcome): { kind: RunKind; outcome: RunOutcome } {
+  if (o.action === "rebalanced") return { kind: "REBALANCE", outcome: "REBALANCED" };
+  if (o.action === "liquidated") return { kind: "LIQUIDATED", outcome: "LIQUIDATED" };
+  const map: Record<typeof o.reason, RunOutcome> = {
+    balanced: "BALANCED", cooldown: "COOLDOWN", paused: "PAUSED",
+    disabled: "DISABLED", stale: "STALE", daily_limit: "DAILY_LIMIT", unsafe: "UNSAFE",
+  };
+  return { kind: "MONITOR", outcome: map[o.reason] };
+}
+
+async function writeAgentRun(
+  vault: string,
+  outcome: VaultOutcome,
+  startedAt: Date,
+  holdings: { symbol: string; allocationPct: number }[],
+  extra?: { swaps?: number; txHash?: string },
+): Promise<void> {
+  const { kind, outcome: outcomeStr } = outcomeFromVaultOutcome(outcome);
+  await prisma.agentRun.create({
+    data: {
+      vaultAddress: vault,
+      kind,
+      outcome: outcomeStr,
+      driftBps: null,
+      details: { holdings, ...(extra ?? {}) },
+      startedAt,
+      finishedAt: new Date(),
+    },
+  }).catch(() => {}); // non-critical — never let logging break the rebalancer
+}
+
 /** The guardrails buildInstructions honours (subset of the agent config). */
 export type Guardrails = Pick<
   AgentConfigValue,
@@ -321,6 +359,22 @@ export class RebalancerService {
 
   /** Decide + (maybe) execute a rebalance for one vault. */
   async processVault(vault: `0x${string}`): Promise<VaultOutcome> {
+    const startedAt = new Date();
+    const outcome = await this._processVaultInner(vault);
+
+    // Log every cycle (HOLD/SKIP/REBALANCE) — best-effort, never throws.
+    const { holdings } = await this.deps.readHoldings(vault).catch(() => ({ holdings: [] }));
+    const extra = outcome.action === "rebalanced"
+      ? { swaps: outcome.swaps, txHash: outcome.hash }
+      : outcome.action === "liquidated"
+        ? { txHash: outcome.hash }
+        : undefined;
+    void writeAgentRun(vault, outcome, startedAt, holdings, extra);
+
+    return outcome;
+  }
+
+  private async _processVaultInner(vault: `0x${string}`): Promise<VaultOutcome> {
     const [meta, config] = await Promise.all([
       this.deps.readVaultMeta(vault),
       this.deps.readAgentConfig(vault),

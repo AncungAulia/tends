@@ -196,6 +196,29 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
     return out === null ? c.json({ activities: [] }) : c.json({ activities: out });
   });
 
+  // ── Honest per-cycle runs (BE-5) ───────────────────────────────────────────
+  r.get("/agent/runs", async (c) => {
+    const limit = Math.min(Math.max(Number(c.req.query("limit")) || 20, 1), 100);
+    const cursor = c.req.query("cursor") ? BigInt(c.req.query("cursor")!) : undefined;
+    const out = await withVault(c.get("privyId"), async (vault) => {
+      const rows = await prisma.agentRun.findMany({
+        where: {
+          vaultAddress: vault,
+          ...(cursor ? { id: { lt: cursor } } : {}),
+        },
+        orderBy: { startedAt: "desc" },
+        take: limit + 1,
+      });
+      const hasMore = rows.length > limit;
+      const items = hasMore ? rows.slice(0, limit) : rows;
+      return {
+        runs: items.map((r) => ({ ...r, id: r.id.toString() })),
+        nextCursor: hasMore ? items[items.length - 1]!.id.toString() : null,
+      };
+    });
+    return out === null ? c.json({ runs: [], nextCursor: null }) : c.json(out);
+  });
+
   // ── Holdings + portfolio snapshot ──────────────────────────────────────────
   r.get("/holdings", async (c) => {
     const out = await withVault(c.get("privyId"), (v) => deps.holdings(v));

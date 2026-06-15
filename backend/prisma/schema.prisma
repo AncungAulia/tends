@@ -157,3 +157,21 @@ model VaultSnapshot {
   @@id([vaultAddress, snapshotAt])
   @@index([vaultAddress, snapshotAt])
 }
+
+/// One row per processVault cycle — honest log of every agent decision, including HOLDs.
+/// kind: MONITOR (no trade) | REBALANCE (swapped) | LIQUIDATED (stop-loss exit).
+/// outcome: BALANCED | COOLDOWN | PAUSED | DISABLED | STALE | DAILY_LIMIT | UNSAFE
+///          | REBALANCED | LIQUIDATED.
+/// details: per-token current holdings + swaps if applicable.
+model AgentRun {
+  id           BigInt   @id @default(autoincrement())
+  vaultAddress String
+  kind         String   // 'MONITOR' | 'REBALANCE' | 'LIQUIDATED'
+  outcome      String   // 'BALANCED' | 'COOLDOWN' | 'PAUSED' | 'DISABLED' | 'STALE' | 'DAILY_LIMIT' | 'UNSAFE' | 'REBALANCED' | 'LIQUIDATED'
+  driftBps     Int?     // max per-token deviation from target (null for early-exit outcomes)
+  details      Json     // { holdings: [{symbol, allocationPct}], swaps?: number, txHash?: string }
+  startedAt    DateTime
+  finishedAt   DateTime
+
+  @@index([vaultAddress, startedAt])
+}
