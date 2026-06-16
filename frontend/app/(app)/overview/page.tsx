@@ -295,10 +295,18 @@ function PortfolioCard() {
   const { getAccessToken } = usePrivy();
   const { vaultAddress, initialDeposit } = useUserVault();
   const { totalAssetsUSDC, riskPreference } = usePortfolio(vaultAddress, address);
-  const { totalValueUSD } = useHoldings();
+  const { holdings, totalValueUSD } = useHoldings();
   const { strategies } = useStrategies();
   const { activities } = useActivity();
   const [range, setRange] = useState("30D");
+
+  // Per-token current APY (% per year). Used to compute the user's blended
+  // APY from their REAL holdings rather than the preset strategy's projection.
+  const { data: apyMap } = useQuery({
+    queryKey: ["apy-map"],
+    queryFn: () => apiFetch<{ apy: Record<string, number> }>("/api/apy/map", null),
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Real historical PnL snapshots from backend (hourly, taken by pnl-snapshot job)
   const { data: pnlData } = useQuery({
@@ -331,7 +339,25 @@ function PortfolioCard() {
   const pctPositive = pctChange == null || pctChange >= 0;
 
   const strategyId = riskPreference != null ? STRATEGY_IDS[riskPreference] : undefined;
-  const apy = strategies.find((s) => s.id === strategyId)?.blendedApyPct ?? null;
+  // Blended APY from the user's ACTUAL holdings, not the preset strategy.
+  // Each holding contributes (allocation share × current per-token APY). This
+  // drifts naturally as the vault rebalances, so the number isn't pinned to
+  // a strategy label. Falls back to the preset's projection while holdings
+  // are still loading (so the card never flashes empty post-deposit), and to
+  // "—" before any deposit (no capital, no realized yield).
+  const apy = (() => {
+    if (currentValue <= 0) return null;
+    if (apyMap?.apy && holdings.length > 0) {
+      let sum = 0;
+      for (const h of holdings) {
+        const tokenApy = apyMap.apy[h.symbol] ?? 0;
+        const weight = Number(h.valueUsd) / currentValue;
+        sum += tokenApy * weight;
+      }
+      return sum;
+    }
+    return strategies.find((s) => s.id === strategyId)?.blendedApyPct ?? null;
+  })();
 
   const pts = RANGE_PTS[range] ?? 30;
   // Prepend range-proportional flat padding at deposit value so each range
