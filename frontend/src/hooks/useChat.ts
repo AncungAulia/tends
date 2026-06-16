@@ -2,9 +2,25 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 
+export type ChatCard =
+  | {
+      type: "holdings";
+      holdings: { symbol: string; valueUsd: string; allocationPct: number }[];
+      totalValueUsd: string;
+    }
+  | {
+      type: "action";
+      kind: "move" | "deposit" | "withdraw";
+      title: string;
+      subtitle: string;
+      proposal: { targetBps: Record<string, number>; reasoning: string };
+    };
+
 export interface ChatMessage {
   role: "user" | "hermes";
   text: string;
+  /** Optional rich card streamed by the agent (holdings view or action proposal). */
+  card?: ChatCard;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -18,6 +34,7 @@ const TOOL_LABELS: Record<string, string> = {
   getApyHistory: "Checking yield history",
   setAgentGuardrails: "Updating your guardrails",
   triggerRebalance: "Starting a rebalance",
+  proposeSwap: "Preparing a swap",
   executeDirectSwap: "Making the swap",
 };
 
@@ -64,6 +81,17 @@ export function useChat() {
         let reply = "";
         let buffer = "";
         let hermesAdded = false;
+        let card: ChatCard | undefined;
+
+        // Create or update the single in-flight hermes message with the latest
+        // streamed text + card. Works whether a card arrives before or after text.
+        const upsertHermes = () => {
+          const msg: ChatMessage = { role: "hermes", text: reply, card };
+          setMessages((prev) =>
+            hermesAdded ? [...prev.slice(0, -1), msg] : [...prev, msg],
+          );
+          hermesAdded = true;
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -108,17 +136,19 @@ export function useChat() {
               setStatus(TOOL_LABELS[toolName] ?? toolName);
               continue;
             }
+            if (type === "card") {
+              try {
+                card = JSON.parse(dataLines.join("\n")) as ChatCard;
+                setStatus(null);
+                upsertHermes();
+              } catch {
+                // ignore malformed card payloads
+              }
+              continue;
+            }
             reply += dataLines.join("\n");
             setStatus(null);
-            if (!hermesAdded) {
-              hermesAdded = true;
-              setMessages((prev) => [...prev, { role: "hermes", text: reply }]);
-            } else {
-              setMessages((prev) => [
-                ...prev.slice(0, -1),
-                { role: "hermes", text: reply },
-              ]);
-            }
+            upsertHermes();
           }
         }
       } catch {

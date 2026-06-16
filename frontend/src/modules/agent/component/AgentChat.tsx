@@ -15,7 +15,12 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useChat } from "@/hooks/useChat";
+import { useChat, type ChatCard } from "@/hooks/useChat";
+import { useHoldings } from "@/hooks/useHoldings";
+import { tokenColor } from "@/components/elements/TokenIcon";
+
+const fmtUsd = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 /* ──────────────────────────────────────────────────────────
    Agent Chat — Tends
@@ -48,27 +53,45 @@ const SUGGESTIONS = [
 
 // ─── Rich cards ─────────────────────────────────────────────
 
-function HoldingsCard() {
-  const rows = [
-    { sym: "cmETH", pct: 40, val: "$4,972", bar: "#2C5EAD", w: "80%" },
-    { sym: "sUSDe", pct: 35, val: "$4,351", bar: "#1591DC", w: "70%" },
-    { sym: "USDC", pct: 25, val: "$3,107", bar: "#4BB8FA", w: "50%" },
-  ];
+function HoldingsCard({ data }: { data?: Extract<ChatCard, { type: "holdings" }> }) {
+  const live = useHoldings();
+  // Prefer the snapshot the agent streamed; fall back to the live query.
+  const holdings = data?.holdings ?? live.holdings;
+  const totalValueUSD = data ? Number(data.totalValueUsd) : live.totalValueUSD;
+  const isLoading = !data && live.isLoading;
+
+  if (isLoading) {
+    return (
+      <div className="mt-2 w-full max-w-sm rounded-xl border border-edge bg-card p-3 text-xs text-dim">
+        Loading your holdings...
+      </div>
+    );
+  }
+  if (holdings.length === 0) {
+    return (
+      <div className="mt-2 w-full max-w-sm rounded-xl border border-edge bg-card p-3 text-xs text-dim">
+        No holdings yet. Make a first deposit to get started.
+      </div>
+    );
+  }
   return (
     <div className="mt-2 w-full max-w-sm rounded-xl border border-edge bg-card p-3">
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-xs font-semibold text-ink">Your holdings</span>
-        <span className="text-sm font-semibold text-ink">$12,430.50</span>
+        <span className="text-sm font-semibold text-ink">{fmtUsd(totalValueUSD)}</span>
       </div>
       <div className="space-y-2">
-        {rows.map((r) => (
-          <div key={r.sym} className="flex items-center gap-2">
-            <span className="w-12 text-xs font-medium text-ink">{r.sym}</span>
+        {holdings.map((h) => (
+          <div key={h.symbol} className="flex items-center gap-2">
+            <span className="w-12 text-xs font-medium text-ink">{h.symbol}</span>
             <div className="h-1.5 flex-1 rounded-[2px] bg-panel">
-              <div className="h-1.5 rounded-[2px]" style={{ background: r.bar, width: r.w }} />
+              <div
+                className="h-1.5 rounded-[2px]"
+                style={{ background: tokenColor(h.symbol), width: `${Math.min(100, h.allocationPct)}%` }}
+              />
             </div>
-            <span className="w-8 text-right text-[10px] text-dim">{r.pct}%</span>
-            <span className="w-14 text-right text-xs font-medium text-ink">{r.val}</span>
+            <span className="w-8 text-right text-[10px] text-dim">{Math.round(h.allocationPct)}%</span>
+            <span className="w-14 text-right text-xs font-medium text-ink">{fmtUsd(Number(h.valueUsd))}</span>
           </div>
         ))}
       </div>
@@ -76,24 +99,55 @@ function HoldingsCard() {
   );
 }
 
-function ActionCard({ kind }: { kind: "move" | "deposit" | "withdraw" }) {
-  const [state, setState] = useState<"proposed" | "executing" | "done" | "cancelled">("proposed");
+function ActionCard({ card }: { card: Extract<ChatCard, { type: "action" }> }) {
+  const { getAccessToken } = usePrivy();
+  const [state, setState] = useState<"proposed" | "executing" | "done" | "error" | "cancelled">("proposed");
+  const [hash, setHash] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const config = {
-    move: { icon: <Sparkles className="h-4 w-4" />, title: "Move 30% cmETH → sUSDe", sub: "≈ $1,491 · new: cmETH 28% · sUSDe 47%" },
-    deposit: { icon: <ArrowDownLeft className="h-4 w-4" />, title: "Deposit 500 USDC", sub: "Added to your vault, agent will allocate" },
-    withdraw: { icon: <ArrowUpRight className="h-4 w-4" />, title: "Withdraw 500 USDC", sub: "Sent back to your wallet" },
-  }[kind];
+  const icon = {
+    move: <Sparkles className="h-4 w-4" />,
+    deposit: <ArrowDownLeft className="h-4 w-4" />,
+    withdraw: <ArrowUpRight className="h-4 w-4" />,
+  }[card.kind];
+
+  // Confirm = execute the proposed swap on-chain via the backend (agent-signed).
+  const confirm = async () => {
+    setState("executing");
+    setErr(null);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/me/chat/confirm-swap`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(card.proposal),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        setErr(data.reason ?? data.error ?? "Swap failed.");
+        setState("error");
+        return;
+      }
+      setHash(data.hash ?? null);
+      setState("done");
+    } catch {
+      setErr("Swap failed. Try again.");
+      setState("error");
+    }
+  };
 
   return (
     <div className="mt-2 w-full max-w-sm overflow-hidden rounded-xl border border-edge bg-card">
       <div className="flex items-center gap-3 p-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
-          {config.icon}
+          {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-ink">{config.title}</p>
-          <p className="text-[11px] text-dim">{config.sub}</p>
+          <p className="text-sm font-semibold text-ink">{card.title}</p>
+          <p className="text-[11px] text-dim">{card.subtitle}</p>
         </div>
       </div>
 
@@ -107,10 +161,7 @@ function ActionCard({ kind }: { kind: "move" | "deposit" | "withdraw" }) {
           </button>
           <div className="w-px bg-panel" />
           <button
-            onClick={() => {
-              setState("executing");
-              setTimeout(() => setState("done"), 2200);
-            }}
+            onClick={confirm}
             className="flex-1 py-2.5 text-xs font-semibold text-brand transition-colors hover:bg-brand-soft"
           >
             Confirm
@@ -125,6 +176,12 @@ function ActionCard({ kind }: { kind: "move" | "deposit" | "withdraw" }) {
       {state === "done" && (
         <div className="flex items-center justify-center gap-1.5 border-t border-edge bg-pos-soft py-2.5 text-xs font-medium text-pos">
           <Check className="h-3.5 w-3.5" /> Done
+          {hash ? ` · ${hash.slice(0, 6)}…${hash.slice(-4)}` : ""}
+        </div>
+      )}
+      {state === "error" && (
+        <div className="border-t border-edge bg-neg-soft px-3 py-2.5 text-xs font-medium text-neg">
+          {err ?? "Swap failed."}
         </div>
       )}
       {state === "cancelled" && (
@@ -142,7 +199,7 @@ type Msg = {
   id: number;
   role: "user" | "agent";
   text?: React.ReactNode;
-  card?: "holdings" | "move" | "deposit" | "withdraw";
+  card?: ChatCard;
 };
 
 // ─── Slash menu ─────────────────────────────────────────────
@@ -228,8 +285,8 @@ function AgentMessage({
       </p>
       {card && (
         <div style={{ animation: "fadeIn .3s ease" }}>
-          {card === "holdings" && <HoldingsCard />}
-          {(card === "move" || card === "deposit" || card === "withdraw") && <ActionCard kind={card} />}
+          {card.type === "holdings" && <HoldingsCard data={card} />}
+          {card.type === "action" && <ActionCard card={card} />}
         </div>
       )}
     </>
@@ -336,6 +393,7 @@ export function AgentChat() {
     id: i,
     role: m.role === "hermes" ? "agent" : "user",
     text: m.text,
+    card: m.card,
   }));
 
   // ── Sessions fetching ──────────────────────────────────────
