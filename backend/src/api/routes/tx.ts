@@ -12,6 +12,7 @@ import { getAgentWallet, publicClient, activeChain } from "../../chain/index.js"
 import { USER_VAULT_TX_ABI, ERC20_ABI } from "../../chain/abis.js";
 import { as0x } from "../../chain/addresses.js";
 import { requireAuth, type AuthVars } from "../auth.js";
+import { prisma } from "../../db/client.js";
 
 const log = childLogger("tx");
 
@@ -98,7 +99,22 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
   const r = new Hono<AuthVars>();
   r.use("*", auth);
 
-  r.post("/deploy-vault", (c) => c.json({ tx: tx.prepareDeployVault() }));
+  r.post("/deploy-vault", async (c) => {
+    // Deploy is the FIRST on-chain action: fresh Google/email (embedded) wallets
+    // often have 0 MNT, so top up gas before the user signs, same as deposit/
+    // withdraw. Wallet derived from auth (privyId), so no body needed.
+    // Fully best-effort: a DB/funder hiccup must NEVER stop the user getting their tx.
+    try {
+      const user = await prisma.user.findUnique({
+        where: { privyId: c.get("privyId") },
+        select: { walletAddress: true },
+      });
+      if (user?.walletAddress) await tryEnsureGas(user.walletAddress as `0x${string}`);
+    } catch (err) {
+      log.warn({ err }, "deploy-vault gas top-up skipped (non-blocking)");
+    }
+    return c.json({ tx: tx.prepareDeployVault() });
+  });
 
   r.post("/prepare-deposit", async (c) => {
     const p = await parseBody(c, depositBody);
