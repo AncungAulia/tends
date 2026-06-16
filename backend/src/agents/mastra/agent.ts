@@ -1,21 +1,8 @@
 import { Agent } from "@mastra/core/agent";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { env } from "../../config/env.js";
 import { tendsMemory } from "./memory.js";
 import { tendsTools, tendsActionTools } from "./tools.js";
+import { hermesModel } from "./hermes-model.js";
 import { TIER_ADVISORY } from "./advisory.js";
-
-/**
- * Chat model for the advisory agent. We DON'T use the Hermes gateway here: it
- * hardcodes copilot/gpt-4o internally (ignores LLM_MODEL/OPENROUTER_*) and that
- * Copilot quota is flaky (HTTP 429). GitHub Models is a separate, free quota with
- * reliable tool-calling — gpt-4o-mini is plenty for read + advisory work.
- */
-const chatModel = createOpenAICompatible({
-  name: "github-models",
-  baseURL: env.ACTION_AGENT_BASE_URL,
-  apiKey: env.GITHUB_TOKEN,
-}).chatModel(env.CHAT_AGENT_MODEL);
 
 /**
  * Grounding prompt for Hermes as portfolio manager AND CFO.
@@ -86,7 +73,7 @@ export const tendsAgent = new Agent({
   id: "tends-portfolio-agent",
   name: "Tends Portfolio Agent",
   instructions: INSTRUCTIONS,
-  model: chatModel,
+  model: hermesModel,
   tools: { ...tendsTools, ...tendsActionTools },
   memory: tendsMemory,
 });

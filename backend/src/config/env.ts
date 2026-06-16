@@ -170,13 +170,6 @@ export const envSchema = z.object({
   GITHUB_TOKEN: z.string().default(""), // PAT with models:read
   ACTION_AGENT_BASE_URL: z.string().url().default("https://models.github.ai/inference"),
   ACTION_AGENT_MODEL: z.string().default("openai/gpt-4o"),
-  // Read+advisory chat (/api/chat). Runs on GitHub Models too — bypasses the Hermes
-  // gateway, which hardcodes copilot/gpt-4o and is quota-flaky (HTTP 429). Cheap model
-  // is fine here: this agent advises + reads, the heavier action agent stays on gpt-4o.
-  CHAT_AGENT_MODEL: z.string().default("openai/gpt-4o-mini"),
-  // Rebalancer strategy decider — also off the Hermes gateway (429-prone). Keeps the
-  // stronger gpt-4o here (allocation reasoning), not the cheaper chat mini.
-  REBALANCER_AGENT_MODEL: z.string().default("openai/gpt-4o"),
   LLM_MODEL: z.string().default("anthropic/claude-sonnet-4.6"),
 
   // ── Privy / pricing / mcp ─────────────────────────────────────────────────
