@@ -7,7 +7,7 @@ import { useBackendTx } from "@/hooks/useBackendTx";
  * number (backend scales to 6dp). Always available — even when the vault is paused.
  */
 export function useWithdraw() {
-  const { execute, state, isPending, isConfirming, isSuccess, error, reset } =
+  const { execute, state, isPending, isConfirming, isSuccess, error, reset, hashes } =
     useBackendTx();
 
   const withdraw = (vaultAddress: string, userAddress: string, amount: number) =>
@@ -17,5 +17,5 @@ export function useWithdraw() {
       vaultAddress,
     );
 
-  return { withdraw, state, isPending, isConfirming, isSuccess, error, reset };
+  return { withdraw, state, isPending, isConfirming, isSuccess, error, reset, hashes };
 }

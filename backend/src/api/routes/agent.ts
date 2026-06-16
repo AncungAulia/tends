@@ -15,6 +15,7 @@ import {
 } from "../../services/agent-config.js";
 import { rebalancerService } from "../../services/rebalancer.js";
 import { readHoldings } from "../../services/holdings.js";
+import { runDirectSwap } from "../../services/direct-swap.js";
 import { enforceGuardrails } from "../../agents/mastra/workflows/enforce-guardrails.js";
 import { runHermesRebalance } from "../../agents/mastra/workflows/rebalancer-workflow.js";
 import { agentLogEmitter, type AgentLogEntry } from "../../services/agent-log-emitter.js";
@@ -119,6 +120,12 @@ const configBody = z.object({
   excludedTokens: z.array(z.string().min(1).max(20)).max(50).optional(),
 });
 
+// Confirm a chat swap proposal (from proposeSwap). Re-plans from fresh state + executes.
+const confirmSwapBody = z.object({
+  targetBps: z.record(z.string(), z.number().int().min(0).max(10_000)),
+  reasoning: z.string().max(400),
+});
+
 /**
  * The FE "Agent" page + portfolio/preferences endpoints, all under /api/users/me
  * (Privy-authed). Agent guardrails drive the autonomous rebalancer; holdings/portfolio
@@ -180,6 +187,21 @@ export function makeAgentRouter(deps: AgentDeps, auth: MiddlewareHandler<AuthVar
   r.post("/agent/run-hermes", async (c) => {
     const out = await withVault(c.get("privyId"), (v) => deps.runHermes(v));
     return out === null ? c.json(NO_VAULT, 404) : c.json(out);
+  });
+
+  // Confirm + execute a chat swap proposal (the FE Confirm button on an action card).
+  // Re-plans from fresh on-chain state, applies the same guardrails, then sends the tx.
+  r.post("/chat/confirm-swap", async (c) => {
+    const parsed = confirmSwapBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "invalid body", issues: parsed.error.issues }, 400);
+    try {
+      const out = await withVault(c.get("privyId"), (v) =>
+        runDirectSwap(v, parsed.data.targetBps, parsed.data.reasoning),
+      );
+      return out === null ? c.json(NO_VAULT, 404) : c.json(out);
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 500);
+    }
   });
 
   // ── Live agent log (Server-Sent Events) ───────────────────────────────────

@@ -90,3 +90,44 @@ test("permitTypedData: USDC EIP-2612 domain + Permit message", () => {
     owner: USER, spender: VAULT, value: 100_000_000n, nonce: 3n, deadline: 1_800_000_000n,
   });
 });
+
+// ── BE-A: agent control prepare functions ────────────────────────────────────
+test("prepareEmergencyPause → vault.emergencyPause(reason)", () => {
+  const t = tx.prepareEmergencyPause(VAULT, "stop");
+  assert.equal(t.to, VAULT);
+  assert.equal(t.value, "0");
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "emergencyPause");
+  assert.deepEqual(d.args, ["stop"]);
+});
+
+test("prepareEmergencyUnpause → vault.emergencyUnpause()", () => {
+  const t = tx.prepareEmergencyUnpause(VAULT);
+  assert.equal(t.to, VAULT);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "emergencyUnpause");
+  assert.ok(!d.args || d.args.length === 0);
+});
+
+test("prepareSetMinRebalanceInterval → vault.setMinRebalanceInterval(seconds)", () => {
+  const t = tx.prepareSetMinRebalanceInterval(VAULT, 3600);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: t.data });
+  assert.equal(d.functionName, "setMinRebalanceInterval");
+  assert.deepEqual(d.args, [3600n]);
+});
+
+test("prepareSetAllowedTokens(allowed=true) → single addAllowedTokens batch", () => {
+  const out = tx.prepareSetAllowedTokens(VAULT, [USER, VAULT], true);
+  assert.equal(out.length, 1);
+  const d = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: out[0]!.data });
+  assert.equal(d.functionName, "addAllowedTokens");
+  assert.deepEqual(d.args, [[USER, VAULT]]);
+});
+
+test("prepareSetAllowedTokens(allowed=false) → one setAllowedToken(false) per token", () => {
+  const out = tx.prepareSetAllowedTokens(VAULT, [USER, VAULT], false);
+  assert.equal(out.length, 2);
+  const d0 = decodeFunctionData({ abi: USER_VAULT_TX_ABI, data: out[0]!.data });
+  assert.equal(d0.functionName, "setAllowedToken");
+  assert.deepEqual(d0.args, [USER, false]);
+});

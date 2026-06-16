@@ -31,7 +31,10 @@ export type AgentConfigPatch = Partial<
 export const DEFAULT_AGENT_CONFIG: Omit<AgentConfigValue, "vaultAddress"> = {
   autoRebalanceEnabled: true,
   cadenceSec: null,
-  driftThresholdBps: null,
+  // 5% deadband: only rebalance a position when its drift exceeds 5% of portfolio
+  // value, so noise doesn't trigger trades (anti-overtrading). Was null (no deadband).
+  // Per-tier tuning (LOW tighter, HIGH looser) is a later refinement; see RISK_TIERS_BRIEF.
+  driftThresholdBps: 500,
   maxSlippageBps: 100,
   perTokenCapsBps: null,
   perTokenBandsBps: null,

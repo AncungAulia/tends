@@ -22,6 +22,7 @@ import {
   defaultRebalancerDeps,
   SLIPPAGE_BPS,
 } from "../../services/rebalancer.js";
+import { planDirectSwap } from "../../services/direct-swap.js";
 import { agentLogEmitter } from "../../services/agent-log-emitter.js";
 
 const strategyId = z.enum(["LOW", "MEDIUM", "HIGH", "CUSTOM"]);
@@ -213,7 +214,7 @@ const setAgentGuardrailsTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
     try {
       const updated = await upsertAgentConfig(vault, patch);
       // enforce the new guardrails (rebalance if a cap is now violated) — async,
@@ -255,7 +256,7 @@ const triggerRebalanceTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
     try {
       return await runHermesRebalance(vault);
     } catch (e) {
@@ -299,7 +300,7 @@ const executeDirectSwapTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
 
     // Validate all symbols exist in the token registry.
     const unknown = Object.keys(targetBps).filter((s) => !(s in TOKENS));
@@ -307,7 +308,7 @@ const executeDirectSwapTool = createTool({
 
     const totalBps = Object.values(targetBps).reduce((s, v) => s + v, 0);
     if (totalBps > 10_000) {
-      return { error: `targetBps sums to ${totalBps} — must be ≤ 10000` };
+      return { error: `targetBps sums to ${totalBps}, must be ≤ 10000` };
     }
 
     // Read current on-chain balances + prices for all registered tokens.
@@ -353,7 +354,7 @@ const executeDirectSwapTool = createTool({
       if (todayCount >= config.dailyLimitPerDay) {
         return {
           outcome: "error",
-          reason: `daily trade limit reached (${todayCount}/${config.dailyLimitPerDay} today) — raise it in agent settings or try tomorrow`,
+          reason: `daily trade limit reached (${todayCount}/${config.dailyLimitPerDay} today). Raise it in agent settings or try tomorrow.`,
         };
       }
     }
@@ -370,7 +371,7 @@ const executeDirectSwapTool = createTool({
     });
 
     if (instructions.length === 0) {
-      return { outcome: "skip", reason: "already at target allocation — no swaps needed" };
+      return { outcome: "skip", reason: "already at target allocation, no swaps needed" };
     }
 
     agentLogEmitter.log({
@@ -389,12 +390,12 @@ const executeDirectSwapTool = createTool({
         workflow: "chat",
         step: "direct-swap",
         status: "error",
-        message: "Chat swap simulation failed — trade would revert on-chain",
+        message: "Chat swap simulation failed: trade would revert on-chain",
         data: { reasoning },
       });
       return {
         outcome: "error",
-        reason: "swap simulation failed — the trade would revert on-chain. Possible causes: stale price feed, insufficient vault balance, or slippage too tight.",
+        reason: "swap simulation failed: the trade would revert on-chain. Possible causes: stale price feed, insufficient vault balance, or slippage too tight.",
       };
     }
 
@@ -405,7 +406,7 @@ const executeDirectSwapTool = createTool({
       workflow: "chat",
       step: "direct-swap",
       status: "done",
-      message: `Chat swap executed: ${instructions.length} trade(s) — ${reasoning}`,
+      message: `Chat swap executed: ${instructions.length} trade(s). ${reasoning}`,
       data: { hash, swaps: instructions.length, reasoning },
     });
 
@@ -418,10 +419,54 @@ const executeDirectSwapTool = createTool({
   },
 });
 
+const proposeSwapTool = createTool({
+  id: "proposeSwap",
+  description:
+    "PROPOSE a user-directed portfolio swap WITHOUT executing it — use this (NOT executeDirectSwap) " +
+    "whenever the user asks to move/swap/convert funds in chat, so they review and confirm a card before " +
+    "anything moves. ALWAYS call getHoldings FIRST. Convert the user's intent into targetBps (token symbol → " +
+    "desired allocation in bps; 100 bps = 1%, 10000 = 100%). Do NOT include USDC (routing medium, implicit 0%). " +
+    "Tokens absent from targetBps are sold. Sum ≤ 10000. The frontend renders a Confirm/Cancel card; on confirm " +
+    "it executes the SAME plan. Still describe the change in chat. Returns a proposal, not a tx.",
+  inputSchema: z.object({
+    targetBps: z
+      .record(z.string(), z.number().int().min(0).max(10_000))
+      .describe("Token symbol → desired allocation in bps. Sum ≤ 10000. No USDC. Absent tokens are sold."),
+    summary: z.string().describe("Short human title for the card, e.g. 'Move 30% cmETH to sUSDe'."),
+    reasoning: z
+      .string()
+      .describe("One English sentence for the audit log: what the user asked for and what this swap does."),
+  }),
+  outputSchema: z.any(),
+  execute: async (
+    { targetBps, summary, reasoning }: { targetBps: Record<string, number>; summary: string; reasoning: string },
+    context,
+  ) => {
+    const wallet = sessionWallet(context);
+    if (!wallet) return { error: "no wallet linked to this session" };
+    const vault = await vaultOf(wallet);
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
+
+    const plan = await planDirectSwap(vault, targetBps);
+    if (!plan.ok) return { outcome: "error", reason: plan.reason };
+
+    // The chat route turns this result into an `action` card (Confirm/Cancel). On
+    // confirm the FE posts {targetBps, reasoning} to /chat/confirm-swap to execute.
+    return {
+      outcome: "proposed",
+      card: "move" as const,
+      title: summary,
+      subtitle: `${plan.swaps} swap${plan.swaps === 1 ? "" : "s"} ready, confirm to execute`,
+      proposal: { targetBps, reasoning },
+    };
+  },
+});
+
 /** Mutating tools — guardrail updates + Hermes-driven rebalance execution. */
 export const tendsActionTools = {
   setAgentGuardrails: setAgentGuardrailsTool,
   triggerRebalance: triggerRebalanceTool,
+  proposeSwap: proposeSwapTool,
   executeDirectSwap: executeDirectSwapTool,
 };
 

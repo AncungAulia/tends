@@ -104,11 +104,23 @@ function fakeRepo() {
   return { repo, vaults, activities, positions, risks };
 }
 
-test("onVaultDeployed upserts the mapped vault record", async () => {
+test("onVaultDeployed upserts the mapped vault record + auto-allows all tokens", async () => {
   const { repo, vaults } = fakeRepo();
-  await new IndexerService(repo).onVaultDeployed(USER, VAULT, 7n);
+  const allowed: string[] = [];
+  await new IndexerService(repo, () => {}, async () => {}, async () => USER, async (v) =>
+    void allowed.push(v),
+  ).onVaultDeployed(USER, VAULT, 7n);
   assert.equal(vaults.length, 1);
   assert.deepEqual(vaults[0], { address: VAULT, owner: USER, deployedBlock: 7n });
+  assert.deepEqual(allowed, [VAULT]); // agent whitelisted tradeable tokens on the new vault
+});
+
+test("onVaultDeployed: a failing auto-allow does not break indexing", async () => {
+  const { repo, vaults } = fakeRepo();
+  await new IndexerService(repo, () => {}, async () => {}, async () => USER, async () => {
+    throw new Error("revert");
+  }).onVaultDeployed(USER, VAULT, 1n);
+  assert.equal(vaults.length, 1); // vault still recorded despite the allow tx failing
 });
 
 test("backfillVault reads owner on-chain and upserts an existing vault", async () => {

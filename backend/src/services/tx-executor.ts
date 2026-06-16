@@ -131,6 +131,86 @@ export class TxExecutorService {
       value: "0",
     };
   }
+
+  // ── Agent control (owner-signed via Privy) ──────────────────────────────────
+  // Hard on-chain controls, distinct from the soft DB guardrails (autoRebalanceEnabled,
+  // excludedTokens). The on-chain pause / allow-list / cooldown are the contract's own
+  // source of truth (read from chain, never duplicated into the DB).
+
+  /** UserVault.emergencyPause(reason) — HARD on-chain pause (owner-signed). */
+  prepareEmergencyPause(vault: `0x${string}`, reason: string): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "emergencyPause",
+        args: [reason],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.emergencyUnpause() — resume after an emergencyPause (owner-signed). */
+  prepareEmergencyUnpause(vault: `0x${string}`): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "emergencyUnpause",
+        args: [],
+      }),
+      value: "0",
+    };
+  }
+
+  /** UserVault.setMinRebalanceInterval(seconds) — on-chain cooldown between rebalances (0 = none). */
+  prepareSetMinRebalanceInterval(vault: `0x${string}`, intervalSec: number): PreparedTx {
+    return {
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "setMinRebalanceInterval",
+        args: [BigInt(intervalSec)],
+      }),
+      value: "0",
+    };
+  }
+
+  /**
+   * Allow-list edits → one or more unsigned txs (FE signs each in order).
+   *   allowed=true  → addAllowedTokens(tokens)            — batch, single tx
+   *   allowed=false → setAllowedToken(token, false) × N   — one tx/token (SC has no batch-remove)
+   * This is the HARD whitelist (may the vault hold the token at all). To merely keep the
+   * agent from targeting a token, use the off-chain `excludedTokens` guardrail instead.
+   */
+  prepareSetAllowedTokens(
+    vault: `0x${string}`,
+    tokens: `0x${string}`[],
+    allowed: boolean,
+  ): PreparedTx[] {
+    if (allowed) {
+      return [
+        {
+          to: vault,
+          data: encodeFunctionData({
+            abi: USER_VAULT_TX_ABI,
+            functionName: "addAllowedTokens",
+            args: [tokens],
+          }),
+          value: "0",
+        },
+      ];
+    }
+    return tokens.map((token) => ({
+      to: vault,
+      data: encodeFunctionData({
+        abi: USER_VAULT_TX_ABI,
+        functionName: "setAllowedToken",
+        args: [token, false],
+      }),
+      value: "0",
+    }));
+  }
 }
 
 export interface PermitTypedData {

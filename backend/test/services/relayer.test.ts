@@ -81,8 +81,8 @@ test("collectEntries: USDY is first, value from the Ondo oracle", async () => {
 
 test("relayOnce: pushes feedKey/wad arrays of equal length and returns the hash", async () => {
   const { deps, pushed } = fakeDeps();
-  const hash = await new RelayerService(deps).relayOnce();
-  assert.equal(hash, "0xhash");
+  const result = await new RelayerService(deps).relayOnce();
+  assert.deepEqual(result?.hashes, ["0xhash"]); // Fase 2: returns { hashes, materialTokens }
   assert.equal(pushed.length, 1);
   const { ids, values } = pushed[0]!;
   assert.equal(ids.length, values.length);

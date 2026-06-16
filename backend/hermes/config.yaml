@@ -1,5 +1,6 @@
 # Hermes Agent config — Tends portfolio assistant.
-# Provider: GitHub Copilot. Auth via COPILOT_GITHUB_TOKEN (see hermes/.env.example).
+# Provider: OpenRouter (cheap gpt-4o-mini). Auth via OPENROUTER_API_KEY (Fly secret on
+# tends-hermes). Switched off GitHub Copilot — its quota is 429-prone.
 # Canonical config shape: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 #
 # NOTE: entrypoint.sh expands the ${VARS} below from the container environment when
@@ -8,8 +9,8 @@
 # config must be passed explicitly or the server exits ("Invalid environment variables").
 
 model:
-  default: gpt-4o # Copilot model (auto-detected from the live catalog). GPT-5+ uses
-  provider: copilot # the Responses API; gpt-4o uses Chat Completions.
+  default: openrouter/openai/gpt-4o-mini # cheap, reliable tool-calling
+  provider: openrouter
 
 # MCP: the Tends tools server (Hermes spawns it as a subprocess and exposes
 # mcp_tends_*). It needs DATABASE_URL + RPC + contract addresses to read data.

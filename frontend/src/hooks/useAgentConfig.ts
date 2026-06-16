@@ -14,6 +14,8 @@ export interface AgentConfig {
   dailyLimitPerDay?: number | null;
   stopLossEnabled?: boolean;
   stopLossPct?: number | null;
+  /** Tokens the agent must not hold (soft "Avoid" list; the rebalancer drops + renormalizes). */
+  excludedTokens?: string[];
 }
 
 export function useAgentConfig() {

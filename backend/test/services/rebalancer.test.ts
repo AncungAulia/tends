@@ -129,30 +129,15 @@ test("processVault: simulation says it would revert → skip 'unsafe', no tx sen
   assert.equal(calls.sendRebalance.length, 0);
 });
 
-test("processVault: on-chain minRebalanceInterval is NOT enforced off-chain → proceeds", async () => {
-  // The off-chain cooldown check was removed: the contract enforces
-  // minRebalanceInterval on-chain (and the simulate-guard catches a too-soon
-  // rebalance). So even inside the on-chain window — and with no off-chain
-  // cadence set — processVault proceeds to build/simulate/send.
+test("processVault: within the on-chain minRebalanceInterval window → skip 'cooldown'", async () => {
+  // processVault enforces the on-chain cooldown off-chain too (cheap pre-check):
+  // inside the window it skips with reason 'cooldown' before building/simulating.
   const { deps, calls } = makeDeps({
     readVaultMeta: async () => meta({ lastRebalanceTime: 900n, minRebalanceInterval: 200n }),
-    now: () => 1000n, // 1000 < 900+200 on-chain, but that's no longer checked here
+    now: () => 1000n, // 1000 < 900 + 200 → still in cooldown
   });
   const out = await new RebalancerService(deps).processVault(V1);
-  assert.deepEqual(out, { action: "rebalanced", hash: "0xhash", swaps: 1 });
-  assert.equal(calls.sendRebalance.length, 1);
-});
-
-test("processVault: on-chain cooldown surfaces as 'unsafe' via the simulate-guard", async () => {
-  // When the contract is still within its minRebalanceInterval, the dry-run
-  // simulation reverts → processVault skips 'unsafe' (no gas spent, no tx).
-  const { deps, calls } = makeDeps({
-    readVaultMeta: async () => meta({ lastRebalanceTime: 900n, minRebalanceInterval: 200n }),
-    now: () => 1000n,
-    simulateRebalance: async () => false, // contract would revert (still in cooldown)
-  });
-  const out = await new RebalancerService(deps).processVault(V1);
-  assert.deepEqual(out, { action: "skip", reason: "unsafe" });
+  assert.deepEqual(out, { action: "skip", reason: "cooldown" });
   assert.equal(calls.sendRebalance.length, 0);
 });
 

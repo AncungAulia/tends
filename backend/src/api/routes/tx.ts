@@ -12,6 +12,7 @@ import { getAgentWallet, publicClient, activeChain } from "../../chain/index.js"
 import { USER_VAULT_TX_ABI, ERC20_ABI } from "../../chain/abis.js";
 import { as0x } from "../../chain/addresses.js";
 import { requireAuth, type AuthVars } from "../auth.js";
+import { prisma } from "../../db/client.js";
 
 const log = childLogger("tx");
 
@@ -47,6 +48,17 @@ const switchBody = z.object({
     .optional(),
 });
 
+// ── Agent control (BE-A) — owner-signed on-chain controls ──────────────────────
+const pauseBody = z.object({ vault: address, reason: z.string().max(200).optional() });
+const unpauseBody = z.object({ vault: address });
+// intervalSec bound mirrors the cadenceSec convention (0 = no on-chain cooldown, ≤ 1 year).
+const frequencyBody = z.object({ vault: address, intervalSec: z.number().int().min(0).max(31_536_000) });
+const setAllowedBody = z.object({
+  vault: address,
+  tokens: z.array(address).min(1).max(64),
+  allowed: z.boolean(),
+});
+
 /** Read+validate a JSON body; returns parsed data or sends a 400. */
 async function parseBody<T>(c: Context, schema: z.ZodType<T>) {
   const raw = await c.req.json().catch(() => null);
@@ -57,7 +69,11 @@ async function parseBody<T>(c: Context, schema: z.ZodType<T>) {
   return { ok: true as const, data: parsed.data };
 }
 
-/** Runs agentLiquidate on-chain, then returns the vault's USDC balance. */
+/** Runs agentLiquidate on-chain, then returns the vault's USDC balance.
+ *  Throws if the on-chain tx reverts — viem's waitForTransactionReceipt does NOT
+ *  throw on revert; it returns a receipt with status="reverted". Without this
+ *  check, a reverted liquidation would silently return usdcBalance=0 and the
+ *  user would end up signing a withdraw(0) tx that succeeds-but-does-nothing. */
 async function defaultAgentLiquidateAndBalance(vaultAddr: `0x${string}`): Promise<bigint> {
   const agent = getAgentWallet();
   const hash = await agent.writeContract({
@@ -68,7 +84,13 @@ async function defaultAgentLiquidateAndBalance(vaultAddr: `0x${string}`): Promis
     chain: activeChain,
     account: agent.account!,
   });
-  await publicClient.waitForTransactionReceipt({ hash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(
+      `agentLiquidate reverted on-chain (tx ${hash}). Some positions may have ` +
+        "lacked liquidity. Try again in a moment or contact support.",
+    );
+  }
   return publicClient.readContract({
     address: as0x(TOKENS.USDC.address),
     abi: ERC20_ABI,
@@ -87,7 +109,22 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
   const r = new Hono<AuthVars>();
   r.use("*", auth);
 
-  r.post("/deploy-vault", (c) => c.json({ tx: tx.prepareDeployVault() }));
+  r.post("/deploy-vault", async (c) => {
+    // Deploy is the FIRST on-chain action: fresh Google/email (embedded) wallets
+    // often have 0 MNT, so top up gas before the user signs, same as deposit/
+    // withdraw. Wallet derived from auth (privyId), so no body needed.
+    // Fully best-effort: a DB/funder hiccup must NEVER stop the user getting their tx.
+    try {
+      const user = await prisma.user.findUnique({
+        where: { privyId: c.get("privyId") },
+        select: { walletAddress: true },
+      });
+      if (user?.walletAddress) await tryEnsureGas(user.walletAddress as `0x${string}`);
+    } catch (err) {
+      log.warn({ err }, "deploy-vault gas top-up skipped (non-blocking)");
+    }
+    return c.json({ tx: tx.prepareDeployVault() });
+  });
 
   r.post("/prepare-deposit", async (c) => {
     const p = await parseBody(c, depositBody);
@@ -140,6 +177,27 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
     const usdcBalance = await agentLiquidateAndBalance(vaultAddr);
     const usdcBalanceHuman = Number(usdcBalance) / 10 ** 6;
 
+    // ── 3. Refuse to return a tx that can't actually pay the user out ─────────
+    // If the vault ended up with way less USDC than the user asked for, returning
+    // a withdraw(min(amount, ~0)) tx would just succeed-but-do-nothing on-chain
+    // (the user sees green checkmarks but no USDC lands in their wallet). The
+    // usual cause is a race with the auto-rebalancer: it ticks between our
+    // liquidation and the user's withdraw, swapping the fresh USDC back into
+    // non-USDC positions. Fail loudly so the FE shows an error the user can act on.
+    const MIN_PAYOUT_RATIO = 0.95; // tolerate up to 5% slippage / drift
+    const minAcceptable = amount * MIN_PAYOUT_RATIO;
+    if (usdcBalanceHuman < minAcceptable) {
+      return c.json(
+        {
+          error:
+            `Vault couldn't deliver enough USDC for your withdrawal ` +
+            `(requested $${amount.toFixed(2)}, vault has $${usdcBalanceHuman.toFixed(2)}). ` +
+            `This usually clears in a minute — please try again.`,
+        },
+        409,
+      );
+    }
+
     // Clamp: jangan minta lebih dari USDC yang tersedia (0.1% buffer untuk slippage)
     const safeAmount = Math.min(amount, usdcBalanceHuman * 0.999);
 
@@ -167,6 +225,48 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
       return c.json({ steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps)] });
     }
     return c.json({ steps: [tx.prepareSetRisk(v, risk)] });
+  });
+
+  // ── Agent control (BE-A): owner-signed on-chain controls ─────────────────────
+  // NOTE: this is the HARD on-chain pause (emergencyPause). The soft "auto-rebalance
+  // off" toggle is a DB flag at PATCH /agent/pause — keep them distinct; the FE picks.
+
+  /** POST /api/users/me/prepare-pause — hard on-chain pause. */
+  r.post("/prepare-pause", async (c) => {
+    const p = await parseBody(c, pauseBody);
+    if (!p.ok) return p.res;
+    return c.json({
+      tx: tx.prepareEmergencyPause(p.data.vault as `0x${string}`, p.data.reason ?? "Paused by owner"),
+    });
+  });
+
+  /** POST /api/users/me/prepare-unpause — resume after an emergency pause. */
+  r.post("/prepare-unpause", async (c) => {
+    const p = await parseBody(c, unpauseBody);
+    if (!p.ok) return p.res;
+    return c.json({ tx: tx.prepareEmergencyUnpause(p.data.vault as `0x${string}`) });
+  });
+
+  /** POST /api/users/me/prepare-set-frequency — on-chain min interval between rebalances. */
+  r.post("/prepare-set-frequency", async (c) => {
+    const p = await parseBody(c, frequencyBody);
+    if (!p.ok) return p.res;
+    return c.json({
+      tx: tx.prepareSetMinRebalanceInterval(p.data.vault as `0x${string}`, p.data.intervalSec),
+    });
+  });
+
+  /** POST /api/users/me/prepare-set-allowed — add/remove tokens from the vault allow-list.
+   *  Returns `steps` (allowed=true → 1 batch tx; allowed=false → one tx per token). */
+  r.post("/prepare-set-allowed", async (c) => {
+    const p = await parseBody(c, setAllowedBody);
+    if (!p.ok) return p.res;
+    const steps = tx.prepareSetAllowedTokens(
+      p.data.vault as `0x${string}`,
+      p.data.tokens as `0x${string}`[],
+      p.data.allowed,
+    );
+    return c.json({ steps });
   });
 
   return r;
