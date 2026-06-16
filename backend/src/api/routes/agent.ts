@@ -57,7 +57,8 @@ export const prismaAgentDeps: AgentDeps = {
   saveConfig: (vault, patch) => upsertAgentConfig(vault, patch),
   setPause: (vault, enabled) => setAutoRebalance(vault, enabled),
   runNow: (vault) => rebalancerService.runNow(vault),
-  runHermes: (vault) => runHermesRebalance(vault),
+  // "Run now" is user-initiated, so override the cadence + auto-rebalance toggle.
+  runHermes: (vault) => runHermesRebalance(vault, { manualOverride: true }),
   agentLog: (vault, limit) =>
     prisma.agentLog.findMany({
       where: { vaultAddress: vault },
