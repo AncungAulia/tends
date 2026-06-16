@@ -213,7 +213,7 @@ const setAgentGuardrailsTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
     try {
       const updated = await upsertAgentConfig(vault, patch);
       // enforce the new guardrails (rebalance if a cap is now violated) — async,
@@ -255,7 +255,7 @@ const triggerRebalanceTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
     try {
       return await runHermesRebalance(vault);
     } catch (e) {
@@ -299,7 +299,7 @@ const executeDirectSwapTool = createTool({
     const wallet = sessionWallet(context);
     if (!wallet) return { error: "no wallet linked to this session" };
     const vault = await vaultOf(wallet);
-    if (!vault) return { error: "no vault deployed yet — deploy a vault first" };
+    if (!vault) return { error: "no vault deployed yet. Deploy a vault first." };
 
     // Validate all symbols exist in the token registry.
     const unknown = Object.keys(targetBps).filter((s) => !(s in TOKENS));
@@ -307,7 +307,7 @@ const executeDirectSwapTool = createTool({
 
     const totalBps = Object.values(targetBps).reduce((s, v) => s + v, 0);
     if (totalBps > 10_000) {
-      return { error: `targetBps sums to ${totalBps} — must be ≤ 10000` };
+      return { error: `targetBps sums to ${totalBps}, must be ≤ 10000` };
     }
 
     // Read current on-chain balances + prices for all registered tokens.
@@ -353,7 +353,7 @@ const executeDirectSwapTool = createTool({
       if (todayCount >= config.dailyLimitPerDay) {
         return {
           outcome: "error",
-          reason: `daily trade limit reached (${todayCount}/${config.dailyLimitPerDay} today) — raise it in agent settings or try tomorrow`,
+          reason: `daily trade limit reached (${todayCount}/${config.dailyLimitPerDay} today). Raise it in agent settings or try tomorrow.`,
         };
       }
     }
@@ -370,7 +370,7 @@ const executeDirectSwapTool = createTool({
     });
 
     if (instructions.length === 0) {
-      return { outcome: "skip", reason: "already at target allocation — no swaps needed" };
+      return { outcome: "skip", reason: "already at target allocation, no swaps needed" };
     }
 
     agentLogEmitter.log({
@@ -389,12 +389,12 @@ const executeDirectSwapTool = createTool({
         workflow: "chat",
         step: "direct-swap",
         status: "error",
-        message: "Chat swap simulation failed — trade would revert on-chain",
+        message: "Chat swap simulation failed: trade would revert on-chain",
         data: { reasoning },
       });
       return {
         outcome: "error",
-        reason: "swap simulation failed — the trade would revert on-chain. Possible causes: stale price feed, insufficient vault balance, or slippage too tight.",
+        reason: "swap simulation failed: the trade would revert on-chain. Possible causes: stale price feed, insufficient vault balance, or slippage too tight.",
       };
     }
 
@@ -405,7 +405,7 @@ const executeDirectSwapTool = createTool({
       workflow: "chat",
       step: "direct-swap",
       status: "done",
-      message: `Chat swap executed: ${instructions.length} trade(s) — ${reasoning}`,
+      message: `Chat swap executed: ${instructions.length} trade(s). ${reasoning}`,
       data: { hash, swaps: instructions.length, reasoning },
     });
 
