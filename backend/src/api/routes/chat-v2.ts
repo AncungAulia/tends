@@ -112,12 +112,36 @@ export function makeChatV2Router(
             // Emit a rich card (holdings / action proposal) from the tool's result.
             const card = toCardEvent(part.payload);
             if (card) await s.writeSSE({ event: "card", data: JSON.stringify(card) });
+          } else if (part.type === "error") {
+            // Mastra surfaces upstream LLM failures (rate limits, auth, bad
+            // model id, etc.) as an `error` part on the stream instead of
+            // throwing. Without explicit handling the loop would just end,
+            // emit `done`, and the frontend would think the agent returned
+            // an empty reply. Forward it as an SSE `error` so the user sees
+            // a real message and the cause shows up in our logs.
+            const raw = (part.payload as { error?: unknown } | undefined)?.error;
+            const rawMsg =
+              raw instanceof Error
+                ? raw.message
+                : typeof raw === "string"
+                  ? raw
+                  : "Agent failed to respond.";
+            log.error({ err: raw }, "agent stream emitted error part");
+            const friendly = /too many requests|rate limit|429/i.test(rawMsg)
+              ? "The LLM provider is rate-limiting us right now. Wait a few seconds and try again."
+              : rawMsg;
+            await s.writeSSE({ event: "error", data: friendly });
+            return;
           }
         }
         await s.writeSSE({ event: "done", data: "" });
       } catch (e) {
         log.error({ err: e }, "chat-v2 stream failed");
-        await s.writeSSE({ event: "error", data: (e as Error).message });
+        const msg = (e as Error).message;
+        const friendly = /too many requests|rate limit|429/i.test(msg)
+          ? "The LLM provider is rate-limiting us right now. Wait a few seconds and try again."
+          : msg;
+        await s.writeSSE({ event: "error", data: friendly });
       }
     });
   });

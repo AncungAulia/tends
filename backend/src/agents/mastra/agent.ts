@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { tendsMemory } from "./memory.js";
 import { tendsTools, tendsActionTools } from "./tools.js";
-import { hermesModel } from "./hermes-model.js";
+import { openRouterModel } from "./hermes-model.js";
 import { TIER_ADVISORY } from "./advisory.js";
 
 /**
@@ -73,7 +73,7 @@ export const tendsAgent = new Agent({
   id: "tends-portfolio-agent",
   name: "Tends Portfolio Agent",
   instructions: INSTRUCTIONS,
-  model: hermesModel,
+  model: openRouterModel,
   tools: { ...tendsTools, ...tendsActionTools },
   memory: tendsMemory,
 });

@@ -9,7 +9,15 @@
 # config must be passed explicitly or the server exits ("Invalid environment variables").
 
 model:
-  default: openrouter/openai/gpt-4o-mini # cheap, reliable tool-calling
+  # OpenRouter routes the request to OpenAI's gpt-4o-mini. Cheap (~$0.15/1M
+  # input, $0.60/1M output) and fast — keeps Hermes responsive for the
+  # advisory chat. The previous 429s in this slot turned out to be the GitHub
+  # Models free-tier quota the action agent hit directly, not OpenRouter
+  # (which has paid credit on file). Both agents now route through here, so
+  # OpenRouter is the single LLM lane and gpt-4o-mini is plenty for it.
+  # NOTE: the model id here is forwarded VERBATIM to OpenRouter — don't
+  # prepend "openrouter/" again. OpenRouter expects "<vendor>/<model>".
+  default: openai/gpt-4o-mini
   provider: openrouter
 
 # MCP: the Tends tools server (Hermes spawns it as a subprocess and exposes

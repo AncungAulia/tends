@@ -2,6 +2,22 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { env } from "../../config/env.js";
 
 /**
+ * Direct OpenRouter chat model. The Hermes gateway used to live here, but it
+ * is an agent framework (with its own MCP loop and persona) rather than a
+ * thin LLM proxy — it discards the `tools` array Mastra sends and answers
+ * with its own context, so Mastra's read/write tools (getHoldings,
+ * proposeSwap, …) never actually fire and the agent hallucinates "no wallet
+ * linked" even when the wallet is bound on the RequestContext. Going straight
+ * to OpenRouter keeps tool-calling intact while still benefiting from the
+ * paid OpenRouter credit lane (no GitHub-Models 429s).
+ */
+export const openRouterModel = createOpenAICompatible({
+  name: "openrouter",
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: env.OPENROUTER_API_KEY,
+}).chatModel(env.OPENROUTER_MODEL);
+
+/**
  * Hermes as a Mastra model — with a FRAME FILTER.
  *
  * The Hermes gateway is not a pure OpenAI-compatible endpoint: alongside standard
