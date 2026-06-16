@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Check, Loader2, AlertCircle } from "lucide-react";
-import { useAccount } from "wagmi";
+import { X, Check, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import SlidingNumber from "@/components/preview/SlidingNumber";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
@@ -253,17 +253,132 @@ export function DepositModal({ open, onClose }: { open: boolean; onClose: () => 
 
 // ─── Withdraw ────────────────────────────────────────────
 
+/**
+ * Post-submit progress screen. ERC-4626 redeem is atomic (one tx that
+ * liquidates every position to USDC AND transfers USDC to the user), so
+ * receipt confirmation is the single gate for "fully done". We split it
+ * into two visual steps purely for storytelling — both flip green at once
+ * when the receipt comes back.
+ */
+function WithdrawProgress({
+  amount,
+  hash,
+  onClose,
+}: {
+  amount: number;
+  hash: `0x${string}` | undefined;
+  onClose: () => void;
+}) {
+  // `isSuccess` from wagmi only means "receipt was fetched", NOT "tx succeeded".
+  // For a reverted tx the receipt comes back fine with status="reverted" — we
+  // must read `data.status` to know the real outcome.
+  const { data: receipt, isError: receiptFetchError } = useWaitForTransactionReceipt({
+    hash,
+    query: { enabled: !!hash },
+  });
+  const confirmed = receipt?.status === "success";
+  const reverted = receipt?.status === "reverted" || receiptFetchError;
+  const finished = confirmed || reverted;
+
+  return (
+    <div className="flex flex-col items-center py-2 text-center" style={{ animation: "fadeIn .25s ease" }}>
+      <div
+        className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+          reverted ? "bg-neg-soft" : confirmed ? "bg-pos-soft" : "bg-brand-soft"
+        }`}
+      >
+        {reverted ? (
+          <AlertCircle className="h-6 w-6 text-neg" />
+        ) : confirmed ? (
+          <Check className="h-6 w-6 text-pos" />
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin text-brand" />
+        )}
+      </div>
+      <p className="mt-3 text-sm font-semibold text-ink">
+        {reverted
+          ? "Withdrawal failed on-chain"
+          : confirmed
+            ? `Withdrew $${USD(amount)}`
+            : "Processing your withdrawal..."}
+      </p>
+      <p className="mt-0.5 text-xs text-dim">
+        {reverted
+          ? "The transaction was rejected by the vault. Try again in a moment."
+          : confirmed
+            ? "USDC is in your wallet."
+            : "Hang tight — this usually takes 10 to 30 seconds."}
+      </p>
+
+      <div className="mt-5 w-full space-y-2 rounded-xl border border-edge p-3 text-left">
+        <ProgressStep done={confirmed} failed={reverted} label="Swapping all positions to USDC" />
+        <ProgressStep done={confirmed} failed={reverted} label="Sending USDC to your wallet" />
+      </div>
+
+      <button
+        onClick={onClose}
+        disabled={!finished}
+        className={`mt-5 w-full rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${
+          finished
+            ? "bg-panel text-ink hover:bg-brand-soft"
+            : "cursor-not-allowed bg-panel text-faint opacity-50"
+        }`}
+      >
+        {reverted ? "Close" : "Done"}
+      </button>
+    </div>
+  );
+}
+
+function ProgressStep({
+  done,
+  failed,
+  label,
+}: {
+  done: boolean;
+  failed?: boolean;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+          failed ? "bg-neg-soft" : done ? "bg-pos-soft" : "bg-panel"
+        }`}
+      >
+        {failed ? (
+          <X className="h-3 w-3 text-neg" />
+        ) : done ? (
+          <Check className="h-3 w-3 text-pos" />
+        ) : (
+          <Loader2 className="h-3 w-3 animate-spin text-dim" />
+        )}
+      </div>
+      <span className={`text-xs ${failed ? "text-neg" : done ? "text-ink" : "text-dim"}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { address } = useAccount();
   const vaultAddress = useVaultStore((s) => s.vaultAddress);
   const { totalAssetsUSDC } = usePortfolio(vaultAddress, address);
   const { holdings } = useVaultHoldings(vaultAddress as `0x${string}` | undefined);
-  const { withdraw, state, error, reset, isSuccess } = useWithdraw();
+  const { withdraw, state, error, reset, isSuccess, hashes } = useWithdraw();
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<"amount" | "percent">("amount");
   const [rawInput, setRawInput] = useState("");
   const [sellPct, setSellPct] = useState<Record<string, number>>({});
+  // Frozen at submit so the progress screen keeps showing the same amount
+  // even if vault holdings / sliders shift while waiting for the receipt.
+  const [submittedAmount, setSubmittedAmount] = useState(0);
+  // Assets-to-sell pagination — keeps the modal compact when the vault holds
+  // many tokens (e.g. HIGH preset can liquidate 10+ positions).
+  const [assetPage, setAssetPage] = useState(0);
+  const ASSETS_PER_PAGE = 3;
   // tracks whether the last edit came from the amount field or a slider, so the
   // two-way sync below doesn't fight itself
   const editSrc = useRef<"amount" | "slider">("amount");
@@ -278,6 +393,19 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
   const nonUsdcHoldings = holdings.filter((h) => h.symbol !== "USDC" && (h.valueUSD ?? 0) > 0.01);
   const isMaxWithdraw = num > 0 && vaultBalance > 0 && Math.abs(num - vaultBalance) < 0.01;
   const showBreakdown = num > 0 && !isMaxWithdraw && nonUsdcHoldings.length > 0;
+
+  // Sliders still operate on the full list (proceeds + proportional math need
+  // every holding). Pagination only narrows what's rendered.
+  const totalAssetPages = Math.max(1, Math.ceil(nonUsdcHoldings.length / ASSETS_PER_PAGE));
+  const pagedHoldings = nonUsdcHoldings.slice(
+    assetPage * ASSETS_PER_PAGE,
+    assetPage * ASSETS_PER_PAGE + ASSETS_PER_PAGE,
+  );
+  // Clamp the active page when the holdings list shrinks (e.g. dust gets dropped
+  // mid-session) so the page indicator never points past the last page.
+  useEffect(() => {
+    if (assetPage >= totalAssetPages) setAssetPage(totalAssetPages - 1);
+  }, [totalAssetPages, assetPage]);
 
   // Sync sliders to proportional whenever the USD amount or holdings list changes
   const nonUsdcKey = nonUsdcHoldings.map((h) => h.symbol).join(",");
@@ -321,7 +449,16 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
   }
 
   function setMax() {
-    setRawInput(mode === "amount" ? USD(vaultBalance) : "100");
+    if (mode === "percent") {
+      setRawInput("100");
+      return;
+    }
+    // Write a plain number string (no thousands separator). USD() returns
+    // "1,001.45" — the comma is rejected by handleRawInput's regex, which
+    // would freeze the field (every subsequent edit would be reverted).
+    // Floor to 2dp so num never exceeds vaultBalance by float round-up
+    // (which would trip the "Exceeds your available balance" guard).
+    setRawInput((Math.floor(vaultBalance * 100) / 100).toFixed(2));
   }
 
   function close() {
@@ -329,11 +466,14 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
     setRawInput("");
     setMode("amount");
     setSellPct({});
+    setSubmittedAmount(0);
+    setAssetPage(0);
     reset();
   }
 
   async function submit() {
     if (!valid || !vaultAddress || !address) return;
+    setSubmittedAmount(num);
     try {
       await withdraw(vaultAddress, address, num);
       await queryClient.invalidateQueries();
@@ -350,9 +490,9 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
         onClose={busy ? () => {} : close}
       />
       {isSuccess ? (
-        <Done
-          msg={`Withdrew $${USD(num)}`}
-          sub="Sent to your wallet. Your allocation stays balanced."
+        <WithdrawProgress
+          amount={submittedAmount}
+          hash={hashes[hashes.length - 1]}
           onClose={close}
         />
       ) : (
@@ -430,9 +570,34 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                 style={{ overflow: "hidden" }}
               >
                 <div className="rounded-xl border border-edge p-3">
-                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim">
-                    Assets to sell
-                  </p>
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-dim">
+                      Assets to sell
+                    </p>
+                    {nonUsdcHoldings.length > ASSETS_PER_PAGE && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setAssetPage((p) => Math.max(0, p - 1))}
+                          disabled={assetPage === 0}
+                          aria-label="Previous assets"
+                          className="flex h-5 w-5 items-center justify-center rounded text-dim transition-colors hover:bg-panel hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="min-w-[2.25rem] text-center text-[10px] tabular-nums text-faint">
+                          {assetPage + 1}/{totalAssetPages}
+                        </span>
+                        <button
+                          onClick={() => setAssetPage((p) => Math.min(totalAssetPages - 1, p + 1))}
+                          disabled={assetPage >= totalAssetPages - 1}
+                          aria-label="Next assets"
+                          className="flex h-5 w-5 items-center justify-center rounded text-dim transition-colors hover:bg-panel hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {/* USDC is used directly — no swap */}
                   {usdcHolding && (usdcHolding.valueUSD ?? 0) > 0.01 && (
@@ -453,9 +618,9 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                     </motion.div>
                   )}
 
-                  {/* Non-USDC holdings with staggered sliders */}
+                  {/* Non-USDC holdings with staggered sliders (paginated) */}
                   <div className="space-y-3">
-                    {nonUsdcHoldings.map((h, i) => {
+                    {pagedHoldings.map((h, i) => {
                       const pct = sellPct[h.symbol] ?? 0;
                       const proceeds = (h.valueUSD ?? 0) * pct / 100;
                       const accentColor = TOKEN_COLOR[h.symbol] ?? "#1591DC";
@@ -520,7 +685,7 @@ export function WithdrawModal({ open, onClose }: { open: boolean; onClose: () =>
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.08 + nonUsdcHoldings.length * 0.055 + 0.05, duration: 0.2 }}
+                    transition={{ delay: 0.08 + pagedHoldings.length * 0.055 + 0.05, duration: 0.2 }}
                     className={`mt-3 flex items-center justify-between rounded-lg px-2.5 py-2 ${
                       proceedsMet ? "bg-pos-soft" : "bg-neg-soft"
                     }`}

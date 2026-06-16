@@ -69,7 +69,11 @@ async function parseBody<T>(c: Context, schema: z.ZodType<T>) {
   return { ok: true as const, data: parsed.data };
 }
 
-/** Runs agentLiquidate on-chain, then returns the vault's USDC balance. */
+/** Runs agentLiquidate on-chain, then returns the vault's USDC balance.
+ *  Throws if the on-chain tx reverts — viem's waitForTransactionReceipt does NOT
+ *  throw on revert; it returns a receipt with status="reverted". Without this
+ *  check, a reverted liquidation would silently return usdcBalance=0 and the
+ *  user would end up signing a withdraw(0) tx that succeeds-but-does-nothing. */
 async function defaultAgentLiquidateAndBalance(vaultAddr: `0x${string}`): Promise<bigint> {
   const agent = getAgentWallet();
   const hash = await agent.writeContract({
@@ -80,7 +84,13 @@ async function defaultAgentLiquidateAndBalance(vaultAddr: `0x${string}`): Promis
     chain: activeChain,
     account: agent.account!,
   });
-  await publicClient.waitForTransactionReceipt({ hash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(
+      `agentLiquidate reverted on-chain (tx ${hash}). Some positions may have ` +
+        "lacked liquidity. Try again in a moment or contact support.",
+    );
+  }
   return publicClient.readContract({
     address: as0x(TOKENS.USDC.address),
     abi: ERC20_ABI,
@@ -166,6 +176,27 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
     // Pakai balance aktual, bukan totalAssets() — menghindari gap slippage
     const usdcBalance = await agentLiquidateAndBalance(vaultAddr);
     const usdcBalanceHuman = Number(usdcBalance) / 10 ** 6;
+
+    // ── 3. Refuse to return a tx that can't actually pay the user out ─────────
+    // If the vault ended up with way less USDC than the user asked for, returning
+    // a withdraw(min(amount, ~0)) tx would just succeed-but-do-nothing on-chain
+    // (the user sees green checkmarks but no USDC lands in their wallet). The
+    // usual cause is a race with the auto-rebalancer: it ticks between our
+    // liquidation and the user's withdraw, swapping the fresh USDC back into
+    // non-USDC positions. Fail loudly so the FE shows an error the user can act on.
+    const MIN_PAYOUT_RATIO = 0.95; // tolerate up to 5% slippage / drift
+    const minAcceptable = amount * MIN_PAYOUT_RATIO;
+    if (usdcBalanceHuman < minAcceptable) {
+      return c.json(
+        {
+          error:
+            `Vault couldn't deliver enough USDC for your withdrawal ` +
+            `(requested $${amount.toFixed(2)}, vault has $${usdcBalanceHuman.toFixed(2)}). ` +
+            `This usually clears in a minute — please try again.`,
+        },
+        409,
+      );
+    }
 
     // Clamp: jangan minta lebih dari USDC yang tersedia (0.1% buffer untuk slippage)
     const safeAmount = Math.min(amount, usdcBalanceHuman * 0.999);
