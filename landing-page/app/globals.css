@@ -70,6 +70,14 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body {
+  scrollbar-width: none;          /* Firefox */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari / Edge */
+}
+
 html {
   background: #F7F9FC;
   -webkit-font-smoothing: antialiased;
@@ -81,6 +89,18 @@ body {
   background: #F7F9FC;
   color: #0C1A2B;
   overflow-x: hidden;
+}
+
+/* ── Load overlay safety net ────────────────────────────────────────
+   Normally GSAP hides the white overlay in ~0.5s. If GSAP fails for ANY
+   reason (bfcache restoration, back-nav timing, script error) this CSS
+   animation guarantees the overlay disappears after 2.5s.
+   ─────────────────────────────────────────────────────────────────── */
+@keyframes loadOverlayHide {
+  to { opacity: 0; visibility: hidden; }
+}
+.load-overlay {
+  animation: loadOverlayHide 0.6s ease-in 2.5s forwards;
 }
 
 /* Clip reveal wrapper — overflow:hidden mask */
@@ -119,15 +139,18 @@ body {
      instead of "rising." */
   transform: translateY(28px);
   will-change: opacity, filter, transform;
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  /* No transition in the base state — when .visible is removed, the slide
+     hides INSTANTLY so there is never more than one slide on screen. */
 }
 .apple-reveal-text.visible {
   opacity: 1;
   filter: blur(0);
   transform: translateY(0);
+  /* Transition only when entering — smooth reveal, instant hide. */
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   .apple-reveal-text,

@@ -507,6 +507,7 @@ export default function HeroSection() {
       {/* ── Page-load white overlay ───────────────────────────────── */}
       <div
         ref={loadOverlayRef}
+        className="load-overlay"
         style={{
           position: "fixed",
           inset: 0,
@@ -612,7 +613,10 @@ export default function HeroSection() {
                   paddingBottom: "20px",
                 }}
               >
-                <button
+                <a
+                  href="https://app.tends.fun"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onMouseEnter={() => setHovered(true)}
                   onMouseLeave={() => setHovered(false)}
                   style={{
@@ -632,6 +636,7 @@ export default function HeroSection() {
                     color: hovered ? "#ffffff" : "#0C1A2B",
                     cursor: "pointer",
                     userSelect: "none",
+                    textDecoration: "none",
                     transition: "color 0.65s ease",
                   }}
                 >
@@ -707,7 +712,7 @@ export default function HeroSection() {
                       </svg>
                     </span>
                   </span>
-                </button>
+                </a>
               </div>
             </div>
           </div>
