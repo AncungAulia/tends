@@ -14,6 +14,17 @@ export default function SmoothScroll({ children }: { children: React.ReactNode }
       window.scrollTo(0, 0);
     }
 
+    // ── bfcache guard ──────────────────────────────────────────────────
+    // When the user navigates to an external URL (e.g. app.tends.fun) and
+    // presses Back, the browser restores from bfcache. React effects don't
+    // re-run → GSAP entry animations, Lenis, and WebGL contexts are dead →
+    // the white load overlay stays visible. Force a clean reload so
+    // everything initialises fresh.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) window.location.reload();
+    };
+    window.addEventListener('pageshow', onPageShow);
+
     let lenis: Lenis;
 
     const init = async () => {
@@ -57,6 +68,7 @@ export default function SmoothScroll({ children }: { children: React.ReactNode }
     init();
 
     return () => {
+      window.removeEventListener('pageshow', onPageShow);
       lenisRef.current?.destroy();
       lenisRef.current = null;
       delete (window as unknown as { lenis?: Lenis }).lenis;

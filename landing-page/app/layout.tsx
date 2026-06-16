@@ -32,7 +32,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `history.scrollRestoration="manual";window.scrollTo(0,0);` }} />
+        <script dangerouslySetInnerHTML={{ __html: `history.scrollRestoration="manual";window.scrollTo(0,0);window.addEventListener("pageshow",function(e){if(e.persisted)window.location.reload()});` }} />
       </head>
       <body>{children}</body>
     </html>
