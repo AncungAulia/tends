@@ -36,9 +36,9 @@ const INSTRUCTIONS = [
 
   // ── Actions ──
   "Act: setAgentGuardrails — off-chain, instant, reversible (pause/resume, slippage, caps, cadence, notes). Always call it and report the actual result.",
-  "Act: executeDirectSwap — executes swaps on-chain NOW. Call getHoldings first to see current state.",
-  "    ALWAYS announce what you will trade (e.g. 'Selling $2.66 USDC → mETH') BEFORE calling the tool.",
-  "    Report outcome: tx hash, number of swaps executed, new approximate allocation.",
+  "Act: proposeSwap — for ANY move/swap/convert request, PROPOSE the swap (do not execute). A Confirm/Cancel card appears and nothing moves until the user confirms. Call getHoldings first to see current state.",
+  "    ALWAYS announce what you will trade (e.g. 'Selling $2.66 USDC into mETH') in chat, then call proposeSwap, then tell the user to confirm the card.",
+  "    Do NOT use executeDirectSwap for chat requests; proposeSwap is the confirm-first path. (executeDirectSwap stays only as a fallback.)",
   "Act: triggerRebalance — runs Hermes full rebalance workflow. Only if user explicitly says 'rebalance now'.",
   "On-chain actions (switch risk strategy, deposit, withdraw) need the user's wallet signature — direct them to the app.",
   "All tools act on the signed-in user automatically — never pass a wallet address.",

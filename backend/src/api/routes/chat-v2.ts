@@ -15,6 +15,33 @@ import { prismaUserResolver, type UserResolver } from "./chat.js";
 const log = childLogger("chat-v2");
 
 /**
+ * Map a tool result to a rich-card SSE payload, or null if the tool has no card.
+ * The FE renders these as a holdings card or a Confirm/Cancel action card.
+ * NOTE: Mastra's fullStream tool-result payload shape can vary across versions —
+ * we read `result`/`output` defensively so a mismatch just yields no card (no crash).
+ */
+function toCardEvent(payload: unknown): object | null {
+  const p = payload as { toolName?: string; result?: unknown; output?: unknown } | undefined;
+  const name = p?.toolName;
+  const result = (p?.result ?? p?.output) as Record<string, unknown> | undefined;
+  if (!name || !result || typeof result !== "object") return null;
+
+  if (name === "getHoldings" && Array.isArray((result as { holdings?: unknown }).holdings)) {
+    return { type: "holdings", holdings: result.holdings, totalValueUsd: result.totalValueUsd };
+  }
+  if (name === "proposeSwap" && result.outcome === "proposed") {
+    return {
+      type: "action",
+      kind: result.card ?? "move",
+      title: result.title,
+      subtitle: result.subtitle,
+      proposal: result.proposal,
+    };
+  }
+  return null;
+}
+
+/**
  * Mastra chat over SSE (Supabase "grow with user" memory + portfolio tools). The
  * `agent` is injected so the same route serves the Hermes read-agent (/api/chat)
  * and the gpt-4o action-agent (/api/chat-v2). Wallet is bound from the Privy session
@@ -81,6 +108,10 @@ export function makeChatV2Router(
           } else if (part.type === "tool-call") {
             // Let the frontend show which tool is running (e.g. "Fetching holdings...")
             await s.writeSSE({ event: "status", data: part.payload.toolName });
+          } else if (part.type === "tool-result") {
+            // Emit a rich card (holdings / action proposal) from the tool's result.
+            const card = toCardEvent(part.payload);
+            if (card) await s.writeSSE({ event: "card", data: JSON.stringify(card) });
           }
         }
         await s.writeSSE({ event: "done", data: "" });
