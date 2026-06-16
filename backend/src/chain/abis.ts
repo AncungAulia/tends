@@ -86,6 +86,41 @@ export const USER_VAULT_TX_ABI = [
     outputs: [],
   },
   {
+    // onlyOwner — resume after an emergencyPause (owner-signed via Privy)
+    name: "emergencyUnpause",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    // onlyOwner — on-chain min seconds between rebalances (0 = no cooldown)
+    name: "setMinRebalanceInterval",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "interval", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    // owner OR agentExecutor — batch add tokens to the vault allow-list
+    name: "addAllowedTokens",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokens", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    // onlyOwner — toggle a single token on/off the allow-list
+    name: "setAllowedToken",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "allowed", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
     // onlyAgent — called by backend before returning withdraw tx
     name: "agentLiquidate",
     type: "function",

@@ -47,6 +47,17 @@ const switchBody = z.object({
     .optional(),
 });
 
+// ── Agent control (BE-A) — owner-signed on-chain controls ──────────────────────
+const pauseBody = z.object({ vault: address, reason: z.string().max(200).optional() });
+const unpauseBody = z.object({ vault: address });
+// intervalSec bound mirrors the cadenceSec convention (0 = no on-chain cooldown, ≤ 1 year).
+const frequencyBody = z.object({ vault: address, intervalSec: z.number().int().min(0).max(31_536_000) });
+const setAllowedBody = z.object({
+  vault: address,
+  tokens: z.array(address).min(1).max(64),
+  allowed: z.boolean(),
+});
+
 /** Read+validate a JSON body; returns parsed data or sends a 400. */
 async function parseBody<T>(c: Context, schema: z.ZodType<T>) {
   const raw = await c.req.json().catch(() => null);
@@ -167,6 +178,48 @@ export function makeTxRouter(auth: MiddlewareHandler<AuthVars>, deps: TxDeps = {
       return c.json({ steps: [tx.prepareSetCustomAllocation(v, lowBps, medBps, highBps)] });
     }
     return c.json({ steps: [tx.prepareSetRisk(v, risk)] });
+  });
+
+  // ── Agent control (BE-A): owner-signed on-chain controls ─────────────────────
+  // NOTE: this is the HARD on-chain pause (emergencyPause). The soft "auto-rebalance
+  // off" toggle is a DB flag at PATCH /agent/pause — keep them distinct; the FE picks.
+
+  /** POST /api/users/me/prepare-pause — hard on-chain pause. */
+  r.post("/prepare-pause", async (c) => {
+    const p = await parseBody(c, pauseBody);
+    if (!p.ok) return p.res;
+    return c.json({
+      tx: tx.prepareEmergencyPause(p.data.vault as `0x${string}`, p.data.reason ?? "Paused by owner"),
+    });
+  });
+
+  /** POST /api/users/me/prepare-unpause — resume after an emergency pause. */
+  r.post("/prepare-unpause", async (c) => {
+    const p = await parseBody(c, unpauseBody);
+    if (!p.ok) return p.res;
+    return c.json({ tx: tx.prepareEmergencyUnpause(p.data.vault as `0x${string}`) });
+  });
+
+  /** POST /api/users/me/prepare-set-frequency — on-chain min interval between rebalances. */
+  r.post("/prepare-set-frequency", async (c) => {
+    const p = await parseBody(c, frequencyBody);
+    if (!p.ok) return p.res;
+    return c.json({
+      tx: tx.prepareSetMinRebalanceInterval(p.data.vault as `0x${string}`, p.data.intervalSec),
+    });
+  });
+
+  /** POST /api/users/me/prepare-set-allowed — add/remove tokens from the vault allow-list.
+   *  Returns `steps` (allowed=true → 1 batch tx; allowed=false → one tx per token). */
+  r.post("/prepare-set-allowed", async (c) => {
+    const p = await parseBody(c, setAllowedBody);
+    if (!p.ok) return p.res;
+    const steps = tx.prepareSetAllowedTokens(
+      p.data.vault as `0x${string}`,
+      p.data.tokens as `0x${string}`[],
+      p.data.allowed,
+    );
+    return c.json({ steps });
   });
 
   return r;

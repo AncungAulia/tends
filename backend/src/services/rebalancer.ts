@@ -419,7 +419,7 @@ export class RebalancerService {
       return { action: "skip", reason: "cooldown" };
     }
     if (!(await this.deps.arePricesFresh())) {
-      log.warn({ vault }, "price feeds stale — skip (won't plan/trade on stale prices)");
+      log.warn({ vault }, "price feeds stale: skip (won't plan/trade on stale prices)");
       return { action: "skip", reason: "stale" };
     }
 
@@ -442,7 +442,7 @@ export class RebalancerService {
       if (peakAssets != null && peakAssets > 0n && currentAssets < peakAssets) {
         const dropBps = ((peakAssets - currentAssets) * 10_000n) / peakAssets;
         if (dropBps >= BigInt(config.stopLossPct * 100)) {
-          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered — liquidating");
+          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered: liquidating");
           const hash = await this.deps.sendLiquidate(vault);
           await this.deps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch((e) =>
             log.error({ vault, err: e }, "stop-loss pause failed"),
@@ -463,7 +463,7 @@ export class RebalancerService {
       return { action: "skip", reason: "balanced" };
     }
     if (!(await this.deps.simulateRebalance(vault, instructions))) {
-      log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip — no gas spent");
+      log.warn({ vault, swaps: instructions.length }, "rebalance would revert (sim), skip: no gas spent");
       agentLogEmitter.log({ vaultAddress: vault, workflow: "deterministic", step: "exec-rebalance", status: "error", message: "Simulation reverted. No trades sent." });
       return { action: "skip", reason: "unsafe" };
     }
@@ -500,7 +500,7 @@ export class RebalancerService {
       if (peakAssets != null && peakAssets > 0n && currentAssets < peakAssets) {
         const dropBps = ((peakAssets - currentAssets) * 10_000n) / peakAssets;
         if (dropBps >= BigInt(config.stopLossPct * 100)) {
-          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered on manual run — liquidating");
+          log.warn({ vault, dropBps: dropBps.toString(), pct: config.stopLossPct }, "stop-loss triggered on manual run: liquidating");
           const hash = await this.deps.sendLiquidate(vault);
           await this.deps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch((e) =>
             log.error({ vault, err: e }, "stop-loss pause failed"),
@@ -555,7 +555,7 @@ export class RebalancerService {
         const breached = tokensOutOfBand(holdings, config.perTokenBandsBps);
         if (breached.length === 0) continue;
         this.vaultLastSwept.set(vault, now);
-        log.info({ vault, breached }, "token(s) out of band after price update — rebalancing");
+        log.info({ vault, breached }, "token(s) out of band after price update: rebalancing");
         agentLogEmitter.log({
           vaultAddress: vault,
           workflow: "deterministic",

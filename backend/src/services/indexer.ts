@@ -286,9 +286,15 @@ export class IndexerService {
       await this.repo.setRiskPreference(vault, toRiskUpdate(level, lowBps, medBps, highBps));
     }
 
-    // DRPC free tier: eth_getLogs max 10 000 blocks — paginate in 9 000-block chunks.
+    // DRPC free tier: eth_getLogs max 10 000 blocks, paginate in 9 000-block chunks.
     // fromBlock: stored deployedBlock (most precise) or fallback to last 200 000 blocks.
-    const latest = await publicClient.getBlockNumber();
+    // Historical-log sync is best-effort: the vault + risk are already persisted above,
+    // so an RPC failure here must not abort the backfill (or break tests with no RPC).
+    const latest = await publicClient.getBlockNumber().catch(() => null);
+    if (latest === null) {
+      log.warn({ vault, owner }, "vault backfilled (historical deposit sync skipped: RPC unavailable)");
+      return;
+    }
     const stored = await prisma.vault.findUnique({
       where: { address: vault },
       select: { deployedBlock: true },
@@ -311,7 +317,9 @@ export class IndexerService {
     const [depositLogs, withdrawLogs] = await Promise.all([
       getLogsPaged(DEPOSIT_EVENT),
       getLogsPaged(WITHDRAW_EVENT),
-    ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ]).catch(() => [[], []] as [any[], any[]]); // RPC failure → treat as no history, keep the upsert
+
 
     let totalDepositedAssets = 0n;
     let totalDepositedShares = 0n;

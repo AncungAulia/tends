@@ -160,29 +160,29 @@ const scanStep = createStep({
     emitScan("running", "Scanning vault status and guardrails...");
 
     if (meta.paused) {
-      log.info({ vault }, "[scan] paused on-chain — skip");
+      log.info({ vault }, "[scan] paused on-chain: skip");
       emitScan("skip", "Vault is paused on-chain");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "paused" };
     }
     if (!config.autoRebalanceEnabled) {
-      log.info({ vault }, "[scan] auto-rebalance disabled — skip");
+      log.info({ vault }, "[scan] auto-rebalance disabled: skip");
       emitScan("skip", "Auto-rebalance is disabled");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "disabled" };
     }
     if (now < meta.lastRebalanceTime + meta.minRebalanceInterval) {
-      log.info({ vault }, "[scan] on-chain cooldown — skip");
+      log.info({ vault }, "[scan] on-chain cooldown: skip");
       emitScan("skip", "On-chain cooldown not elapsed yet");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "cooldown" };
     }
     if (config.cadenceSec != null && now < meta.lastRebalanceTime + BigInt(config.cadenceSec)) {
-      log.info({ vault }, "[scan] off-chain cadence — skip");
+      log.info({ vault }, "[scan] off-chain cadence: skip");
       emitScan("skip", "Off-chain cadence not elapsed yet");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "cooldown" };
     }
     if (config.dailyLimitPerDay != null) {
       const todayCount = await defaultRebalancerDeps.countTodayRebalances(vault);
       if (todayCount >= config.dailyLimitPerDay) {
-        log.info({ vault }, "[scan] daily limit reached — skip");
+        log.info({ vault }, "[scan] daily limit reached: skip");
         emitScan("skip", `Daily rebalance limit reached (${todayCount}/${config.dailyLimitPerDay})`);
         return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "daily_limit" };
       }
@@ -268,7 +268,7 @@ const signalStep = createStep({
     // Gate: check price freshness before planning
     const fresh = await defaultRebalancerDeps.arePricesFresh();
     if (!fresh) {
-      log.warn({ vault }, "[signal] price feeds stale — skip");
+      log.warn({ vault }, "[signal] price feeds stale: skip");
       emitSignal("skip", "Price feeds stale. Skipping to avoid stale-price trades.");
       return { ...empty, proceed: false, skipReason: "stale" };
     }
@@ -414,10 +414,10 @@ const decideStep = createStep({
         }
 
         lastErrors = validation.errors.join("; ");
-        log.warn({ vault, attempt, errors: validation.errors }, "[decide] allocation invalid — retry");
+        log.warn({ vault, attempt, errors: validation.errors }, "[decide] allocation invalid: retry");
       } catch (e) {
         lastErrors = (e as Error).message;
-        log.warn({ vault, attempt, err: lastErrors }, "[decide] LLM call failed — retry");
+        log.warn({ vault, attempt, err: lastErrors }, "[decide] LLM call failed: retry");
         allocation = {};
       }
     }
@@ -430,7 +430,7 @@ const decideStep = createStep({
     );
 
     if (!finalCheck.valid) {
-      log.error({ vault, errors: finalCheck.errors }, "[decide] Hermes allocation invalid after max retries — fallback to skip");
+      log.error({ vault, errors: finalCheck.errors }, "[decide] Hermes allocation invalid after max retries: fallback to skip");
       emitDecide("error", `Hermes allocation failed validation after ${attempts} attempt(s)`, { errors: finalCheck.errors });
       return { ...skip, proceed: false, skipReason: "llm_invalid", attempts, reasoning: `Failed: ${lastErrors}` };
     }
@@ -515,7 +515,7 @@ const execStep = createStep({
     });
 
     if (instructions.length === 0) {
-      log.info({ vault }, "[exec] already balanced after Hermes decision — skip");
+      log.info({ vault }, "[exec] already balanced after Hermes decision: skip");
       emitExec("skip", "Portfolio is already at target allocation");
       return { ...base, outcome: { action: "skip", reason: "balanced" } };
     }
@@ -523,7 +523,7 @@ const execStep = createStep({
     emitExec("running", `Simulating ${instructions.length} swap(s)...`);
     const simOk = await defaultRebalancerDeps.simulateRebalance(vault, instructions);
     if (!simOk) {
-      log.warn({ vault, swaps: instructions.length }, "[exec] rebalance would revert (sim) — skip");
+      log.warn({ vault, swaps: instructions.length }, "[exec] rebalance would revert (sim): skip");
       emitExec("error", "Swap simulation reverted. Skipping to save gas.");
       return { ...base, outcome: { action: "skip", reason: "unsafe" } };
     }
@@ -538,7 +538,7 @@ const execStep = createStep({
       if (peakAssets != null && peakAssets > 0n && currentAssets < peakAssets) {
         const dropBps = ((peakAssets - currentAssets) * 10_000n) / peakAssets;
         if (dropBps >= BigInt(config.stopLossPct * 100)) {
-          log.warn({ vault, dropBps: dropBps.toString() }, "[exec] stop-loss triggered — liquidating");
+          log.warn({ vault, dropBps: dropBps.toString() }, "[exec] stop-loss triggered: liquidating");
           const hash = await defaultRebalancerDeps.sendLiquidate(vault);
           await defaultRebalancerDeps.sendPause(vault, `stop-loss: -${config.stopLossPct}%`).catch(() => {});
           emitExec("done", `Stop-loss hit (-${config.stopLossPct}%). Exiting all positions.`, { hash });

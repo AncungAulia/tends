@@ -133,3 +133,47 @@ test("POST /prepare-switch CUSTOM → single setCustomAllocation (NOT setRiskLev
   assert.equal(d.functionName, "setCustomAllocation"); // regression guard
   assert.deepEqual(d.args, [5000, 3000, 2000]);
 });
+
+// ── BE-A: agent control endpoints ────────────────────────────────────────────
+test("POST /prepare-pause → emergencyPause tx", async () => {
+  const res = await post("/prepare-pause", { vault: VAULT, reason: "stop" });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { tx: Step };
+  assert.equal(decode(body.tx).functionName, "emergencyPause");
+});
+
+test("POST /prepare-unpause → emergencyUnpause tx", async () => {
+  const res = await post("/prepare-unpause", { vault: VAULT });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { tx: Step };
+  assert.equal(decode(body.tx).functionName, "emergencyUnpause");
+});
+
+test("POST /prepare-set-frequency → setMinRebalanceInterval; out-of-bound → 400", async () => {
+  const ok = await post("/prepare-set-frequency", { vault: VAULT, intervalSec: 3600 });
+  assert.equal(ok.status, 200);
+  assert.equal(decode(((await ok.json()) as { tx: Step }).tx).functionName, "setMinRebalanceInterval");
+  const bad = await post("/prepare-set-frequency", { vault: VAULT, intervalSec: 99_999_999 });
+  assert.equal(bad.status, 400);
+});
+
+test("POST /prepare-set-allowed(true) → 1 addAllowedTokens step", async () => {
+  const res = await post("/prepare-set-allowed", { vault: VAULT, tokens: [ACCOUNT], allowed: true });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { steps: Step[] };
+  assert.equal(body.steps.length, 1);
+  assert.equal(decode(body.steps[0]!).functionName, "addAllowedTokens");
+});
+
+test("POST /prepare-set-allowed(false) → one setAllowedToken step per token", async () => {
+  const res = await post("/prepare-set-allowed", { vault: VAULT, tokens: [ACCOUNT, VAULT], allowed: false });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { steps: Step[] };
+  assert.equal(body.steps.length, 2);
+  assert.equal(decode(body.steps[0]!).functionName, "setAllowedToken");
+});
+
+test("agent-control endpoints reject a bad address (400)", async () => {
+  const res = await post("/prepare-pause", { vault: "0xnope" });
+  assert.equal(res.status, 400);
+});

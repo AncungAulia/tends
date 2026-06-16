@@ -3,6 +3,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { env } from "../../config/env.js";
 import { tendsMemory } from "./memory.js";
 import { tendsReadTools, tendsActionTools } from "./tools.js";
+import { TIER_ADVISORY } from "./advisory.js";
 
 /**
  * Reliable tool-calling model (gpt-4o via GitHub Models) for the ACTION agent. Unlike
@@ -45,6 +46,9 @@ const INSTRUCTIONS = [
   // ── Strategy & projection ──
   "When asked about growing to a target value: call getHoldings + listStrategies + computeProjection.",
   "Present a clear recommendation: strategy name, blended APY, estimated time to target, key tradeoff.",
+
+  // ── Risk-tier personalities + discovery (shared with the read-advisory agent) ──
+  ...TIER_ADVISORY,
 
   "Be honest about risk. Never promise returns.",
 ].join(" ");
