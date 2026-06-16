@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { childLogger } from "../lib/logger.js";
 import { prisma } from "../db/client.js";
-import { publicClient } from "../chain/index.js";
+import { publicClient, getAgentWallet, activeChain } from "../chain/index.js";
 import { addresses, as0x } from "../chain/addresses.js";
-import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI } from "../chain/abis.js";
+import { VAULT_FACTORY_ABI, ACTIVITY_LOG_ABI, USER_VAULT_ABI, USER_VAULT_TX_ABI } from "../chain/abis.js";
+import { TOKENS } from "../chain/tokens.js";
 import { wsHub, type WsEvent } from "../ws/hub.js";
 import { rebalancerService } from "./rebalancer.js";
 
@@ -41,6 +42,30 @@ async function defaultTriggerRebalance(vault: `0x${string}`): Promise<void> {
 /** Default on-chain owner reader for backfill: UserVault.owner(). */
 function defaultReadVaultOwner(vault: `0x${string}`): Promise<string> {
   return publicClient.readContract({ address: vault, abi: USER_VAULT_ABI, functionName: "owner" });
+}
+
+/**
+ * Default: the agent (agentExecutor) whitelists every non-USDC token on a freshly
+ * deployed vault, so the rebalancer can actually trade into the full RWA universe.
+ * New vaults run the owner-OR-agent implementation, so the agent is authorized; the
+ * dedupe in addAllowedTokens makes a re-run a no-op. Best-effort: a revert (e.g. a
+ * legacy onlyOwner impl) is caught by the caller and never blocks indexing.
+ */
+async function defaultAllowAllTokens(vault: `0x${string}`): Promise<void> {
+  const tokens = Object.values(TOKENS)
+    .filter((t) => t.symbol !== "USDC" && t.address && t.address !== "0x0000000000000000000000000000000000000000")
+    .map((t) => as0x(t.address));
+  if (tokens.length === 0) return;
+  const wallet = getAgentWallet();
+  const hash = await wallet.writeContract({
+    address: vault,
+    abi: USER_VAULT_TX_ABI,
+    functionName: "addAllowedTokens",
+    args: [tokens],
+    chain: activeChain,
+    account: wallet.account!,
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 }
 
 export interface VaultRecord {
@@ -255,12 +280,19 @@ export class IndexerService {
     private readonly triggerRebalance: (vault: `0x${string}`) => Promise<void> = defaultTriggerRebalance,
     // backfill: read an existing vault's owner on-chain (UserVault.owner())
     private readonly readVaultOwner: (vault: `0x${string}`) => Promise<string> = defaultReadVaultOwner,
+    // on deploy: agent whitelists all tokens so the rebalancer can trade them
+    private readonly allowAllTokens: (vault: `0x${string}`) => Promise<void> = defaultAllowAllTokens,
   ) {}
 
   async onVaultDeployed(user: string, vault: string, blockNumber: bigint | null): Promise<void> {
     await this.repo.upsertVault(toVaultRecord(user, vault, blockNumber));
     this.broadcast({ type: "vault_deployed", user, vault });
     log.info({ user, vault }, "vault deployed");
+    // Whitelist all tradeable tokens so the rebalancer can use the full RWA universe
+    // (best-effort, agent-signed — never blocks indexing if it reverts).
+    await this.allowAllTokens(vault as `0x${string}`).catch((err) =>
+      log.warn({ vault, err }, "auto-allow tokens failed (vault may be on a legacy impl)"),
+    );
   }
 
   /**
