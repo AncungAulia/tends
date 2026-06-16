@@ -28,10 +28,9 @@ export default function OnboardingPage() {
     }
   }, [authenticated, isVaultLoading, hasVault, router]);
 
-  // skip connect step if wallet already authenticated
-  useEffect(() => {
-    if (authenticated && step === 0) go(1);
-  }, [authenticated, step, go]);
+  // NOTE: step 0 is NOT auto-skipped when authenticated — the user stays on it to
+  // confirm WHICH wallet (address + type + MNT balance) before continuing, and can
+  // switch wallets. They advance via the Continue button (onContinue → go(1)).
 
   // Persist name to localStorage at the result step — the actual DB write
   // happens in Onboarding.tsx after the vault is successfully deployed.
@@ -50,7 +49,7 @@ export default function OnboardingPage() {
       showBack={step > 0 && step < ONBOARDING_LAST}
       onBack={() => go(step - 1)}
     >
-      {step === 0 && <ConnectWallet onConnect={login} />}
+      {step === 0 && <ConnectWallet onConnect={login} onContinue={() => go(1)} />}
 
       {step === 1 && (
         <div>
