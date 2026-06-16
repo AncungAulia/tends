@@ -697,7 +697,7 @@ export default function SetupPreview() {
   const { vaultAddress } = useUserVault();
   const { config: agentConfig, save: saveAgentConfig } = useAgentConfig();
 
-  // seed the guardrail form from the backend once config loads
+  // seed the guardrail form + avoid list from the backend once config loads
   useEffect(() => {
     if (!agentConfig) return;
     setGr({
@@ -713,7 +713,15 @@ export default function SetupPreview() {
       stopLoss: agentConfig.stopLossPct ?? 0,
       notes: agentConfig.notes ?? "",
     });
+    setAvoid(agentConfig.excludedTokens ?? []);
   }, [agentConfig]);
+
+  // persist the Avoid list to the backend (off-chain excludedTokens; the agent
+  // drops + renormalizes around them). ExclusionField gives the full next array.
+  const onAvoidChange = (next: string[]) => {
+    setAvoid(next);
+    if (vaultAddress) saveAgentConfig({ excludedTokens: next }).catch(() => {});
+  };
 
   // update a guardrail locally + debounced-persist the mapped patch to backend
   const grSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1073,7 +1081,7 @@ export default function SetupPreview() {
             </p>
             <ExclusionField
               selected={avoid}
-              onChange={setAvoid}
+              onChange={onAvoidChange}
               options={ALL_TOKENS.map((t) => ({
                 value: t.sym,
                 cat: t.category,
