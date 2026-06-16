@@ -3,6 +3,7 @@ import {
   createWalletClient,
   fallback,
   http,
+  type Chain,
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -10,22 +11,42 @@ import { mantle, mantleSepoliaTestnet } from "viem/chains";
 import { env } from "../config/env.js";
 import { as0x } from "./addresses.js";
 
+// Canonical Multicall3 — deployed at the same address on every chain (verified
+// on-chain on Mantle Sepolia). viem's mantleSepoliaTestnet def omits it, so add it
+// here to enable read batching (Promise.all reads coalesce into one aggregate call).
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
+const withMulticall3 = (chain: Chain): Chain =>
+  chain.contracts?.multicall3
+    ? chain
+    : { ...chain, contracts: { ...chain.contracts, multicall3: { address: MULTICALL3 } } };
+
 /** Resolve the active chain from CHAIN_ID (5000 mainnet, 5003 sepolia). */
-export const activeChain =
-  env.CHAIN_ID === mantle.id ? mantle : mantleSepoliaTestnet;
+export const activeChain = withMulticall3(
+  env.CHAIN_ID === mantle.id ? mantle : mantleSepoliaTestnet,
+);
 
-// The public Mantle Sepolia RPC is flaky, so retry generously and fall back to a
-// secondary endpoint when MANTLE_RPC_URL_FALLBACK is configured.
+// Public Mantle Sepolia RPCs throttle ("Too many request"), so spread load across
+// every configured + known-good endpoint. fallback() fails over to the next endpoint
+// on error (incl. a 429), and reads are batched via Multicall3 below to cut volume.
+// (No `rank` — its background ranking timer would keep the test process alive.)
 const httpOpts = { retryCount: 5, retryDelay: 300 } as const;
-const primary = http(env.MANTLE_RPC_URL, httpOpts);
-const transport = env.MANTLE_RPC_URL_FALLBACK
-  ? fallback([primary, http(env.MANTLE_RPC_URL_FALLBACK, httpOpts)])
-  : primary;
+const rpcUrls = [
+  env.MANTLE_RPC_URL,
+  env.MANTLE_RPC_URL_FALLBACK,
+  // extra public fallback (verified live) — sepolia only
+  env.CHAIN_ID === mantle.id ? undefined : "https://mantle-sepolia.gateway.tenderly.co",
+].filter((u): u is string => !!u);
+const uniqueUrls = [...new Set(rpcUrls)];
+const transport =
+  uniqueUrls.length > 1
+    ? fallback(uniqueUrls.map((u) => http(u, httpOpts)))
+    : http(uniqueUrls[0], httpOpts);
 
-/** Read-only client (indexer, pricing, projections, vault reads). */
+/** Read-only client. Batches concurrent reads via Multicall3 to cut RPC request volume. */
 export const publicClient = createPublicClient({
   chain: activeChain,
   transport,
+  batch: { multicall: { wait: 16 } },
 });
 
 /** Mantle MAINNET read client — only for the Ondo USDY oracle (mainnet-only). */
