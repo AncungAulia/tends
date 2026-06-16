@@ -70,6 +70,14 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body {
+  scrollbar-width: none;          /* Firefox */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari / Edge */
+}
+
 html {
   background: #F7F9FC;
   -webkit-font-smoothing: antialiased;
@@ -81,6 +89,18 @@ body {
   background: #F7F9FC;
   color: #0C1A2B;
   overflow-x: hidden;
+}
+
+/* ── Load overlay safety net ────────────────────────────────────────
+   Normally GSAP hides the white overlay in ~0.5s. If GSAP fails for ANY
+   reason (bfcache restoration, back-nav timing, script error) this CSS
+   animation guarantees the overlay disappears after 2.5s.
+   ─────────────────────────────────────────────────────────────────── */
+@keyframes loadOverlayHide {
+  to { opacity: 0; visibility: hidden; }
+}
+.load-overlay {
+  animation: loadOverlayHide 0.6s ease-in 2.5s forwards;
 }
 
 /* Clip reveal wrapper — overflow:hidden mask */
