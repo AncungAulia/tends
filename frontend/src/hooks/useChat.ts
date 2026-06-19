@@ -1,6 +1,8 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export type ChatCard =
   | {
@@ -38,16 +40,89 @@ const TOOL_LABELS: Record<string, string> = {
   executeDirectSwap: "Making the swap",
 };
 
+/**
+ * Conversation state lifted to a Zustand store with sessionStorage persistence.
+ * This is what survives the "bubble disappears mid-conversation" bug. Local
+ * useState in the hook lost the in-flight user message any time React
+ * re-mounted the chat component (background query invalidations, gate
+ * re-renders, hot reload, etc.). With the store outside the component tree,
+ * an unmount/remount or a refresh restores messages from sessionStorage and
+ * the user sees the same conversation they left, no need to click history.
+ *
+ * Transient runtime state (streaming, status) intentionally stays local to
+ * useChat. We don't want streaming=true to survive a refresh and lock the
+ * composer until the user reloads again.
+ */
+interface ChatPersistedState {
+  messages: ChatMessage[];
+  threadId: string;
+  /** First send of this thread persists a title to the backend. */
+  isNew: boolean;
+  setMessages: (
+    updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
+  ) => void;
+  setThreadId: (id: string) => void;
+  setIsNew: (v: boolean) => void;
+  newThread: () => void;
+}
+
+const initialThreadId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+const useChatPersisted = create<ChatPersistedState>()(
+  persist(
+    (set) => ({
+      messages: [],
+      threadId: initialThreadId(),
+      isNew: true,
+      setMessages: (updater) =>
+        set((s) => ({
+          messages:
+            typeof updater === "function" ? updater(s.messages) : updater,
+        })),
+      setThreadId: (id) => set({ threadId: id }),
+      setIsNew: (v) => set({ isNew: v }),
+      newThread: () =>
+        set({ messages: [], threadId: initialThreadId(), isNew: true }),
+    }),
+    {
+      name: "tends-chat-conversation",
+      storage: createJSONStorage(() =>
+        typeof window === "undefined" ? undefinedStorage : window.sessionStorage,
+      ),
+      partialize: (s) => ({
+        messages: s.messages,
+        threadId: s.threadId,
+        isNew: s.isNew,
+      }),
+    },
+  ),
+);
+
+// Safe placeholder storage for SSR (window is undefined on server).
+const undefinedStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
 /** Chat with Tends Agent via SSE (POST /api/chat-v2). Streams reply token by token.
  *  Manages thread IDs for multi-session chat history. */
 export function useChat() {
   const { getAccessToken } = usePrivy();
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Persisted: messages + thread id + first-send flag (survives unmount/refresh).
+  const messages = useChatPersisted((s) => s.messages);
+  const threadId = useChatPersisted((s) => s.threadId);
+  const setMessages = useChatPersisted((s) => s.setMessages);
+  const setThreadId = useChatPersisted((s) => s.setThreadId);
+  const setIsNew = useChatPersisted((s) => s.setIsNew);
+  const newThread = useChatPersisted((s) => s.newThread);
+  // Transient: streaming + tool status. Intentionally not persisted.
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
-  const isNewRef = useRef(true);
 
   const sendMessage = useCallback(
     async (message: string) => {
@@ -58,9 +133,11 @@ export function useChat() {
 
       try {
         const token = await getAccessToken();
-        const isNew = isNewRef.current;
+        // Read+clear the first-send flag from the store rather than a ref so
+        // the value survives an unmount-during-stream the same way messages do.
+        const isNew = useChatPersisted.getState().isNew;
         const title = isNew ? message.slice(0, 60) : undefined;
-        isNewRef.current = false;
+        if (isNew) setIsNew(false);
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/chat-v2`,
@@ -87,9 +164,20 @@ export function useChat() {
         // streamed text + card. Works whether a card arrives before or after text.
         const upsertHermes = () => {
           const msg: ChatMessage = { role: "hermes", text: reply, card };
-          setMessages((prev) =>
-            hermesAdded ? [...prev.slice(0, -1), msg] : [...prev, msg],
-          );
+          setMessages((prev) => {
+            // Only treat the last message as the in-flight hermes when it IS
+            // the hermes we appended. Without this guard a stray re-render
+            // that lands a user message at the tail could be silently
+            // overwritten by the next text chunk. Defensive but cheap.
+            if (
+              hermesAdded &&
+              prev.length > 0 &&
+              prev[prev.length - 1].role === "hermes"
+            ) {
+              return [...prev.slice(0, -1), msg];
+            }
+            return [...prev, msg];
+          });
           hermesAdded = true;
         };
 
@@ -114,9 +202,24 @@ export function useChat() {
             }
 
             if (type === "done") {
+              // The backend can emit `done` without ever sending a text/card
+              // event (LLM cold-start, quota error swallowed upstream, etc.).
+              // Surface that to the user instead of leaving their question
+              // sitting alone with no reply. They'd otherwise think the chat
+              // is broken when it just needs a retry.
+              if (!hermesAdded) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "hermes" as const,
+                    text:
+                      "Tends Agent didn't return anything just now. Try sending your message again.",
+                  },
+                ]);
+              }
               setStatus(null);
               setStreaming(false);
-              // the agent may have changed guardrails / pause / holdings —
+              // the agent may have changed guardrails / pause / holdings,
               // refetch so the rest of the UI reflects it
               queryClient.invalidateQueries();
               return;
@@ -160,17 +263,22 @@ export function useChat() {
         setStreaming(false);
       }
     },
-    [getAccessToken, streaming, threadId, queryClient],
+    [
+      getAccessToken,
+      streaming,
+      threadId,
+      queryClient,
+      setMessages,
+      setIsNew,
+    ],
   );
 
-  /** Start a fresh conversation — new thread ID, clear messages. */
+  /** Start a fresh conversation. New thread ID, clear messages. */
   const newChat = useCallback(() => {
-    setThreadId(crypto.randomUUID());
-    isNewRef.current = true;
-    setMessages([]);
+    newThread();
     setStatus(null);
     setStreaming(false);
-  }, []);
+  }, [newThread]);
 
   /** Load historical messages from an existing thread. */
   const loadThread = useCallback(
@@ -183,19 +291,19 @@ export function useChat() {
       if (!res.ok) return;
       const data = (await res.json()) as { messages: ChatMessage[] };
       setThreadId(tid);
-      isNewRef.current = false;
+      setIsNew(false);
       setMessages(data.messages ?? []);
       setStatus(null);
       setStreaming(false);
     },
-    [getAccessToken],
+    [getAccessToken, setThreadId, setIsNew, setMessages],
   );
 
   const reset = useCallback(() => {
     setMessages([]);
     setStreaming(false);
     setStatus(null);
-  }, []);
+  }, [setMessages]);
 
   return { messages, sendMessage, streaming, status, reset, threadId, newChat, loadThread };
 }

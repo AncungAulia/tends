@@ -1,21 +1,17 @@
 import { Agent } from "@mastra/core/agent";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { env } from "../../config/env.js";
 import { tendsMemory } from "./memory.js";
 import { tendsReadTools, tendsActionTools } from "./tools.js";
 import { TIER_ADVISORY } from "./advisory.js";
+import { openRouterModel } from "./hermes-model.js";
 
 /**
- * Reliable tool-calling model (gpt-4o via GitHub Models) for the ACTION agent. Unlike
- * Hermes — which hallucinates write-tool success — gpt-4o actually invokes tools, so
- * this agent can DO things, not just advise. GitHub Models is plain OpenAI-compatible
- * (auth = a GitHub PAT with models:read).
+ * Direct OpenRouter chat model (gpt-4o-mini). Originally pointed at GitHub
+ * Models gpt-4o, then briefly at the Hermes gateway — but Hermes is an agent
+ * framework, not a thin proxy, so it discards Mastra's `tools` array and the
+ * agent never actually calls getHoldings / proposeSwap / etc. Going straight
+ * to OpenRouter keeps tool-calling intact and uses the paid credit lane.
  */
-const actionModel = createOpenAICompatible({
-  name: "github-models",
-  baseURL: env.ACTION_AGENT_BASE_URL,
-  apiKey: env.GITHUB_TOKEN,
-}).chatModel(env.ACTION_AGENT_MODEL);
+const actionModel = openRouterModel;
 
 const INSTRUCTIONS = [
   "You are Hermes, the AI portfolio manager and CFO for Tends — an AI-managed RWA vault on Mantle.",

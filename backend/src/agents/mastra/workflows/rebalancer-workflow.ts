@@ -142,10 +142,17 @@ const execOutputSchema = z.object({
 
 const scanStep = createStep({
   id: "scan-vault",
-  inputSchema: z.object({ vaultAddress: z.string() }),
+  inputSchema: z.object({
+    vaultAddress: z.string(),
+    /** True when triggered by the FE "Run now" button. Bypasses the user-set
+     *  cadence + auto-rebalance toggle since the user explicitly asked for it.
+     *  On-chain minRebalanceInterval and the daily limit are still respected. */
+    manualOverride: z.boolean().optional(),
+  }),
   outputSchema: scanOutputSchema,
   execute: async ({ inputData }) => {
     const vault = as0x(inputData.vaultAddress);
+    const manualOverride = inputData.manualOverride === true;
 
     const [meta, config] = await Promise.all([
       defaultRebalancerDeps.readVaultMeta(vault),
@@ -164,17 +171,23 @@ const scanStep = createStep({
       emitScan("skip", "Vault is paused on-chain");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "paused" };
     }
-    if (!config.autoRebalanceEnabled) {
+    if (!config.autoRebalanceEnabled && !manualOverride) {
       log.info({ vault }, "[scan] auto-rebalance disabled: skip");
       emitScan("skip", "Auto-rebalance is disabled");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "disabled" };
     }
+    // On-chain minRebalanceInterval is enforced by the contract and cannot be
+    // bypassed even with manualOverride, so we'd revert anyway. Still skip early.
     if (now < meta.lastRebalanceTime + meta.minRebalanceInterval) {
       log.info({ vault }, "[scan] on-chain cooldown: skip");
       emitScan("skip", "On-chain cooldown not elapsed yet");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "cooldown" };
     }
-    if (config.cadenceSec != null && now < meta.lastRebalanceTime + BigInt(config.cadenceSec)) {
+    if (
+      !manualOverride &&
+      config.cadenceSec != null &&
+      now < meta.lastRebalanceTime + BigInt(config.cadenceSec)
+    ) {
       log.info({ vault }, "[scan] off-chain cadence: skip");
       emitScan("skip", "Off-chain cadence not elapsed yet");
       return { vaultAddress: inputData.vaultAddress, riskPreference: meta.riskPreference, riskLevel: "LOW" as const, userNotes: "", proceed: false, skipReason: "cooldown" };
@@ -575,15 +588,26 @@ export const hermesRebalancerWorkflow = createWorkflow({
  *   SCAN (gate checks) → SIGNAL (market data) → DECIDE (LLM allocation) → EXEC (on-chain)
  *
  * Each step is observable in Mastra Studio under the "hermes-rebalancer" workflow.
+ *
+ * `manualOverride` is set to true when called from the FE "Run now" button so
+ * the SCAN step skips the off-chain cadence + auto-rebalance toggle checks
+ * (user explicitly asked for a run). On-chain cooldown + the daily limit
+ * still apply, since those would revert or are policy guards we don't want
+ * a button to circumvent.
  */
-export async function runHermesRebalance(vaultAddress: string): Promise<{
+export async function runHermesRebalance(
+  vaultAddress: string,
+  opts: { manualOverride?: boolean } = {},
+): Promise<{
   outcome: unknown;
   reasoning: string;
   allocation: Record<string, number>;
   attempts: number;
 }> {
   const run = await hermesRebalancerWorkflow.createRun();
-  const result = await run.start({ inputData: { vaultAddress } });
+  const result = await run.start({
+    inputData: { vaultAddress, manualOverride: opts.manualOverride === true },
+  });
 
   if (result.status === "success") {
     const output = result.result as {

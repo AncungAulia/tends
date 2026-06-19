@@ -165,6 +165,8 @@ export const envSchema = z.object({
   HERMES_MODEL: z.string().default("hermes-agent"),
   OPENROUTER_KEY: z.string().default(""),
   OPENROUTER_API_KEY: z.string().default(""),
+  /** Direct OpenRouter model id for the chat agents (tendsAgent + actionAgent). */
+  OPENROUTER_MODEL: z.string().default("openai/gpt-4o-mini"),
   // Reliable model for the ACTION agent (gpt-4o via GitHub Models) — calls tools
   // properly, unlike Hermes which hallucinates write-tool success.
   GITHUB_TOKEN: z.string().default(""), // PAT with models:read
