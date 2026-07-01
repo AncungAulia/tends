@@ -47,4 +47,4 @@ primary_region = "sin"   # Singapore — closest Fly region to ID/SEA
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"   # bump to 1gb if the schedulers + viem get tight
+  memory = "1gb"   # 512mb OOM-killed (exit 137) under schedulers + viem + chat; bumped 2026-07-01
