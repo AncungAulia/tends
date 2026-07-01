@@ -90,15 +90,11 @@ test("POST /prepare-withdraw: agentLiquidate → read balance → encode withdra
   assert.equal(decode(body.tx).functionName, "withdraw");
 });
 
-test("POST /prepare-withdraw: amount clamped when larger than USDC balance", async () => {
-  // 200 USDC available; requesting 999 → clamped to ~199.8
+test("POST /prepare-withdraw: 409 when the vault can't deliver near the requested amount", async () => {
+  // 200 USDC available; requesting 999 is >5% short → fail loudly (409) instead of
+  // returning a withdraw tx that shows green checkmarks but delivers nothing (c04cdf0).
   const res = await post("/prepare-withdraw", { vault: VAULT, account: ACCOUNT, amount: 999 }, "good", stubDeps);
-  assert.equal(res.status, 200);
-  const body = await res.json() as { tx: Step };
-  assert.equal(decode(body.tx).functionName, "withdraw");
-  // encoded assets (6 dec) must be ≤ 200_000_000 (200 USDC)
-  const [assets] = decode(body.tx).args as [bigint, ...unknown[]];
-  assert.ok(assets <= 200_000_000n, `clamped assets ${assets} should be ≤ 200 USDC`);
+  assert.equal(res.status, 409);
 });
 
 test("POST /prepare-switch: preset → single setRiskLevel(level)", async () => {

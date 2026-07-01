@@ -26,7 +26,7 @@ import {
   SLIPPAGE_BPS,
   MIN_SWAP_USD,
 } from "../../../services/rebalancer.js";
-import { hermesModel } from "../hermes-model.js";
+import { openRouterModel } from "../hermes-model.js";
 import { tendsMemory } from "../memory.js";
 import { prisma } from "../../../db/client.js";
 import { agentLogEmitter } from "../../../services/agent-log-emitter.js";
@@ -34,11 +34,13 @@ import { agentLogEmitter } from "../../../services/agent-log-emitter.js";
 const log = childLogger("rebalancer-workflow");
 
 // ── One-shot strategy decider — no tools, no memory, pure JSON allocation ──────
+// Direct OpenRouter (not the Hermes gateway): this is a pure-JSON completion, and the
+// gateway is now off the product path entirely, so there's no reason for the extra hop.
 const hermesStrategyAgent = new Agent({
   id: "hermes-strategy-decider",
   name: "Hermes Strategy Decider",
   instructions: STRATEGY_SYSTEM_PROMPT,
-  model: hermesModel,
+  model: openRouterModel,
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
